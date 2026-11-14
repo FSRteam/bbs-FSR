@@ -17,6 +17,7 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.keys.KeybindManager;
+import mchorse.bbs_mod.ui.utils.resizers.ChildResizer;
 import mchorse.bbs_mod.ui.utils.resizers.Flex;
 import mchorse.bbs_mod.ui.utils.resizers.IResizer;
 import mchorse.bbs_mod.ui.utils.resizers.Margin;
@@ -49,6 +50,8 @@ public class UIElement implements IUIElement, IUndoElement
      */
     public final Margin margin = new Margin();
 
+    protected boolean expand;
+
     /**
      * Flex resizer of this class
      */
@@ -78,6 +81,8 @@ public class UIElement implements IUIElement, IUndoElement
      * Context menu options
      */
     private List<Consumer<ContextMenuManager>> contextOptions;
+
+    private Runnable valueBinding;
 
     /**
      * Whether this element can be culled if it's out of viewport
@@ -109,6 +114,9 @@ public class UIElement implements IUIElement, IUndoElement
      * Children elements
      */
     private List<IUIElement> children = new ArrayList<>();
+
+    /** Listener-free subtrees can skip tree event traversal when attached or removed. */
+    private boolean treeListeners = this instanceof IUITreeEventListener;
 
     /**
      * Whether this element is enabled (can handle any input) 
@@ -160,16 +168,33 @@ public class UIElement implements IUIElement, IUndoElement
 
     public <T extends UIElement> T getParent(Class<T> clazz)
     {
-        UIElement element = this;
+        UIElement element = this.getParent();
 
         while (element != null)
         {
-            element = element.getParent();
-
             if (element.getClass() == clazz)
             {
                 return (T) element;
             }
+
+            element = element.getParent();
+        }
+
+        return null;
+    }
+
+    public <T> T getAncestor(Class<T> clazz)
+    {
+        UIElement element = this.getParent();
+
+        while (element != null)
+        {
+            if (clazz.isInstance(element))
+            {
+                return (T) element;
+            }
+
+            element = element.getParent();
         }
 
         return null;
@@ -231,7 +256,7 @@ public class UIElement implements IUIElement, IUndoElement
 
             if (element instanceof UIElement)
             {
-                ((UIElement) element).getChildren(clazz, list, includeItself);
+                ((UIElement) element).getChildren(clazz, list, false);
             }
         }
 
@@ -259,7 +284,7 @@ public class UIElement implements IUIElement, IUndoElement
 
             if (element instanceof UIElement)
             {
-                ((UIElement) element).visitChildren(clazz, includeItself, consumer);
+                ((UIElement) element).visitChildren(clazz, false, consumer);
             }
         }
     }
@@ -372,12 +397,23 @@ public class UIElement implements IUIElement, IUndoElement
             child.parentAttachmentGeneration = child.parentAttachmentGeneration == Long.MAX_VALUE
                 ? 1L
                 : child.parentAttachmentGeneration + 1L;
+
+            if (child.treeListeners)
+            {
+                for (UIElement ancestor = this; ancestor != null && !ancestor.treeListeners; ancestor = ancestor.parent)
+                {
+                    ancestor.treeListeners = true;
+                }
+            }
+
             child.onAdd(this);
 
             if (this.resizer != null)
             {
                 this.resizer.add(this, child);
             }
+
+            this.invalidateLayout();
         }
     }
 
@@ -440,10 +476,19 @@ public class UIElement implements IUIElement, IUndoElement
     {
         UIContext context = this.getContext();
 
-        if (context != null)
+        if (context == null)
         {
-            context.invalidateLayout(this);
+            return;
         }
+
+        UIElement target = this;
+
+        while (target.resizer instanceof ChildResizer && target.parent != null)
+        {
+            target = target.parent;
+        }
+
+        context.invalidateLayout(target);
     }
 
     public void remove(IUIElement element)
@@ -618,9 +663,12 @@ public class UIElement implements IUIElement, IUndoElement
     {
         this.events.emit(new UIAddedEvent(this));
 
-        for (IUITreeEventListener listener : this.getChildren(IUITreeEventListener.class))
+        if (this.treeListeners)
         {
-            listener.onAddedToTree(this);
+            for (IUITreeEventListener listener : this.getChildren(IUITreeEventListener.class))
+            {
+                listener.onAddedToTree(this);
+            }
         }
     }
 
@@ -628,9 +676,12 @@ public class UIElement implements IUIElement, IUndoElement
     {
         this.events.emit(new UIRemovedEvent(this));
 
-        for (IUITreeEventListener listener : this.getChildren(IUITreeEventListener.class))
+        if (this.treeListeners)
         {
-            listener.onRemovedFromTree(this);
+            for (IUITreeEventListener listener : this.getChildren(IUITreeEventListener.class))
+            {
+                listener.onRemovedFromTree(this);
+            }
         }
     }
 
@@ -991,6 +1042,24 @@ public class UIElement implements IUIElement, IUndoElement
         this.flex.h.offset = offset;
 
         return this;
+    }
+
+    /** Grow into the height left over in the parent row or column, keeping the requested minimum. */
+    public UIElement expand()
+    {
+        return this.expand(true);
+    }
+
+    public UIElement expand(boolean expand)
+    {
+        this.expand = expand;
+
+        return this;
+    }
+
+    public boolean isExpanding()
+    {
+        return this.expand;
     }
 
     /* Other variations */
@@ -1507,6 +1576,11 @@ public class UIElement implements IUIElement, IUndoElement
     {
         for (int i = this.children.size() - 1; i >= 0; i--)
         {
+            if (i >= this.children.size())
+            {
+                continue;
+            }
+
             IUIElement element = this.children.get(i);
 
             if (element.isEnabled())
@@ -1527,6 +1601,11 @@ public class UIElement implements IUIElement, IUndoElement
     {
         for (int i = this.children.size() - 1; i >= 0; i--)
         {
+            if (i >= this.children.size())
+            {
+                continue;
+            }
+
             IUIElement element = this.children.get(i);
 
             if (element.isEnabled())
@@ -1547,6 +1626,11 @@ public class UIElement implements IUIElement, IUndoElement
     {
         for (int i = this.children.size() - 1; i >= 0; i--)
         {
+            if (i >= this.children.size())
+            {
+                continue;
+            }
+
             IUIElement element = this.children.get(i);
 
             if (element.isEnabled())
@@ -1567,6 +1651,11 @@ public class UIElement implements IUIElement, IUndoElement
     {
         for (int i = this.children.size() - 1; i >= 0; i--)
         {
+            if (i >= this.children.size())
+            {
+                continue;
+            }
+
             IUIElement element = this.children.get(i);
 
             if (element.isEnabled())
@@ -1587,6 +1676,11 @@ public class UIElement implements IUIElement, IUndoElement
     {
         for (int i = this.children.size() - 1; i >= 0; i--)
         {
+            if (i >= this.children.size())
+            {
+                continue;
+            }
+
             IUIElement element = this.children.get(i);
 
             if (element.isEnabled())
@@ -1694,9 +1788,40 @@ public class UIElement implements IUIElement, IUndoElement
         return !this.culled || viewport.intersects(this.area);
     }
 
+    /** Read the edited property before drawing, unless the user is editing this subtree. */
+    public UIElement valueBinding(Runnable valueBinding)
+    {
+        this.valueBinding = valueBinding;
+
+        return this;
+    }
+
+    public boolean isUserEditing()
+    {
+        if (this instanceof IFocusedUIElement focused && focused.isFocused())
+        {
+            return true;
+        }
+
+        for (IUIElement child : this.children)
+        {
+            if (child instanceof UIElement element && element.isUserEditing())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     @Override
     public void render(UIContext context)
     {
+        if (this.valueBinding != null && !this.isUserEditing())
+        {
+            this.valueBinding.run();
+        }
+
         if (this.keybinds != null && this.isEnabled())
         {
             this.keybinds.add(context, this.area.isInside(context));

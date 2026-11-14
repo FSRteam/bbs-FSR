@@ -34,6 +34,8 @@ import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,6 +57,8 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     }
 
     private boolean despawn;
+    private boolean pickUpItems = true;
+    private final List<ItemStack> pickedUp = new ArrayList<>();
     private String replayId = "";
     @Nullable
     private UUID playbackAudience;
@@ -443,7 +447,7 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
 
         this.tickActorVisualState();
 
-        if (this.level().isClientSide)
+        if (this.level().isClientSide || !this.pickUpItems)
         {
             return;
         }
@@ -463,9 +467,39 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
                 {
                     ServerLevel level = (ServerLevel) this.level();
                     level.getChunkSource().broadcast(entity, new ClientboundTakeItemEntityPacket(entity.getId(), this.getId(), i));
+                    this.pickedUp.add(itemStack.copy());
                     entity.discard();
                 }
             }
+        }
+    }
+
+    public void setPickUpItems(boolean pickUpItems)
+    {
+        this.pickUpItems = pickUpItems;
+    }
+
+    /** Return swept-up items before the playback body is retired. */
+    public void dropPickedUp()
+    {
+        if (this.level().isClientSide)
+        {
+            return;
+        }
+
+        Iterator<ItemStack> items = this.pickedUp.iterator();
+
+        while (items.hasNext())
+        {
+            ItemEntity item = new ItemEntity(this.level(), this.getX(), this.getY() + 0.5D, this.getZ(), items.next().copy());
+            item.setDefaultPickUpDelay();
+
+            if (!this.level().addFreshEntity(item))
+            {
+                throw new IllegalStateException("Could not return items picked up by replay actor " + this.replayId);
+            }
+
+            items.remove();
         }
     }
 
@@ -513,6 +547,7 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
 
         if (this.despawn)
         {
+            this.dropPickedUp();
             this.discard();
         }
     }

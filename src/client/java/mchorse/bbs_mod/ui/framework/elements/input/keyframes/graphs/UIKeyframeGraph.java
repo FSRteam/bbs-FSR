@@ -54,6 +54,12 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
 
     /* Graphing */
 
+    @Override
+    public UIKeyframes getKeyframes()
+    {
+        return this.keyframes;
+    }
+
     public int toGraphY(double value)
     {
         return (int) this.yAxis.to(value);
@@ -89,8 +95,8 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             {
                 Keyframe frame = keyframes.get(i);
 
-                minY = Math.min(minY, frame.getY(i));
-                maxY = Math.max(maxY, frame.getY(i));
+                minY = Math.min(minY, frame.getY());
+                maxY = Math.max(maxY, frame.getY());
             }
         }
         else
@@ -100,7 +106,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
 
             if (c == 1)
             {
-                minY = maxY = channel.get(0).getY(0);
+                minY = maxY = channel.get(0).getY();
             }
         }
 
@@ -247,12 +253,6 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         }
 
         return null;
-    }
-
-    @Override
-    public void pickKeyframe(Keyframe keyframe)
-    {
-        this.keyframes.pickKeyframe(keyframe);
     }
 
     @Override
@@ -557,8 +557,14 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
     @SuppressWarnings({"rawtypes", "IntegerDivisionInFloatingPointContext"})
     protected void renderGraph(UIContext context)
     {
-        BufferBuilder builder;
         Matrix4f matrix = context.batcher.getContext().pose().last().pose();
+
+        if (!this.sheet.channel.getLoops().isEmpty())
+        {
+            this.renderLoopGraph(context, matrix);
+
+            return;
+        }
 
         UIKeyframeSheet sheet = this.sheet;
         List keyframes = sheet.channel.getKeyframes();
@@ -590,19 +596,26 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
                     lineBuilder.add(x, py);
                     lineBuilder.push();
                 }
-                else if (interp != Interpolations.LINEAR)
+                else if (interp != Interpolations.LINEAR || prev.getMotionShift() != 0F)
                 {
-                    float steps = 50F;
+                    boolean visible = Math.max(px, x) >= this.keyframes.area.x - 20 && Math.min(px, x) <= this.keyframes.area.ex() + 20;
 
-                    for (int j = 1; j <= steps; j++)
+                    if (visible)
                     {
-                        float a = j / steps;
+                        float steps = Math.min(50, Math.max(2, Math.abs(x - px)));
 
-                        segment.setup(prev, frame, prev.getTick() + a * (frame.getTick() - prev.getTick()));
+                        segment.fill(prev, frame, i - 1);
 
-                        float interpolate = this.toGraphY((float) frame.getFactory().getY(segment.createInterpolated()));
+                        for (int j = 1; j <= steps; j++)
+                        {
+                            float a = j / steps;
 
-                        lineBuilder.add(Lerps.lerp(px, x, a), interpolate);
+                            segment.setup(prev.getTick() + a * (frame.getTick() - prev.getTick()));
+
+                            float interpolate = this.toGraphY((float) frame.getFactory().getY(segment.createInterpolated()));
+
+                            lineBuilder.add(Lerps.lerp(px, x, a), interpolate);
+                        }
                     }
                 }
             }
@@ -649,103 +662,9 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
 
         lineBuilder.render(context.batcher, SolidColorLineRenderer.get(Colors.COLOR.set(Colors.setA(sheet.color, 1F))));
 
-        /* Render track bars (horizontal lines) */
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
-        /* Draw keyframe handles (outer) */
-        int forcedIndex = 0;
-
-        for (int i = 0; i < keyframes.size(); i++)
-        {
-            Keyframe frame = (Keyframe) keyframes.get(i);
-            Keyframe prev = i > 0 ? (Keyframe) keyframes.get(i - 1) : null;
-            float tick = frame.getTick();
-            int x1 = this.keyframes.toGraphX(tick);
-            int x2 = this.keyframes.toGraphX(tick + frame.getDuration());
-            int y = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()));
-
-            /* Render custom duration markers */
-            if (x1 != x2)
-            {
-                int y1 = y - 8 + (forcedIndex % 2 == 1 ? -4 : 0);
-                int color = sheet.selection.has(i) ? Colors.WHITE :  Colors.setA(Colors.mulRGB(sheet.color, 0.9F), 0.75F);
-
-                context.batcher.fillRect(builder, matrix, x1, y1 - 2, 1, 5, color, color, color, color);
-                context.batcher.fillRect(builder, matrix, x2, y1 - 2, 1, 5, color, color, color, color);
-                context.batcher.fillRect(builder, matrix, x1 + 1, y1, x2 - x1, 1, color, color, color, color);
-
-                forcedIndex += 1;
-            }
-
-            boolean isPointHover = this.isNear(this.keyframes.toGraphX(frame.getTick()), y, context.mouseX, context.mouseY);
-            boolean toRemove = this.keyframes.isRemovingKeyframe() && isPointHover;
-
-            if (this.keyframes.isSelecting())
-            {
-                isPointHover = isPointHover || this.keyframes.getGrabbingArea(context).isInside(x1, y);
-            }
-
-            int kc = frame.getColor() != null ? frame.getColor().getRGBColor() | Colors.A100 : sheet.color;
-            int c = (sheet.selection.has(i) || isPointHover ? Colors.WHITE : kc) | Colors.A100;
-
-            if (toRemove)
-            {
-                c = Colors.RED | Colors.A100;
-            }
-
-            int offset = toRemove ? 4 : 3;
-
-            UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, x1, y, offset, c);
-
-            if (frame.getInterpolation().getInterp() == Interpolations.BEZIER)
-            {
-                int rx = this.keyframes.toGraphX(frame.getTick() + frame.rx);
-                int ry = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()) + frame.ry);
-
-                UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, rx, ry, 3, c);
-            }
-
-            if (prev != null && prev.getInterpolation().getInterp() == Interpolations.BEZIER)
-            {
-                int lx = this.keyframes.toGraphX(frame.getTick() - frame.lx);
-                int ly = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()) + frame.ly);
-
-                UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, lx, ly, 3, c);
-            }
-        }
-
-        /* Render keyframe handles (inner) */
-        for (int j = 0; j < keyframes.size(); j++)
-        {
-            Keyframe frame = (Keyframe) keyframes.get(j);
-            Keyframe prev = j > 0 ? (Keyframe) keyframes.get(j - 1) : null;
-            int y = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()));
-
-            int c = sheet.selection.has(j) ? BBSSettings.activeColor() & Colors.RGB : 0;
-            int mx = this.keyframes.toGraphX(frame.getTick());
-            int mc = c | Colors.A100;
-            IKeyframeShapeRenderer shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, mx, y, 2, mc);
-
-            shapeResult.renderKeyframeBackground(context, builder, matrix, mx, y, 2, mc);
-
-            if (frame.getInterpolation().getInterp() == Interpolations.BEZIER)
-            {
-                int rx = this.keyframes.toGraphX(frame.getTick() + frame.rx);
-                int ry = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()) + frame.ry);
-
-                shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, rx, ry, 2, c | Colors.A100);
-                shapeResult.renderKeyframeBackground(context, builder, matrix, rx, ry, 2, c | Colors.A100);
-            }
-
-            if (prev != null && prev.getInterpolation().getInterp() == Interpolations.BEZIER)
-            {
-                int lx = this.keyframes.toGraphX(frame.getTick() - frame.lx);
-                int ly = this.toGraphY(sheet.channel.getFactory().getY(frame.getValue()) + frame.ly);
-
-                shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, lx, ly, 2, c | Colors.A100);
-                shapeResult.renderKeyframeBackground(context, builder, matrix, lx, ly, 2, c | Colors.A100);
-            }
-        }
+        this.renderGraphPointShapes(context, builder, matrix, keyframes);
 
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
@@ -755,6 +674,50 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
         {
             BufferUploader.drawWithShader(mesh);
         }
+    }
+
+    /** Sample the actual finite-loop playback instead of drawing a fictitious line from the
+     * source's last key straight to the next ordinary key. Work is bounded by visible pixels. */
+    private void renderLoopGraph(UIContext context, Matrix4f matrix)
+    {
+        LineBuilder line = new LineBuilder(0.7F);
+        float previousSource = -Float.MAX_VALUE;
+        for (int x = this.keyframes.graphArea.x; x <= this.keyframes.graphArea.ex(); x += 2)
+        {
+            float tick = (float) this.keyframes.fromGraphX(x);
+            float source = this.sheet.channel.getSourceTick(tick);
+            if (source < previousSource) line.push();
+            Object value = this.sheet.channel.interpolate(tick);
+            if (value != null) line.add(x, this.toGraphY(this.sheet.channel.getFactory().getY(value)));
+            previousSource = source;
+        }
+
+        /* Original Bezier handles remain editable in the same place. */
+        List<Keyframe> originals = this.sheet.channel.getKeyframes();
+        for (int index = 0; index < originals.size(); index++)
+        {
+            Keyframe key = originals.get(index);
+            int x = this.keyframes.toGraphX(key.getTick()), y = this.toGraphY(key.getY());
+            if (x < this.keyframes.graphArea.x - 20 || x > this.keyframes.graphArea.ex() + 20) continue;
+            Keyframe previous = this.sheet.channel.get(index - 1);
+            if (key.getInterpolation().getInterp() == Interpolations.BEZIER)
+            {
+                line.push(); line.add(x, y);
+                line.add(this.keyframes.toGraphX(key.getTick() + key.rx), this.toGraphY(key.getY() + key.ry));
+            }
+            if (previous != null && previous.getInterpolation().getInterp() == Interpolations.BEZIER)
+            {
+                line.push(); line.add(x, y);
+                line.add(this.keyframes.toGraphX(key.getTick() - key.lx), this.toGraphY(key.getY() + key.ly));
+            }
+        }
+        line.render(context.batcher, SolidColorLineRenderer.get(Colors.COLOR.set(Colors.setA(this.sheet.color, 1F))));
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        this.renderGraphPointShapes(context, builder, matrix, this.sheet.channel.getKeyframes());
+        RenderSystem.enableBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        MeshData built = builder.build();
+        if (built != null) BufferUploader.drawWithShader(built);
     }
 
     protected void renderGraphPointShapes(UIContext context, BufferBuilder builder, Matrix4f matrix, List keyframes)
@@ -830,7 +793,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
             int mc = c | Colors.A100;
             IKeyframeShapeRenderer shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, mx, y, 2, mc);
 
-            shapeResult.renderKeyframeBackground(context, builder, matrix, mx, y, 2, mc);
+            if (!frame.getStyle().isFilled()) shapeResult.renderKeyframeBackground(context, builder, matrix, mx, y, 2, mc);
 
             if (frame.getInterpolation().getInterp() == Interpolations.BEZIER)
             {

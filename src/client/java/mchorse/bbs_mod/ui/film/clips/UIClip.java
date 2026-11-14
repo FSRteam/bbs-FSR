@@ -56,6 +56,7 @@ import mchorse.bbs_mod.ui.film.clips.actions.UIReleaseUseItemActionClip;
 import mchorse.bbs_mod.ui.film.clips.widgets.UIEnvelope;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.ScrollMemory;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -75,7 +76,7 @@ import java.util.Map;
 public abstract class UIClip <T extends Clip> extends UIElement
 {
     private static final Map<Class, IUIClipFactory> FACTORIES = new HashMap<>();
-    private static final Map<Class, Integer> SCROLLS = new HashMap<>();
+    private static final ScrollMemory<Class<?>> SCROLLS = new ScrollMemory<>();
 
     public T clip;
     public IUIClipsDelegate editor;
@@ -150,14 +151,14 @@ public abstract class UIClip <T extends Clip> extends UIElement
     {
         if (editor != null)
         {
-            SCROLLS.put(editor.clip.getClass(), (int) editor.panels.scroll.getScroll());
+            SCROLLS.save(editor.clip.getClass(), editor.panels);
         }
     }
 
     /** Restore after the property panel has a laid-out viewport, so clamping uses its real size. */
     public void restoreScroll()
     {
-        this.panels.scroll.setScroll(SCROLLS.getOrDefault(this.clip.getClass(), 0));
+        SCROLLS.restore(this.clip.getClass(), this.panels);
     }
 
     public static UIClip createPanel(Clip clip, IUIClipsDelegate delegate)

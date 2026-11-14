@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.forms.forms;
 
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
@@ -10,6 +12,8 @@ import mchorse.bbs_mod.utils.colors.Color;
 
 public class LabelForm extends Form
 {
+    public static final Icon ICON = Icons.FONT;
+
     public final ValueString text = new ValueString("text", "Hello, World!");
 
     /* Font: a TrueType file in the assets, empty for Minecraft's own one */
@@ -60,5 +64,11 @@ public class LabelForm extends Form
     public String getDefaultDisplayName()
     {
         return this.text.get();
+    }
+
+    @Override
+    public Icon getIcon()
+    {
+        return ICON;
     }
 }

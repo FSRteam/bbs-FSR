@@ -15,6 +15,7 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 public class UIActionsConfigKeyframeFactory extends UIKeyframeFactory<ActionsConfig>
 {
     public UIActionsConfigEditor actionsEditor;
+    private Boolean wide;
 
     public UIActionsConfigKeyframeFactory(Keyframe<ActionsConfig> keyframe, UIKeyframes editor)
     {
@@ -25,23 +26,50 @@ public class UIActionsConfigKeyframeFactory extends UIKeyframeFactory<ActionsCon
 
         this.actionsEditor = new UIActionsConfigEditor(() ->
         {
-            this.keyframe.preNotify();
+            this.actionsEditor.bindConfigs(this.copyDisplayValue());
         }, () ->
         {
             renderer.resetAnimator();
-            this.keyframe.postNotify();
+            this.setValue(this.actionsEditor.getConfigs());
         });
-        this.actionsEditor.setConfigs(keyframe.getValue(), form);
+        this.actionsEditor.setConfigs(this.copyDisplayValue(), form);
 
         this.scroll.add(this.actionsEditor);
+    }
+
+    private ActionsConfig copyDisplayValue()
+    {
+        ActionsConfig copy = new ActionsConfig();
+        copy.copy(this.getDisplayValue());
+        return copy;
+    }
+
+    @Override
+    public void update()
+    {
+        super.update();
+        this.actionsEditor.updateConfigs(this.copyDisplayValue());
     }
 
     @Override
     public void resize()
     {
+        boolean wide = this.getFlex().getW() > 240;
+
+        if (this.wide == null || this.wide != wide)
+        {
+            this.wide = wide;
+            this.rebuild(wide);
+        }
+
+        super.resize();
+    }
+
+    private void rebuild(boolean wide)
+    {
         this.actionsEditor.removeAll();
 
-        if (this.getFlex().getW() > 240)
+        if (wide)
         {
             this.actionsEditor.add(UI.row(
                 UI.column(
@@ -65,6 +93,5 @@ public class UIActionsConfigKeyframeFactory extends UIKeyframeFactory<ActionsCon
             this.actionsEditor.add(UI.labelRow(UIKeys.FORMS_EDITORS_ACTIONS_TICK, this.actionsEditor.tick));
         }
 
-        super.resize();
     }
 }

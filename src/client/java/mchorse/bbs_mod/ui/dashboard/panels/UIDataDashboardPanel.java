@@ -22,7 +22,7 @@ import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.repos.IRepository;
 
-import java.util.ArrayList;
+import java.io.File;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -31,7 +31,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 {
     public UIIcon saveIcon;
 
-    public final List<DataTab> tabs = new ArrayList<>();
+    public final List<DataTab> tabs = this.documentTabs.getEntries();
     public int currentTab = -1;
     public UIDataTabs tabBar;
 
@@ -51,9 +51,12 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
     {
         super(dashboard);
 
+        this.onOpen(this::onPanelOpened);
+        this.onClose(this::onPanelClosed);
+
         this.saveIcon = new UIIcon(Icons.SAVED, (b) -> this.save());
 
-        this.iconBar.add(this.saveIcon);
+        this.actions().common(this.saveIcon);
 
         /* A separate element is needed to make save keybind a more priority than other keybinds, because
          * the keybinds are processed afterwards. */
@@ -73,14 +76,10 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
         this.tabsEnabled = true;
 
-        this.tabBar = new UIDataTabs(this);
-        this.tabBar.relative(this).w(1F).h(UIDataTabs.TABS_HEIGHT_PX);
+        this.tabBar = this.topBar.enableTabs(this);
         this.setupTabsLayout();
-        this.add(this.tabBar);
 
-        this.tabs.add(new DataTab(null));
-        this.currentTab = 0;
-        this.tabBar.sync();
+        this.documentTabs.setBar(this.tabBar);
     }
 
     private void setupTabsLayout()
@@ -93,21 +92,10 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         int tabsHeight = UIDataTabs.TABS_HEIGHT_PX;
         int tabsSlide = Math.round(tabsHeight * this.dashboardChromeHiddenAmount);
         int contentTop = tabsHeight - tabsSlide;
-        int sidebarWidth = Math.max(0, this.getSidebarWidthPx());
 
-        this.tabBar.relative(this).y(-tabsSlide).w(1F).h(tabsHeight);
-        this.tabBar.setRightInsetPx(this.getTabsRightInsetPx());
-        this.iconBar.relative(this).x(1F, -sidebarWidth).y(contentTop).w(sidebarWidth).h(1F, -contentTop).column(0).stretch();
-        this.iconBar.setVisible(sidebarWidth > 0);
-
-        if (sidebarWidth > 0)
-        {
-            this.editor.relative(this).y(contentTop).wTo(this.iconBar.area).h(1F, -contentTop);
-        }
-        else
-        {
-            this.editor.relative(this).y(contentTop).w(1F).h(1F, -contentTop);
-        }
+        this.topBar.relative(this).y(-tabsSlide).w(1F).h(tabsHeight);
+        this.topBar.setTabsRightInset(this.getTabsRightInsetPx());
+        this.editor.relative(this).y(contentTop).w(1F).h(1F, -contentTop);
     }
 
     @Override
@@ -121,14 +109,14 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         }
 
         this.dashboardChromeHiddenAmount = amount;
+        super.setDashboardChromeHiddenAmount(amount);
         this.setupTabsLayout();
     }
 
     @Override
     public boolean isDashboardChromeHovered(int mouseX, int mouseY)
     {
-        return this.tabsEnabled && this.tabBar != null && this.tabBar.isVisible()
-            && this.tabBar.area.isInside(mouseX, mouseY);
+        return this.topBar.area.isInside(mouseX, mouseY);
     }
 
     protected int getSidebarWidthPx()
@@ -156,9 +144,40 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         return tab != null && tab.dataId == null ? Icons.SEARCH : Icons.FOLDER;
     }
 
+    @Override
+    protected void onTabsChanged()
+    {
+        this.currentTab = this.documentTabs.getCurrentTab();
+    }
+
+    @Override
+    protected void showTab(String id)
+    {
+        if (id == null)
+        {
+            this.fill(null);
+        }
+        else
+        {
+            this.requestData(id);
+        }
+    }
+
+    @Override
+    public String getOpenId()
+    {
+        return this.tabsEnabled ? this.documentTabs.getCurrentId() : this.data == null ? null : this.data.getId();
+    }
+
+    @Override
+    public void saveOpen()
+    {
+        this.save();
+    }
+
     public DataTab getCurrentDataTab()
     {
-        return this.currentTab >= 0 && this.currentTab < this.tabs.size() ? this.tabs.get(this.currentTab) : null;
+        return this.documentTabs.getCurrent();
     }
 
     public boolean isNewTab(DataTab tab)
@@ -166,90 +185,71 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         return tab != null && tab.dataId == null;
     }
 
-    /* IUITabs — index-based adapters over the DataTab list */
+    /* IUITabs adapters preserve the data panel API while UITabList owns the state. */
 
     @Override
     public int getTabCount()
     {
-        return this.tabs.size();
+        return this.documentTabs.getTabCount();
     }
 
     @Override
     public int getCurrentTab()
     {
-        return this.currentTab;
+        return this.documentTabs.getCurrentTab();
     }
 
     @Override
     public IKey getTabLabel(int index)
     {
-        DataTab tab = this.tabs.get(index);
-
-        return tab.dataId == null ? this.getNewTabLabel() : IKey.raw(tab.dataId);
+        return this.documentTabs.getTabLabel(index);
     }
 
     @Override
     public IKey getTabTooltip(int index)
     {
-        return null;
+        return this.documentTabs.getTabTooltip(index);
     }
 
     @Override
     public Icon getTabIcon(int index)
     {
-        return this.getTabIcon(this.tabs.get(index));
+        return this.getTabIcon(this.documentTabs.get(index));
     }
 
     @Override
     public boolean isNewTab(int index)
     {
-        return this.isNewTab(this.tabs.get(index));
+        return this.isNewTab(this.documentTabs.get(index));
     }
 
     @Override
     public boolean canCloseTab(int index)
     {
-        return index >= 0 && index < this.tabs.size();
+        return this.documentTabs.canCloseTab(index);
     }
 
     @Override
     public void closeOtherTabs(int index)
     {
-        if (index >= 0 && index < this.tabs.size())
-        {
-            this.closeOtherTabs(this.tabs.get(index));
-        }
+        if (this.tabsEnabled) this.documentTabs.closeOtherTabs(index);
     }
 
     @Override
     public void closeTabsLeft(int index)
     {
-        if (index >= 0 && index < this.tabs.size())
-        {
-            this.closeTabsLeft(this.tabs.get(index));
-        }
+        if (this.tabsEnabled) this.documentTabs.closeTabsLeft(index);
     }
 
     @Override
     public void closeTabsRight(int index)
     {
-        if (index >= 0 && index < this.tabs.size())
-        {
-            this.closeTabsRight(this.tabs.get(index));
-        }
+        if (this.tabsEnabled) this.documentTabs.closeTabsRight(index);
     }
 
     public int findNewTabIndex()
     {
-        for (int i = 0; i < this.tabs.size(); i++)
-        {
-            if (this.isNewTab(this.tabs.get(i)))
-            {
-                return i;
-            }
-        }
-
-        return -1;
+        return this.documentTabs.findEmptyTab();
     }
 
     public boolean canAddNewTab()
@@ -257,211 +257,54 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         return this.findNewTabIndex() < 0;
     }
 
+    @Override
     public void addTab()
     {
-        if (!this.tabsEnabled)
+        if (this.tabsEnabled)
+        {
+            this.documentTabs.addTab();
+        }
+        else
         {
             this.openDataManager();
-
-            return;
         }
-
-        int index = this.findNewTabIndex();
-
-        if (index >= 0)
-        {
-            this.switchTab(index);
-
-            return;
-        }
-
-        this.tabs.add(new DataTab(null));
-        this.switchTab(this.tabs.size() - 1);
     }
 
     public void closeTab(DataTab tab)
     {
-        if (tab == null)
-        {
-            return;
-        }
-
-        int index = this.tabs.indexOf(tab);
-
-        if (index >= 0)
-        {
-            this.closeTab(index);
-        }
+        if (this.tabsEnabled) this.documentTabs.closeTab(tab);
     }
 
+    @Override
     public void closeTab(int index)
     {
-        if (!this.tabsEnabled || index < 0 || index >= this.tabs.size())
-        {
-            return;
-        }
-
-        if (this.tabs.size() <= 1)
-        {
-            if (this.data != null)
-            {
-                this.save();
-            }
-
-            this.tabs.get(0).dataId = null;
-            this.currentTab = 0;
-            this.fill(null);
-
-            return;
-        }
-
-        boolean wasCurrent = this.currentTab == index;
-
-        if (wasCurrent && this.data != null)
-        {
-            this.save();
-            this.data = null;
-        }
-
-        this.tabs.remove(index);
-
-        if (this.currentTab >= index)
-        {
-            this.currentTab = Math.max(0, this.currentTab - 1);
-        }
-
-        if (wasCurrent)
-        {
-            this.switchTab(this.currentTab, true);
-        }
-        else if (this.tabBar != null)
-        {
-            this.tabBar.sync();
-        }
+        if (this.tabsEnabled) this.documentTabs.closeTab(index);
     }
 
     public void closeOtherTabs(DataTab tab)
     {
-        int index = this.tabs.indexOf(tab);
-
-        if (index >= 0)
-        {
-            this.closeTabsKeeping((i) -> i == index, index);
-        }
+        this.closeOtherTabs(this.tabs.indexOf(tab));
     }
 
     public void closeTabsLeft(DataTab tab)
     {
-        int index = this.tabs.indexOf(tab);
-
-        if (index >= 0)
-        {
-            this.closeTabsKeeping((i) -> i >= index, index);
-        }
+        this.closeTabsLeft(this.tabs.indexOf(tab));
     }
 
     public void closeTabsRight(DataTab tab)
     {
-        int index = this.tabs.indexOf(tab);
-
-        if (index >= 0)
-        {
-            this.closeTabsKeeping((i) -> i <= index, index);
-        }
-    }
-
-    private void closeTabsKeeping(java.util.function.IntPredicate keep, int targetIndex)
-    {
-        if (!this.tabsEnabled || this.tabs.size() <= 1 || targetIndex < 0 || targetIndex >= this.tabs.size())
-        {
-            return;
-        }
-
-        if (this.data != null)
-        {
-            this.save();
-        }
-
-        DataTab target = this.tabs.get(targetIndex);
-        ArrayList<DataTab> kept = new ArrayList<>();
-
-        for (int i = 0; i < this.tabs.size(); i++)
-        {
-            if (keep.test(i))
-            {
-                kept.add(this.tabs.get(i));
-            }
-        }
-
-        if (kept.isEmpty())
-        {
-            kept.add(target);
-        }
-
-        this.tabs.clear();
-        this.tabs.addAll(kept);
-
-        int newIndex = this.tabs.indexOf(target);
-
-        if (newIndex < 0)
-        {
-            newIndex = 0;
-        }
-
-        this.currentTab = -1;
-        this.switchTab(newIndex, true);
+        this.closeTabsRight(this.tabs.indexOf(tab));
     }
 
     public void switchTab(DataTab tab)
     {
-        if (!this.tabsEnabled || tab == null)
-        {
-            return;
-        }
-
-        int index = this.tabs.indexOf(tab);
-
-        if (index >= 0)
-        {
-            this.switchTab(index);
-        }
+        if (this.tabsEnabled) this.documentTabs.switchTab(tab);
     }
 
+    @Override
     public void switchTab(int index)
     {
-        if (!this.tabsEnabled || index < 0 || index >= this.tabs.size())
-        {
-            return;
-        }
-
-        this.switchTab(index, false);
-    }
-
-    private void switchTab(int index, boolean force)
-    {
-        if (!force && this.currentTab == index)
-        {
-            return;
-        }
-
-        if (this.currentTab >= 0 && this.currentTab < this.tabs.size() && this.data != null)
-        {
-            this.save();
-            this.tabs.get(this.currentTab).dataId = this.data.getId();
-        }
-
-        this.currentTab = index;
-
-        DataTab tab = this.tabs.get(index);
-
-        if (tab.dataId == null)
-        {
-            this.fill(null);
-        }
-        else
-        {
-            this.requestData(tab.dataId);
-        }
+        if (this.tabsEnabled) this.documentTabs.switchTab(index);
     }
 
     public void onDataRenamed(String from, String to)
@@ -471,20 +314,11 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
             return;
         }
 
-        boolean changed = false;
+        this.documentTabs.renameId(from, to);
 
-        for (DataTab tab : this.tabs)
+        if (BBSSettings.recentData != null)
         {
-            if (from.equals(tab.dataId))
-            {
-                tab.dataId = to;
-                changed = true;
-            }
-        }
-
-        if (changed && this.tabBar != null)
-        {
-            this.tabBar.sync();
+            BBSSettings.recentData.rename(this.getType().getId(), from, to);
         }
     }
 
@@ -497,23 +331,11 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
         fromPath = normalizeFolderRenamePath(fromPath);
         toPath = resolveFolderRenamePath(fromPath, toPath);
+        this.documentTabs.renameFolder(fromPath, toPath);
 
-        String oldPrefix = fromPath + "/";
-        String newPrefix = toPath + "/";
-        boolean changed = false;
-
-        for (DataTab tab : this.tabs)
+        if (BBSSettings.recentData != null)
         {
-            if (tab.dataId != null && tab.dataId.startsWith(oldPrefix))
-            {
-                tab.dataId = newPrefix + tab.dataId.substring(oldPrefix.length());
-                changed = true;
-            }
-        }
-
-        if (changed && this.tabBar != null)
-        {
-            this.tabBar.sync();
+            BBSSettings.recentData.renameFolder(this.getType().getId(), fromPath, toPath);
         }
     }
 
@@ -571,27 +393,16 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
             return;
         }
 
-        boolean changed = false;
+        this.documentTabs.forgetId(id);
 
-        for (DataTab tab : this.tabs)
+        if (BBSSettings.recentData != null)
         {
-            if (id.equals(tab.dataId))
-            {
-                tab.dataId = null;
-                changed = true;
-            }
+            BBSSettings.recentData.forget(this.getType().getId(), id);
         }
 
         if (this.data != null && id.equals(this.data.getId()))
         {
             this.fill(null);
-
-            return;
-        }
-
-        if (changed && this.tabBar != null)
-        {
-            this.tabBar.sync();
         }
     }
 
@@ -602,28 +413,18 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
             return;
         }
 
-        String prefix = path.endsWith("/") ? path : path + "/";
-        boolean changed = false;
+        this.documentTabs.forgetFolder(path);
 
-        for (DataTab tab : this.tabs)
+        if (BBSSettings.recentData != null)
         {
-            if (tab.dataId != null && tab.dataId.startsWith(prefix))
-            {
-                tab.dataId = null;
-                changed = true;
-            }
+            BBSSettings.recentData.forgetFolder(this.getType().getId(), path);
         }
+
+        String prefix = path.endsWith("/") ? path : path + "/";
 
         if (this.data != null && this.data.getId() != null && this.data.getId().startsWith(prefix))
         {
             this.fill(null);
-
-            return;
-        }
-
-        if (changed && this.tabBar != null)
-        {
-            this.tabBar.sync();
         }
     }
 
@@ -663,7 +464,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         return new UIDataOverlayPanel<>(this.getTitle(), this, this::pickData);
     }
 
-    protected void openDataManager()
+    public void openDataManager()
     {
         super.openDataManager();
     }
@@ -678,24 +479,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
         if (this.tabsEnabled)
         {
-            if (this.currentTab < 0 || this.currentTab >= this.tabs.size())
-            {
-                if (this.tabs.isEmpty())
-                {
-                    this.tabs.add(new DataTab(null));
-                }
-
-                this.currentTab = 0;
-            }
-
-            this.save();
-            this.tabs.get(this.currentTab).dataId = id;
-            this.requestData(id);
-
-            if (this.tabBar != null)
-            {
-                this.tabBar.sync();
-            }
+            this.documentTabs.pick(id);
 
             return;
         }
@@ -704,9 +488,55 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         this.requestData(id);
     }
 
+    @Override
+    protected String getLandingId()
+    {
+        DataTab tab = this.getCurrentDataTab();
+        return tab == null ? (this.data == null ? null : this.data.getId()) : tab.dataId;
+    }
+
+    @Override
+    public String getRecentType()
+    {
+        return this.getType().getId();
+    }
+
+    @Override
+    public Icon getTabIcon(String id)
+    {
+        return this.getTabIcon(new DataTab(id));
+    }
+
+    @Override
+    public IKey getCreateLabel()
+    {
+        return this.overlay.canCreate() ? UIKeys.GENERAL_ADD : null;
+    }
+
+    @Override
+    public void addNewData(UIContext context)
+    {
+        this.overlay.addNewData(context);
+    }
+
+    @Override
+    public File getDataFolder()
+    {
+        return this.getRepository().getFolder();
+    }
+
+    @Override
+    public void showInList(String id)
+    {
+        this.overlay.namesList.setCurrentFile(id);
+        this.openDataManager();
+    }
+
     private boolean isCurrentData(String id)
     {
-        return id != null && this.data != null && id.equals(this.data.getId());
+        return id != null && this.data != null && id.equals(this.data.getId())
+            && this.editor.isEnabled()
+            && (!this.tabsEnabled || id.equals(this.documentTabs.getCurrentId()));
     }
 
     public void requestData(String id)
@@ -767,13 +597,18 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         if (data != null)
         {
             this.pinRepository();
+
+            if (BBSSettings.recentData != null && data.getId() != null)
+            {
+                BBSSettings.recentData.touch(this.getType().getId(), data.getId());
+            }
         }
 
         this.data = data;
 
         if (this.tabsEnabled && this.currentTab >= 0 && this.currentTab < this.tabs.size())
         {
-            this.tabs.get(this.currentTab).dataId = data == null ? null : data.getId();
+            this.documentTabs.setOpenId(data == null ? null : data.getId());
         }
 
         this.saveIcon.setEnabled(data != null);
@@ -783,6 +618,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         this.overlay.remove.setEnabled(data != null);
 
         this.fillData(data);
+        this.syncLanding();
 
         if (data != null && data.getId() != null)
         {
@@ -804,6 +640,7 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
 
     public void fillNames(Collection<String> names)
     {
+        super.fillNames(names);
         String value;
 
         if (this.tabsEnabled)
@@ -886,11 +723,8 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         repository.save(this.data.getId(), this.data.toData().asMap());
     }
 
-    @Override
-    public void open()
+    private void onPanelOpened()
     {
-        super.open();
-
         int seconds = BBSSettings.editorPeriodicSave.get();
 
         if (seconds > 0)
@@ -899,11 +733,8 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
         }
     }
 
-    @Override
-    public void close()
+    private void onPanelClosed()
     {
-        super.close();
-
         this.save();
     }
 

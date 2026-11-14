@@ -15,7 +15,19 @@ public class FormColorBlend
 
     public static void blend(Color base, Color overlay, boolean additive)
     {
-        blend(base, overlay, additive ? BlendMode.BRIGHTEN : BlendMode.MULTIPLY);
+        if (additive)
+        {
+            blend(base, overlay, BlendMode.BRIGHTEN);
+        }
+        else
+        {
+            blend(base, overlay);
+        }
+    }
+
+    public static void blend(Color base, Color overlay)
+    {
+        blend(base, overlay, BlendMode.MULTIPLY);
     }
 
     public static void blend(Color base, Color overlay, BlendMode mode)

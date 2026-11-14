@@ -37,6 +37,7 @@ import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIRenderingContext;
+import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIViewportStack;
@@ -72,12 +73,20 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 import java.util.List;
+import java.util.Deque;
+import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
 public class UIDashboard extends UIBaseMenu
 {
+    @Override
+    public IUIElement getPointerOwner()
+    {
+        return this.orbitUI.isFreeLook() ? this.orbitUI : null;
+    }
+
     private UIDashboardPanels panels;
 
     public UIIcon settings;
@@ -99,6 +108,7 @@ public class UIDashboard extends UIBaseMenu
     private final Map<String, UIExtensionDashboardOverlay> extensionOverlays = new LinkedHashMap<>();
     private final Map<String, AnchorTarget> dashboardAnchors = new LinkedHashMap<>();
     private boolean dashboardOpen;
+    private final Deque<Runnable> buildSteps = new ArrayDeque<>();
 
     public UIDashboard()
     {
@@ -114,16 +124,10 @@ public class UIDashboard extends UIBaseMenu
         });
         this.panels.full(this.viewport);
         this.registerPanels();
-        BBSDashboardPanelHostRegistry.installAll(this);
-
-        /* Posted straight on the addon channel: it carries api.client.events to addons, and the
-         * private static BBSModClient#postAddonEvent is not reachable from this package. */
-        mchorse.bbs_mod.api.EventBus.INSTANCE.post(new RegisterDashboardPanelsEvent(this));
 
         this.main.add(this.panels);
         this.addonOverlayLayer.full(this.getRoot()).eventPropagataion(EventPropagation.PASS);
         this.getRoot().addBefore(this.overlay, this.addonOverlayLayer);
-        BBSDashboardOverlayHostRegistry.installAll(this);
 
         this.settingsPanel = new UISettingsOverlayPanel();
 
@@ -189,10 +193,6 @@ public class UIDashboard extends UIBaseMenu
 
             UIOverlay.addOverlay(this.context, new UIUtilityOverlayPanel(UIKeys.UTILITY_TITLE, null), 240, height);
         });
-
-        /* Kicks the throttled FSR update check; popups only land once the
-         * dashboard is actually on screen. */
-        FSRUpdates.onDashboardOpened(this);
 
         this.showAnnoyingPopups();
     }
@@ -294,7 +294,9 @@ public class UIDashboard extends UIBaseMenu
     @Override
     public void onOpen(UIBaseMenu oldMenu)
     {
+        this.finishBuilding();
         super.onOpen(oldMenu);
+        FSRUpdates.onDashboardOpened(this);
 
         this.lastPerspective = Minecraft.getInstance().options.getCameraType();
 
@@ -334,6 +336,7 @@ public class UIDashboard extends UIBaseMenu
             this.panels.close();
         }
 
+        this.orbitUI.setFreeLook(false);
         this.orbit.reset();
         BBSModClient.getCameraController().remove(this.camera);
 
@@ -371,27 +374,62 @@ public class UIDashboard extends UIBaseMenu
 
     protected void registerPanels()
     {
-        this.registerBuiltInPanel(BBSDashboardPanelIds.MORPHING, new UIMorphingPanel(this), UIKeys.MORPHING_TITLE, Icons.MORPH);
-        this.registerBuiltInPanel(BBSDashboardPanelIds.FILM, new UIFilmPanel(this), UIKeys.FILM_TITLE, Icons.FILM);
-        this.registerBuiltInPanel(BBSDashboardPanelIds.MODEL_BLOCKS, new UIModelBlockPanel(this), UIKeys.MODEL_BLOCKS_TITLE, Icons.BLOCK);
-        this.registerBuiltInPanel(BBSDashboardPanelIds.PARTICLES, new UIParticleSchemePanel(this), UIKeys.PANELS_PARTICLES, Icons.PARTICLE).marginLeft(10);
-        this.registerBuiltInPanel(BBSDashboardPanelIds.MODEL_EDITOR, new UIModelEditorPanel(this), UIKeys.MODEL_EDITOR_TITLE, Icons.POSE);
-        this.registerBuiltInPanel(BBSDashboardPanelIds.TEXTURES, new UITextureManagerPanel(this), UIKeys.TEXTURES_TOOLTIP, Icons.MATERIAL);
-        this.registerBuiltInPanel(BBSDashboardPanelIds.AUDIO, new UIAudioEditorPanel(this), UIKeys.AUDIO_TITLE, Icons.SOUND);
-        this.registerBuiltInPanel(BBSDashboardPanelIds.GRAPH, new UIGraphPanel(this), UIKeys.GRAPH_TOOLTIP, Icons.GRAPH);
-        this.registerBuiltInPanel(BBSDashboardPanelIds.PLUGINS, new UIPluginsPanel(this), UIKeys.PLUGINS_TITLE, Icons.PROCESSOR);
+        this.buildStep("morphing", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.MORPHING, new UIMorphingPanel(this), UIKeys.MORPHING_TITLE, Icons.MORPH));
+        this.buildStep("film", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.FILM, new UIFilmPanel(this), UIKeys.FILM_TITLE, Icons.FILM));
+        this.buildStep("model_blocks", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.MODEL_BLOCKS, new UIModelBlockPanel(this), UIKeys.MODEL_BLOCKS_TITLE, Icons.BLOCK));
+        this.buildStep("particles", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.PARTICLES, new UIParticleSchemePanel(this), UIKeys.PANELS_PARTICLES, Icons.PARTICLE).marginLeft(10));
+        this.buildStep("model_editor", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.MODEL_EDITOR, new UIModelEditorPanel(this), UIKeys.MODEL_EDITOR_TITLE, Icons.POSE));
+        this.buildStep("textures", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.TEXTURES, new UITextureManagerPanel(this), UIKeys.TEXTURES_TOOLTIP, Icons.MATERIAL));
+        this.buildStep("audio", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.AUDIO, new UIAudioEditorPanel(this), UIKeys.AUDIO_TITLE, Icons.SOUND));
+        this.buildStep("graph", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.GRAPH, new UIGraphPanel(this), UIKeys.GRAPH_TOOLTIP, Icons.GRAPH));
+        this.buildStep("plugins", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.PLUGINS, new UIPluginsPanel(this), UIKeys.PLUGINS_TITLE, Icons.PROCESSOR));
 
-        if (!List.copyOf(this.builtInPanels.keySet()).equals(BBSDashboardPanelIds.BUILT_IN))
+        this.buildStep("built-in completion", () ->
         {
-            throw new IllegalStateException("Dashboard built-in panel ids do not match the taskbar registration order");
-        }
-
-        if (LoaderAccessHolder.get().isDevelopmentEnvironment())
+            if (!List.copyOf(this.builtInPanels.keySet()).equals(BBSDashboardPanelIds.BUILT_IN))
+            {
+                throw new IllegalStateException("Dashboard built-in panel ids do not match the taskbar registration order");
+            }
+            if (LoaderAccessHolder.get().isDevelopmentEnvironment())
+            {
+                this.panels.registerPanel(new UIDebugPanel(this), IKey.raw("Sandbox"), Icons.CODE);
+            }
+            this.setPanel(this.getPanel(UIFilmPanel.class));
+        });
+        this.buildStep("add-ons", () ->
         {
-            this.panels.registerPanel(new UIDebugPanel(this), IKey.raw("Sandbox"), Icons.CODE);
-        }
+            BBSDashboardPanelHostRegistry.installAll(this);
+            mchorse.bbs_mod.api.EventBus.INSTANCE.post(new RegisterDashboardPanelsEvent(this));
+            BBSDashboardOverlayHostRegistry.installAll(this);
+        });
+    }
 
-        this.setPanel(this.getPanel(UIFilmPanel.class));
+    private void buildStep(String name, Runnable action)
+    {
+        this.buildSteps.add(() ->
+        {
+            long start = System.nanoTime();
+            action.run();
+            System.out.printf("Dashboard panel %s built in %.1f ms%n", name, (System.nanoTime() - start) / 1_000_000D);
+        });
+    }
+
+    /** Build one render-thread step, returning whether more remain. */
+    public boolean buildNextStep()
+    {
+        Runnable step = this.buildSteps.poll();
+        if (step != null) step.run();
+        return !this.buildSteps.isEmpty();
+    }
+
+    public boolean isFullyBuilt()
+    {
+        return this.buildSteps.isEmpty();
+    }
+
+    public void finishBuilding()
+    {
+        while (this.buildNextStep());
     }
 
     private UIIcon registerBuiltInPanel(String id, UIDashboardPanel panel, IKey title, mchorse.bbs_mod.ui.utils.icons.Icon icon)
@@ -486,7 +524,7 @@ public class UIDashboard extends UIBaseMenu
     private void registerParticlesAnchors(UIParticleSchemePanel panel)
     {
         this.registerAnchor(BBSDashboardAnchors.PARTICLES_RENDERER, BBSDashboardPanelIds.PARTICLES, () -> panel.renderer);
-        this.registerAnchor(BBSDashboardAnchors.PARTICLES_SELECTION, BBSDashboardPanelIds.PARTICLES, () -> panel.selectionPanel);
+        this.registerAnchor(BBSDashboardAnchors.PARTICLES_SELECTION, BBSDashboardPanelIds.PARTICLES, () -> panel.landing);
         this.registerAnchor(BBSDashboardAnchors.PARTICLES_DOCK, BBSDashboardPanelIds.PARTICLES, () -> panel.dock);
         this.registerAnchor(BBSDashboardAnchors.PARTICLES_LOCK_LAYOUT, BBSDashboardPanelIds.PARTICLES, () -> panel.lockLayoutButton);
         this.registerAnchor(BBSDashboardAnchors.PARTICLES_LAYOUT_PRESETS, BBSDashboardPanelIds.PARTICLES, () -> panel.layoutPresetsButton);

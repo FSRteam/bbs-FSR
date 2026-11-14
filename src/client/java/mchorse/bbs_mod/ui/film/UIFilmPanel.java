@@ -66,6 +66,7 @@ import mchorse.bbs_mod.ui.film.view.ViewPerformanceSettings;
 import mchorse.bbs_mod.ui.film.utils.undo.UIUndoHistoryOverlay;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIUndoKeys;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.layout.ILayoutSource;
 import mchorse.bbs_mod.ui.framework.elements.layout.UIDockLayout;
@@ -172,6 +173,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public UIIcon openCameraEditor;
     public UIIcon openReplayEditor;
     public UIIcon openActionEditor;
+    public UIIcon layoutLock;
 
     private UICopyPasteController layoutPresetsController;
 
@@ -211,12 +213,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     private static final String PANEL_REPLAY_PROPS_ID = "replayProps";
     /** Top offset (px) for parameters panels when layout is unlocked (space for drag icon). Used for lock button size too. */
     public static final int EDIT_PANEL_TOP_OFFSET_PX = 20;
-    private static final int FILM_TOP_BAR_BUTTON_SIZE = UIDataTabs.TABS_HEIGHT_PX;
-    private static final int FILM_TOP_BAR_SEPARATOR_WIDTH = 8;
-    private static final int FILM_TOP_BAR_ACTIONS_WIDTH = FILM_TOP_BAR_BUTTON_SIZE * 4 + FILM_TOP_BAR_SEPARATOR_WIDTH;
     private UIElement selectedMainEditorPanel;
-    private UIElement topBarActions;
-    private UIElement topBarSeparator;
 
 
     /**
@@ -225,6 +222,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     public UIFilmPanel(UIDashboard dashboard)
     {
         super(dashboard);
+
+        this.onOpen(this::onPanelOpened);
+        this.onClose(this::onPanelClosed);
+        this.onAppear(this::onPanelAppeared);
+        this.onDisappear(this::onPanelDisappeared);
         this.enableTabs();
         this.playerToCamera = BBSSettings.editorPlayerFollowsCamera.get();
 
@@ -257,11 +259,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.panelById.put(PANEL_PREVIEW_4_ID, this.preview4);
         this.panelById.put(PANEL_EDIT_AREA_ID, this.editArea);
 
-        /* The dock must be constructed before the editors below: the replay
-         * editors query its lock state (edit panel top offset) from their own
-         * constructors, and this final field cannot be left unassigned when
-         * getEditPanelTopOffsetPx() runs during their construction. The layout
-         * wiring further down configures and mounts it afterwards. */
+        /* Construct the dock before its editors; layout wiring and slot mounting follow below. */
         this.dock = new UIDockLayout()
             .locked(!BBSSettings.editorLayoutSettings.isDockUnlocked(ValueEditorLayout.FILM));
 
@@ -277,40 +275,40 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.replayEditor = new UIReplaysEditor(this);
         this.replayEditor.full(this.main).setVisible(false);
         this.actionEditor = new UIClipsPanel(this, BBSMod.getFactoryActionClips()).target(this.editArea);
-        this.actionEditor.full(this.main).setVisible(false);
+        this.actionEditor.setVisible(false);
+        this.replayEditor.attachActionTimeline(this.actionEditor);
 
         this.panelById.put(PANEL_REPLAYS_LIST_ID, this.replayEditor.replaysList);
         this.panelById.put(PANEL_REPLAY_PROPS_ID, this.replayEditor.replayProperties);
         this.selectedMainEditorPanel = this.cameraEditor;
 
-        /* Film panel keeps common CRUD actions inside film settings menu instead of the sidebar. */
-        this.iconBar.remove(this.openOverlay);
-        this.iconBar.remove(this.saveIcon);
-
         /* Top bar buttons */
-        this.openFilmMenu = new UIIcon(Icons.MORE, (b) ->
+        this.openFilmMenu = new UIIcon(Icons.GEAR, (b) ->
         {
             this.getContext().replaceContextMenu(this::fillFilmContextMenu);
         });
         this.openCameraEditor = new UIIcon(Icons.FRUSTUM, (b) -> this.showPanel(this.cameraEditor));
         this.openReplayEditor = new UIIcon(Icons.SCENE, (b) -> this.showPanel(this.replayEditor));
         this.openActionEditor = new UIIcon(Icons.ACTION, (b) -> this.showPanel(this.actionEditor));
+        this.layoutLock = new UIIcon(() -> this.dock.isLocked() ? Icons.LOCKED : Icons.UNLOCKED, (b) -> this.toggleLayoutLock());
+        this.layoutLock.tooltip((IKey) () -> (this.dock.isLocked() ? UIKeys.FILM_LAYOUT_UNLOCK : UIKeys.FILM_LAYOUT_LOCK).get());
+        this.openOverlay.tooltip(UIKeys.FILM_TITLE);
+        this.saveIcon.tooltip(UIKeys.GENERAL_SAVE);
 
         this.layoutPresetsController = new UICopyPasteController(PresetManager.LAYOUTS, "_CopyFilmLayout")
             .supplier(this::getFilmLayoutPresetData)
             .consumer(this::applyFilmLayoutFromPreset);
 
-        this.openFilmMenu.wh(FILM_TOP_BAR_BUTTON_SIZE, FILM_TOP_BAR_BUTTON_SIZE).tooltip(UIKeys.FILM_OPTIONS, Direction.BOTTOM);
-        this.openCameraEditor.wh(FILM_TOP_BAR_BUTTON_SIZE, FILM_TOP_BAR_BUTTON_SIZE).tooltip(UIKeys.FILM_OPEN_CAMERA_EDITOR, Direction.BOTTOM);
-        this.openReplayEditor.wh(FILM_TOP_BAR_BUTTON_SIZE, FILM_TOP_BAR_BUTTON_SIZE).tooltip(UIKeys.FILM_OPEN_REPLAY_EDITOR, Direction.BOTTOM);
-        this.openActionEditor.wh(FILM_TOP_BAR_BUTTON_SIZE, FILM_TOP_BAR_BUTTON_SIZE).tooltip(UIKeys.FILM_OPEN_ACTION_EDITOR, Direction.BOTTOM);
+        this.openFilmMenu.tooltip(UIKeys.FILM_OPTIONS);
+        this.openCameraEditor.tooltip(UIKeys.FILM_OPEN_CAMERA_EDITOR);
+        this.openReplayEditor.tooltip(UIKeys.FILM_OPEN_REPLAY_EDITOR);
+        this.openActionEditor.tooltip(UIKeys.FILM_OPEN_ACTION_EDITOR);
 
-        this.topBarActions = new UIElement();
-        this.topBarActions.relative(this.tabBar).x(1F, -FILM_TOP_BAR_ACTIONS_WIDTH).w(FILM_TOP_BAR_ACTIONS_WIDTH).h(UIDataTabs.TABS_HEIGHT_PX).row(0).resize();
-        this.topBarSeparator = new UIElement();
-        this.topBarSeparator.wh(FILM_TOP_BAR_SEPARATOR_WIDTH, UIDataTabs.TABS_HEIGHT_PX);
-        this.topBarActions.add(new UIRenderable(this::renderTopBarActions), this.openCameraEditor, this.openReplayEditor, this.openActionEditor, this.topBarSeparator, this.openFilmMenu);
-        this.tabBar.add(this.topBarActions);
+        this.actions()
+            .editor(this.openCameraEditor, () -> this.cameraEditor.isVisible())
+            .editor(this.openReplayEditor, () -> this.replayEditor.isVisible())
+            .layout(this.layoutLock, () -> this.dock.isLocked())
+            .menu(this.openFilmMenu);
 
         /* Setup elements */
         this.dock.relative(this.editor).w(1F).h(1F);
@@ -330,7 +328,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.dock.mount();
         this.editor.add(this.dock);
-        this.main.add(this.cameraEditor, this.replayEditor, this.actionEditor);
+        this.main.add(this.cameraEditor, this.replayEditor);
         this.add(this.controller);
         this.overlay.namesList.setFileIcon(Icons.FILM);
 
@@ -364,12 +362,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.keys().register(Keys.JUMP_BACKWARD, () -> this.setCursor(this.getCursor() - BBSSettings.editorJump.get())).active(active).category(editor);
         this.keys().register(Keys.FILM_CONTROLLER_CYCLE_EDITORS, () ->
         {
-            this.showPanel(MathUtils.cycler(this.getPanelIndex() + 1, this.panels));
+            this.cycleMainEditor();
             UIUtils.playClick();
         }).category(editor);
         this.keys().register(Keys.FILM_CONTROLLER_TOGGLE_ACTIONS, () ->
         {
-            this.showPanel(this.actionEditor);
+            this.toggleActionTimeline();
             UIUtils.playClick();
         }).category(editor);
         this.keys().register(Keys.FILM_CONTROLLER_NEXT_DOCK_TAB, () ->
@@ -442,7 +440,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         };
 
         this.add(element);
-        this.add(new UIFilmPanelUndoKeys(this).full(this));
+        this.add(new UIUndoKeys(this::undo, this::redo).full(this));
 
         IValueListener refreshPreviewOnVideoResolution = (v, f) ->
         {
@@ -455,7 +453,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         BBSSettings.editorPreviewCustomHeight.postCallback(refreshPreviewOnVideoResolution);
         BBSSettings.editorPreviewResolutionScale.postCallback(refreshPreviewOnVideoResolution);
 
-        this.selectionPanel.relative(this).y(UIDataTabs.TABS_HEIGHT_PX).wTo(this.iconBar.area).h(1F, -UIDataTabs.TABS_HEIGHT_PX);
+        this.layoutUnderTopBar(this.selectionPanel);
         this.add(this.selectionPanel);
     }
 
@@ -490,22 +488,16 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return this.dock.isLocked();
     }
 
-    /** Top offset (px) for parameters panels; 0 when layout locked. */
+    /** Legacy inspector offset; the dock slot now reserves its own header. */
     public int getEditPanelTopOffsetPx()
     {
-        return this.dock.isLocked() ? 0 : EDIT_PANEL_TOP_OFFSET_PX;
+        return 0;
     }
 
     @Override
     protected int getSidebarWidthPx()
     {
         return 0;
-    }
-
-    @Override
-    protected int getTabsRightInsetPx()
-    {
-        return FILM_TOP_BAR_ACTIONS_WIDTH;
     }
 
     @Override
@@ -674,11 +666,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         boolean visible = hasFilm && (mainActive || editAreaActive);
         boolean cameraVisible = visible && selected == this.cameraEditor;
         boolean replayVisible = visible && selected == this.replayEditor;
-        boolean actionVisible = visible && selected == this.actionEditor;
 
         this.cameraEditor.setVisible(cameraVisible);
         this.replayEditor.setVisible(replayVisible);
-        this.actionEditor.setVisible(actionVisible);
 
         this.cameraEditor.setTimelineVisible(mainActive && cameraVisible);
         this.cameraEditor.setPropertiesVisible(editAreaActive && cameraVisible);
@@ -686,8 +676,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.replayEditor.setTimelineVisible(mainActive && replayVisible);
         this.replayEditor.setPropertiesVisible(editAreaActive && replayVisible);
 
-        this.actionEditor.setTimelineVisible(mainActive && actionVisible);
-        this.actionEditor.setPropertiesVisible(editAreaActive && actionVisible);
     }
 
     private void toggleLayoutLock()
@@ -740,12 +728,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         if (this.selectedMainEditorPanel == this.replayEditor)
         {
-            return ValueEditorLayout.FilmEditor.REPLAY;
-        }
-
-        if (this.selectedMainEditorPanel == this.actionEditor)
-        {
-            return ValueEditorLayout.FilmEditor.ACTION;
+            return this.replayEditor.isActionsMode() ? ValueEditorLayout.FilmEditor.ACTION : ValueEditorLayout.FilmEditor.REPLAY;
         }
 
         return ValueEditorLayout.FilmEditor.CAMERA;
@@ -812,31 +795,64 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     private EditorLayoutNode getCurrentFilmLayoutRoot()
     {
-        return this.getFilmLayoutSettings().getFilmLayoutRoot(this.getCurrentFilmLayoutEditor());
+        ValueEditorLayout layout = this.getFilmLayoutSettings();
+        String id = this.currentLayoutId();
+
+        return layout.getLayout(id, () ->
+        {
+            /* Materialize a missing tree once so repeated dock reads keep the same node identity. */
+            EditorLayoutNode seed = ValueEditorLayout.FILM.equals(id)
+                ? EditorLayoutNode.defaultFilmLayout()
+                : layout.getLayout(ValueEditorLayout.FILM, EditorLayoutNode::defaultFilmLayout);
+            EditorLayoutNode root = EditorLayoutNode.fromData(seed.toData());
+
+            layout.setLayout(id, root);
+
+            return root;
+        });
     }
 
     private void setCurrentFilmLayoutRoot(EditorLayoutNode root)
     {
-        this.getFilmLayoutSettings().setFilmLayoutRoot(this.getCurrentFilmLayoutEditor(), root);
+        this.getFilmLayoutSettings().setLayout(this.currentLayoutId(), root);
     }
 
     private List<EditorLayoutNode.SplitterNode> getCurrentFilmSplitters()
     {
-        return this.getFilmLayoutSettings().getFilmSplitters(this.getCurrentFilmLayoutEditor());
+        List<EditorLayoutNode.SplitterNode> splitters = new ArrayList<>();
+
+        EditorLayoutNode.collectSplitters(this.getCurrentFilmLayoutRoot(), splitters);
+
+        return splitters;
     }
 
     private List<EditorLayoutNode.SplitterNode> getCurrentFilmSplittersForWrite()
     {
-        return this.getFilmLayoutSettings().getFilmSplittersForWrite(this.getCurrentFilmLayoutEditor());
+        return this.getCurrentFilmSplitters();
     }
 
     private String currentLayoutId()
     {
         ValueEditorLayout.FilmEditor editor = this.getCurrentFilmLayoutEditor();
 
-        return this.getFilmLayoutSettings().isFilmLayoutBound(editor)
+        return this.getFilmLayoutSettings().isBound(ValueEditorLayout.filmLayoutId(editor))
             ? ValueEditorLayout.filmLayoutId(editor)
             : ValueEditorLayout.FILM;
+    }
+
+    private boolean isCurrentFilmLayoutBound()
+    {
+        return this.getFilmLayoutSettings().isBound(ValueEditorLayout.filmLayoutId(this.getCurrentFilmLayoutEditor()));
+    }
+
+    private void toggleCurrentFilmLayoutBinding()
+    {
+        ValueEditorLayout layout = this.getFilmLayoutSettings();
+        String id = ValueEditorLayout.filmLayoutId(this.getCurrentFilmLayoutEditor());
+
+        /* Binding starts from the visible layout; only an explicit unbind discards its copy. */
+        layout.setBound(id, !layout.isBound(id), this.getCurrentFilmLayoutRoot());
+        this.dock.refresh();
     }
 
     private MapType getFilmLayoutPresetData()
@@ -1047,19 +1063,15 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     private void fillFilmContextMenu(ContextMenuManager menu)
     {
-        menu.action(Icons.FILM, UIKeys.FILM_TITLE, this::openFilmListOverlay);
-
         if (this.data == null)
         {
             return;
         }
 
-        menu.action(Icons.SAVED, UIKeys.GENERAL_SAVE, this::save);
         menu.action(Icons.LAYOUT, UIKeys.FILM_LAYOUT_PRESETS, this::openLayoutPresetsMenu);
+        menu.action(Icons.LINK, UIKeys.FILM_LAYOUT_BIND_TO_EDITOR, this.isCurrentFilmLayoutBound(), this::toggleCurrentFilmLayoutBinding);
         menu.action(Icons.REFRESH, UIKeys.FILM_LAYOUT_RESET, this::resetFilmLayout);
         this.dock.fillHiddenPanelsMenu(menu);
-        boolean layoutLocked = this.dock.isLocked();
-        menu.action(layoutLocked ? Icons.UNLOCKED : Icons.LOCKED, layoutLocked ? UIKeys.FILM_LAYOUT_UNLOCK : UIKeys.FILM_LAYOUT_LOCK, layoutLocked, this::toggleLayoutLock);
 
         menu.action(Icons.LIST, UIKeys.FILM_OPEN_HISTORY, () ->
         {
@@ -1422,8 +1434,24 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
     }
 
+    private void cycleMainEditor()
+    {
+        this.showPanel(this.selectedMainEditorPanel == this.cameraEditor ? this.replayEditor : this.cameraEditor);
+    }
+
+    private void toggleActionTimeline()
+    {
+        this.showPanel(this.replayEditor.isActionsMode() ? this.replayEditor : this.actionEditor);
+    }
+
     public int getPanelIndex()
     {
+        /* Keep the persisted action index and direct-addon entry point as adapters. */
+        if (this.replayEditor.isVisible() && this.replayEditor.isActionsMode())
+        {
+            return this.panels.indexOf(this.actionEditor);
+        }
+
         for (int i = 0; i < this.panels.size(); i++)
         {
             if (this.panels.get(i).isVisible())
@@ -1437,15 +1465,29 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public void showPanel(int index)
     {
-        this.showPanel(this.panels.get(index));
+        if (index >= 0 && index < this.panels.size())
+        {
+            this.showPanel(this.panels.get(index));
+        }
     }
 
     public void showPanel(UIElement element)
     {
         this.cameraEditor.embedView(null);
+        boolean actionsMode = element == this.actionEditor;
+
+        if (actionsMode)
+        {
+            element = this.replayEditor;
+        }
 
         if (element == this.selectedMainEditorPanel && element.isVisible())
         {
+            if (element == this.replayEditor)
+            {
+                this.replayEditor.setActionsMode(actionsMode);
+            }
+
             if (this.isFlying())
             {
                 this.toggleFlight();
@@ -1460,6 +1502,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (index >= 0)
         {
             this.captureTimelineViewport(this.panels.get(index));
+        }
+
+        if (element == this.replayEditor)
+        {
+            this.replayEditor.setActionsMode(actionsMode);
         }
 
         this.selectedMainEditorPanel = element;
@@ -1496,10 +1543,18 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.timelineXMin = this.actionEditor.clips.scale.getMinValue();
             this.timelineXMax = this.actionEditor.clips.scale.getMaxValue();
         }
-        else if (panel == this.replayEditor && this.replayEditor.keyframeEditor != null)
+        else if (panel == this.replayEditor)
         {
-            this.timelineXMin = this.replayEditor.keyframeEditor.view.getXAxis().getMinValue();
-            this.timelineXMax = this.replayEditor.keyframeEditor.view.getXAxis().getMaxValue();
+            if (this.replayEditor.isActionsMode())
+            {
+                this.timelineXMin = this.actionEditor.clips.scale.getMinValue();
+                this.timelineXMax = this.actionEditor.clips.scale.getMaxValue();
+            }
+            else if (this.replayEditor.keyframeEditor != null)
+            {
+                this.timelineXMin = this.replayEditor.keyframeEditor.view.getXAxis().getMinValue();
+                this.timelineXMax = this.replayEditor.keyframeEditor.view.getXAxis().getMaxValue();
+            }
         }
     }
 
@@ -1518,9 +1573,26 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         {
             this.actionEditor.clips.scale.view(this.timelineXMin, this.timelineXMax);
         }
-        else if (panel == this.replayEditor && this.replayEditor.keyframeEditor != null)
+        else if (panel == this.replayEditor)
         {
-            this.replayEditor.keyframeEditor.view.getXAxis().view(this.timelineXMin, this.timelineXMax);
+            if (this.replayEditor.isActionsMode())
+            {
+                this.actionEditor.clips.scale.view(this.timelineXMin, this.timelineXMax);
+            }
+            else if (this.replayEditor.keyframeEditor != null)
+            {
+                this.replayEditor.keyframeEditor.view.getXAxis().view(this.timelineXMin, this.timelineXMax);
+            }
+        }
+    }
+
+    /** Refresh the dock while retaining FSR's separate saved action layout. */
+    public void onReplayTimelineModeChanged()
+    {
+        if (this.selectedMainEditorPanel == this.replayEditor)
+        {
+            this.dock.applyLayoutRoot(this.getCurrentFilmLayoutRoot());
+            this.applyPreviewSizeToBBS("timelineMode");
         }
     }
 
@@ -2004,11 +2076,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return data;
     }
 
-    @Override
-    public void open()
+    private void onPanelOpened()
     {
-        super.open();
-
         Recorder recorder = BBSModClient.getFilms().stopRecording();
         Film film = this.data;
 
@@ -2019,8 +2088,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             || !recorder.hasRecordedFrame()
             || !recorder.isInCurrentLevel())
         {
-            this.notifyServer(ActionState.RESTART);
-
             return;
         }
 
@@ -2163,11 +2230,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.controller.createEntities();
     }
 
-    @Override
-    public void appear()
+    private void onPanelAppeared()
     {
-        super.appear();
-
         this.activateLifecycle();
     }
 
@@ -2178,7 +2242,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
          * context and the editor isn't actually shown. Defer activation until update()
          * runs for the genuinely visible panel, and keep it idempotent so the runner
          * can never be registered twice. */
-        if (this.lifecycleActive || this.getContext() == null)
+        if (this.lifecycleActive || this.getContext() == null || this.dashboard.getPanels().panel != this)
         {
             return;
         }
@@ -2201,11 +2265,25 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         cameraController.add(this.runner);
 
         this.getContext().menu.getRoot().add(this.secretPlay);
+
+        /* Only the visible editor owns server actions; a take or export already owns its clock. */
+        if (this.canStartEditorPlayback())
+        {
+            this.notifyServer(ActionState.RESTART);
+        }
     }
 
-    @Override
-    public void close()
+    private boolean canStartEditorPlayback()
     {
+        return this.lifecycleActive && this.dashboard.getPanels().panel == this
+            && !this.controller.isRecording() && !this.recorder.isRecording() && !this.recorder.isExporting()
+            && BBSModClient.getFilms().getRecorder() == null;
+    }
+
+    private void onPanelClosed()
+    {
+        boolean wasActive = this.lifecycleActive;
+
         this.cancelViewInteractions();
         this.saveViewSettings();
         this.releaseViewResources();
@@ -2220,7 +2298,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.queueExporter.cancel();
         }
 
-        super.close();
         BBSRendering.setCustomSize(false);
         MorphRenderer.hidePlayer = false;
 
@@ -2234,7 +2311,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.disableContext();
         this.replayEditor.close();
 
-        this.notifyServer(ActionState.STOP);
+        if (wasActive && BBSModClient.getFilms().getRecorder() == null)
+        {
+            this.notifyServer(ActionState.STOP);
+        }
         this.freezeFrame();
     }
 
@@ -2258,9 +2338,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
     }
 
-    @Override
-    public void disappear()
+    private void onPanelDisappeared()
     {
+        boolean wasActive = this.lifecycleActive;
+
         this.cancelViewInteractions();
         this.saveViewSettings();
         this.releaseViewResources();
@@ -2269,8 +2350,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.controller.shutdown();
         this.flushFilmCollaborationEdits();
         BBSFilmCollaborationBridge.detach(this);
-        super.disappear();
-
         BBSRendering.setCustomSize(false);
         MorphRenderer.hidePlayer = false;
 
@@ -2280,6 +2359,11 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.disableContext();
         this.secretPlay.removeFromParent();
+
+        if (wasActive && BBSModClient.getFilms().getRecorder() == null)
+        {
+            this.notifyServer(ActionState.STOP);
+        }
     }
 
     private void disableContext()
@@ -2366,7 +2450,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
          * local collaboration mutation. submitUndo() is idempotent when empty. */
         this.flushFilmCollaborationEdits();
         this.captureTimelineScroll();
-        this.notifyServer(ActionState.STOP);
+        if (this.lifecycleActive && BBSModClient.getFilms().getRecorder() == null)
+        {
+            this.notifyServer(ActionState.STOP);
+        }
         super.fill(data);
         this.restoreTimelineScroll();
 
@@ -2381,7 +2468,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             FilmThumbnails.requestCapture(data.getId());
         }
 
-        this.notifyServer(ActionState.RESTART);
+        if (this.canStartEditorPlayback())
+        {
+            this.notifyServer(ActionState.RESTART);
+        }
     }
 
     /** Flush the undo batch before a remote CAS check or session teardown. */
@@ -2389,7 +2479,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         if (this.undoHandler != null)
         {
-            this.undoHandler.submitUndo();
+            this.undoHandler.submitUndo(true);
         }
 
         BBSFilmCollaborationBridge.flushPending(this);
@@ -2471,6 +2561,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.openCameraEditor.setEnabled(data != null);
         this.openReplayEditor.setEnabled(data != null);
         this.openActionEditor.setEnabled(data != null);
+        this.layoutLock.setEnabled(data != null);
         this.duplicateFilm.setEnabled(data != null);
 
         this.actionEditor.setClips(null);
@@ -2528,12 +2619,14 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
     public void undo()
     {
+        this.undoHandler.submitUndo(true);
         this.finishFlight(false, "undo");
         if (this.data != null && this.undoHandler.getUndoManager().undo(this.data)) UIUtils.playClick();
     }
 
     public void redo()
     {
+        this.undoHandler.submitUndo(true);
         this.finishFlight(false, "redo");
         if (this.data != null && this.undoHandler.getUndoManager().redo(this.data)) UIUtils.playClick();
     }
@@ -2784,60 +2877,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         super.renderBackground(context);
     }
 
-    private void renderTopBarActions(UIContext context)
-    {
-        if (this.topBarActions == null || !this.topBarActions.isVisible())
-        {
-            return;
-        }
-
-        this.renderTopBarButton(context, this.openCameraEditor, this.cameraEditor.isVisible());
-        this.renderTopBarButton(context, this.openReplayEditor, this.replayEditor.isVisible());
-        this.renderTopBarButton(context, this.openActionEditor, this.actionEditor.isVisible());
-        this.renderTopBarSeparator(context);
-        this.renderTopBarButton(context, this.openFilmMenu, false);
-    }
-
-    private void renderTopBarButton(UIContext context, UIIcon button, boolean active)
-    {
-        if (button == null || !button.isVisible())
-        {
-            return;
-        }
-
-        button.active(active);
-
-        Area area = button.area;
-        boolean hover = area.isInside(context.mouseX, context.mouseY);
-
-        if (BBSSettings.cornerWidget() > 0)
-        {
-            return;
-        }
-
-        if (active)
-        {
-            UIDashboardPanels.renderHighlight(context.batcher, area, Direction.BOTTOM);
-        }
-        else if (hover)
-        {
-            context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
-        }
-    }
-
-    private void renderTopBarSeparator(UIContext context)
-    {
-        if (this.topBarSeparator == null || !this.topBarSeparator.isVisible())
-        {
-            return;
-        }
-
-        Area area = this.topBarSeparator.area;
-        int x = area.mx();
-
-        context.batcher.box(x, area.y + 3, x + 1, area.ey() - 3, BBSSettings.dividerColor());
-    }
-
     /**
      * Draw everything on the screen
      */
@@ -2875,7 +2914,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             }
         }
 
-        if (this.controller.isControlling())
+        this.dashboard.orbitUI.setFreeLook(this.isFlying()
+            && BBSSettings.editorFlightFreeLook.get()
+            && !this.controller.isControlling()
+            && !UIOverlay.has(context));
+
+        if (this.controller.isControlling() || this.dashboard.orbitUI.isFreeLook())
         {
             context.mouseX = context.mouseY = -1;
         }

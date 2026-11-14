@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.ui.particles.utils;
 
-import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.particles.components.appearance.BillboardDirection;
 import mchorse.bbs_mod.particles.components.appearance.CameraFacing;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
@@ -31,14 +31,14 @@ public final class UIParticleIcons
     {
         for (CameraFacing facing : CameraFacing.values())
         {
-            icons.add(facingIcon(facing), IKey.raw(facing.id));
+            icons.add(facingIcon(facing), UIKeys.C_CAMERA_FACING.get(facing.id));
         }
     }
 
     public static void addDirectionModes(UIIcons icons)
     {
-        icons.add(Icons.ALL_DIRECTIONS, UIKeys.SNOWSTORM_APPEARANCE_DIRECTION_DERIVE);
-        icons.add(Icons.CODE, UIKeys.SNOWSTORM_APPEARANCE_DIRECTION_CUSTOM);
+        icons.add(Icons.ALL_DIRECTIONS, UIKeys.C_BILLBOARD_DIRECTION.get(BillboardDirection.DERIVE_FROM_VELOCITY.id));
+        icons.add(Icons.CODE, UIKeys.C_BILLBOARD_DIRECTION.get(BillboardDirection.CUSTOM_DIRECTION.id));
     }
 
     public static void addColorModes(UIIcons icons)

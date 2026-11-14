@@ -15,7 +15,8 @@
         "LimbAnimatorAccessor",
         "LevelPropertiesAccessor",
         "EntityInvoker",
-        "LivingEntityRollAccessor"
+        "LivingEntityRollAccessor",
+        "LivingEntityAccess"
     ],
     "injectors": {
         "defaultRequire": 1

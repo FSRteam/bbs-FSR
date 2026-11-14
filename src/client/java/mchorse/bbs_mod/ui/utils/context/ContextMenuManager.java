@@ -19,6 +19,7 @@ import java.util.function.Consumer;
 public class ContextMenuManager
 {
     public List<ContextAction> actions = new ArrayList<>();
+    public List<MenuIcon> icons = new ArrayList<>();
     public Consumer<UIRemovedEvent> onClose;
     public boolean autoKeys;
     public UISimpleContextMenu menu;
@@ -95,6 +96,15 @@ public class ContextMenuManager
         return action;
     }
 
+    public MenuIcon icon(MenuVerb verb, Runnable runnable)
+    {
+        MenuIcon icon = new MenuIcon(verb, runnable);
+
+        this.icons.add(icon);
+
+        return icon;
+    }
+
     public UISimpleContextMenu create()
     {
         UISimpleContextMenu contextMenu = this.menu == null ? new UISimpleContextMenu() : this.menu;
@@ -104,12 +114,20 @@ public class ContextMenuManager
         contextMenu.actions.add(this.actions);
         contextMenu.getEvents().register(UIRemovedEvent.class, this.onClose);
 
+        for (MenuIcon icon : this.icons)
+        {
+            contextMenu.bar.register(icon);
+        }
+
+        boolean keyed = this.autoKeys;
+
         for (int i = 0; i < this.actions.size(); i++)
         {
             ContextAction action = this.actions.get(i);
 
             if (action.keys != null)
             {
+                keyed = true;
                 Keybind register = contextMenu.keys().register(new KeyCombo(action.label, action.keys), () ->
                 {
                     if (action.runnable != null)
@@ -117,7 +135,7 @@ public class ContextMenuManager
                         action.runnable.run();
                     }
 
-                    contextMenu.removeFromParent();
+                    contextMenu.dismiss();
                 });
 
                 if (action.keyCategory != null)
@@ -153,10 +171,12 @@ public class ContextMenuManager
                         action.runnable.run();
                     }
 
-                    contextMenu.removeFromParent();
+                    contextMenu.dismiss();
                 }).category(this.category);
             }
         }
+
+        contextMenu.canFocusFilter(!keyed);
 
         return contextMenu.isEmpty() ? null : contextMenu;
     }

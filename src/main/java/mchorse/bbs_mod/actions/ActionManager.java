@@ -72,12 +72,7 @@ public class ActionManager
         {
             try
             {
-                damageControl.restore();
-
-                if (!damageControl.hasPendingChanges())
-                {
-                    this.dc.remove(damageControl.getWorld(), damageControl);
-                }
+                this.resetDamage(damageControl.getWorld());
             }
             catch (RuntimeException | LinkageError e)
             {
@@ -344,7 +339,7 @@ public class ActionManager
             }
 
             player.initializeFirstPersonState();
-            this.trackDamage(level);
+            this.trackDamage(level, player);
             player.stopDamage = true;
             this.players.add(player);
 
@@ -440,6 +435,7 @@ public class ActionManager
             }
 
             expectedStopped = true;
+            this.restoreDamage(level);
             /* The old runtime may have emitted a c12 update during teardown;
              * reassert the committed replacement after that identity change. */
             replacement.resendActors();
@@ -569,7 +565,7 @@ public class ActionManager
         {
             try
             {
-                this.stopDamage(player.getLevel());
+                this.stopDamage(player.getLevel(), player);
                 player.stopDamage = false;
             }
             catch (RuntimeException | LinkageError e)
@@ -942,6 +938,11 @@ public class ActionManager
         this.recorders.put(entity, recorder);
         this.recordingPlayers.put(entity, play);
 
+        /* The recorder can outlive the playback driver when the film reaches its end. Keep a
+         * distinct identity hold so the driver's teardown cannot restore the world underneath
+         * an active recording. */
+        this.trackDamage(play.getLevel(), recorder);
+
         return true;
     }
 
@@ -1053,6 +1054,18 @@ public class ActionManager
                 return null;
             }
 
+            try
+            {
+                this.stopDamage(recordingPlayer.getLevel(), recorder);
+            }
+            catch (RuntimeException | LinkageError e)
+            {
+                LOGGER.warn("[BBS-SEM] topic=action.recording phase=damage_release result=retry film={}",
+                    recorder.getFilm().getId(), e);
+
+                return null;
+            }
+
             recorder.markTerminalTeardownComplete();
         }
 
@@ -1073,7 +1086,7 @@ public class ActionManager
 
         ActionPlayer recordingPlayer = this.recordingPlayers.remove(entity);
 
-        this.recorders.remove(entity);
+        ActionRecorder recorder = this.recorders.remove(entity);
 
         if (recordingPlayer == null)
         {
@@ -1086,6 +1099,16 @@ public class ActionManager
         {
             LOGGER.warn("[BBS-SEM] topic=action.recording phase=disconnect result=discard film={}",
                 recordingPlayer.film == null ? "<unknown>" : recordingPlayer.film.getId());
+        }
+
+        try
+        {
+            this.stopDamage(recordingPlayer.getLevel(), recorder);
+        }
+        catch (RuntimeException | LinkageError e)
+        {
+            LOGGER.warn("[BBS-SEM] topic=action.recording phase=disconnect_damage_release result=retry film={}",
+                recordingPlayer.film == null ? "<unknown>" : recordingPlayer.film.getId(), e);
         }
 
         int index = this.indexOfPlayerIdentity(recordingPlayer);
@@ -1175,55 +1198,60 @@ public class ActionManager
 
     public void trackDamage(ServerLevel world)
     {
-        DamageControl damageControl = this.dc.get(world);
+        this.trackDamage(world, null);
+    }
 
-        if (damageControl == null)
-        {
-            this.dc.put(world, new DamageControl(world));
-        }
-        else
-        {
-            damageControl.nested += 1;
-        }
+    public void trackDamage(ServerLevel world, Object owner)
+    {
+        this.dc.computeIfAbsent(world, DamageControl::new).acquire(owner);
     }
 
     public void stopDamage(ServerLevel world)
     {
-        DamageControl damageControl = this.dc.get(world);
+        this.stopDamage(world, null);
+    }
 
-        if (damageControl != null)
+    public void stopDamage(ServerLevel world, Object owner)
+    {
+        DamageControl control = this.dc.get(world);
+
+        if (control != null && control.release(owner))
         {
-            if (damageControl.nested > 0)
-            {
-                damageControl.nested -= 1;
-            }
-            else
-            {
-                /* Drop the snapshot from the manager BEFORE restoring: restoring a block
-                 * is itself a block change, and a snapshot still reachable from the
-                 * manager gets written to while it is being walked - the restore used to
-                 * die halfway on exactly that. */
-                damageControl.restore();
-
-                if (!damageControl.hasPendingChanges())
-                {
-                    this.dc.remove(world, damageControl);
-                }
-            }
+            this.resetDamage(world);
         }
     }
 
     public void resetDamage(ServerLevel world)
     {
-        DamageControl dc = this.dc.get(world);
+        DamageControl control = this.dc.remove(world);
 
-        if (dc != null)
+        if (control != null)
         {
-            dc.restore();
-
-            if (!dc.hasPendingChanges())
+            try
             {
-                this.dc.remove(world, dc);
+                control.restore();
+            }
+            finally
+            {
+                if (control.hasPendingChanges()) this.dc.put(world, control);
+            }
+        }
+    }
+
+    /** Restore a live scene while retaining the identities of everyone holding its snapshot. */
+    public void restoreDamage(ServerLevel world)
+    {
+        DamageControl control = this.dc.remove(world);
+
+        if (control != null)
+        {
+            try
+            {
+                control.restore();
+            }
+            finally
+            {
+                this.dc.put(world, control);
             }
         }
     }

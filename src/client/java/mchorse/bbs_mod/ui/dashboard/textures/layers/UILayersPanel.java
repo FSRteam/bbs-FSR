@@ -13,6 +13,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.UI;
@@ -22,6 +23,9 @@ import mchorse.bbs_mod.utils.resources.Pixels;
 
 public class UILayersPanel extends UIElement
 {
+    /** Keep the original one-row gap while measuring the list against its actual controls. */
+    private static final int CONTROLS_GAP = UIConstants.CONTROL_HEIGHT;
+
     private UITexturePainter painter;
     private UIScrollView list;
     private UIIcon addLayer;
@@ -34,7 +38,6 @@ public class UILayersPanel extends UIElement
 
         this.list = UI.scrollView(5, 5);
         this.list.scroll.cancelScrolling();
-        this.list.relative(this).y(20).w(1F).h(1F, -UIConstants.CONTROL_HEIGHT * 2 - 25);
 
         UILabel label = UI.label(UIKeys.TEXTURES_LAYERS).background();
         label.relative(this).w(1F).h(20);
@@ -65,7 +68,9 @@ public class UILayersPanel extends UIElement
         UIElement controls = UI.row(this.addLayer, this.opacity);
         controls.relative(this).x(UIConstants.MARGIN).y(1F, -UIConstants.CONTROL_HEIGHT - 5).w(1F, -UIConstants.MARGIN * 2).h(UIConstants.CONTROL_HEIGHT);
 
-        this.add(label, this.list, controls);
+        this.list.relative(this).y(20).w(1F).hTo(controls.area, 0F, -CONTROLS_GAP);
+
+        this.add(label, controls, this.list);
     }
 
     public void setEditor(UITextureEditor editor)
@@ -89,7 +94,7 @@ public class UILayersPanel extends UIElement
 
         this.getContext().replaceContextMenu((menu) ->
         {
-            menu.action(Icons.ADD, UIKeys.TEXTURES_LAYERS_ADD_EMPTY, this::addLayer);
+            menu.icon(MenuVerb.ADD, this::addLayer).label(UIKeys.TEXTURES_LAYERS_ADD_EMPTY);
             menu.action(Icons.IMAGE, UIKeys.TEXTURES_LAYERS_ADD_IMAGE, this::addImageLayer);
 
             if (ImageClipboard.hasImage())

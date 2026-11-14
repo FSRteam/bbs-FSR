@@ -53,6 +53,8 @@ public final class WeldGeometryCacheTest
 
     public static void runAll()
     {
+        WeldSmoothNormalsTest.runAll();
+        WeldRestFitTest.runAll();
         sameKeyFindsTheEntry();
         differentKeyIsNeverServed();
         invalidBakeIsNotServedEvenByItsOwnKey();

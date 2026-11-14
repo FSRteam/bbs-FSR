@@ -8,6 +8,7 @@ import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.utils.FormBone;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Matrix4f;
@@ -19,15 +20,6 @@ import org.joml.Matrix4f;
  * callbacks may modify their output, but must not edit the form's saved animation.
  * Listeners run in registration order.
  *
- * <p>The chain-claim event is the one member of this set that is not here yet, and it is absent
- * rather than declared. Upstream's {@code CLAIM_CHAIN} hands a {@code FormBone} to its listeners and
- * they answer whether they own that bone's chain — the whole event is addressed by bone. FSR has no
- * bone model to hand over: a bone's physics settings live in the form's {@code physics} blob, not in
- * a per-bone group, until the value layer grows one. Declaring the signature now would freeze a
- * shape that must change the day {@code ValueBones}/{@code FormBone} arrive (P1, upstream
- * {@code 4339b076a}), so an addon would compile against a contract that is known to be temporary.
- * It lands together with the bone model instead. In the meantime B9·B1b keeps a file's
- * {@code bones} data intact across load and save, so nothing is lost while it waits.</p>
  */
 public final class FormPoseEvents
 {
@@ -78,6 +70,21 @@ public final class FormPoseEvents
             return false;
         });
 
+    /** Claimed chains are excluded from built-in physics. Change ownership with the bone's settings. */
+    public static final FunctionalEvent<ChainClaim> CLAIM_CHAIN = new FunctionalEvent<>(
+        listeners -> (form, model, bone) ->
+        {
+            for (ChainClaim listener : listeners)
+            {
+                if (listener.claims(form, model, bone))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+
     /** Resolve a temporary anchor without changing the stored one. Return a non-null anchor. */
     public static final FunctionalEvent<ResolveAnchor> ANCHOR = new FunctionalEvent<>(
         listeners -> anchor ->
@@ -104,6 +111,7 @@ public final class FormPoseEvents
     public interface ParentFrame { void capture(Form form, IEntity entity, Matrix4f parent, String path, float transition); }
     public interface ModelPose { void apply(ModelForm form, IEntity entity, ModelInstance model, float transition, Matrix4f base, Pass pass); }
     public interface PivotOffsets { boolean include(IModel model); }
+    public interface ChainClaim { boolean claims(ModelForm form, IModel model, FormBone bone); }
     public interface ResolveAnchor { Anchor resolve(Anchor anchor); }
     public interface ActorPrepare { void prepare(FilmControllerContext context); }
 

@@ -8,8 +8,7 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MissingForm;
-import mchorse.bbs_mod.forms.forms.MobForm;
-import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.IPosedForm;
 import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
@@ -52,16 +51,12 @@ public class FormUtils
         Form form = getForm(editedTrack);
         List<ValuePose> tracks = new ArrayList<>();
 
-        if (form instanceof ModelForm modelForm)
+        if (form instanceof IPosedForm posedForm)
         {
-            tracks.add(modelForm.pose);
-            tracks.add(modelForm.poseOverlay);
-            tracks.addAll(modelForm.additionalOverlays);
-        }
-        else if (form instanceof MobForm mobForm)
-        {
-            tracks.add(mobForm.pose);
-            tracks.add(mobForm.poseOverlay);
+            tracks.add(posedForm.getPose());
+            tracks.add(posedForm.getPoseOverlay());
+            form.syncOverlayTracks();
+            tracks.addAll(form.additionalOverlays);
         }
         else
         {
@@ -389,7 +384,7 @@ public class FormUtils
 
         for (String segment : path.split(PATH_SEPARATOR))
         {
-            BaseValueBasic property = form.getAllMap().get(segment);
+            BaseValueBasic property = form.getBasic(segment);
 
             if (property != null)
             {

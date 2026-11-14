@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.utils;
 
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.utils.OS;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
@@ -22,7 +23,24 @@ public final class UIFileDialogs
     {
         String titleText = title.get();
         String path = folder == null ? "" : folder.getAbsolutePath();
-        open(() -> TinyFileDialogs.tinyfd_selectFolderDialog(titleText, path), callback);
+        open(() ->
+        {
+            if (OS.CURRENT == OS.WINDOWS)
+            {
+                try
+                {
+                    return WindowsFolderDialog.pick(titleText, path);
+                }
+                catch (Throwable error)
+                {
+                    error.printStackTrace();
+                }
+            }
+
+            utf8();
+
+            return TinyFileDialogs.tinyfd_selectFolderDialog(titleText, path.isEmpty() ? path : path + File.separator);
+        }, callback);
     }
 
     public static void pickFile(IKey title, File file, String[] patterns, IKey description, Consumer<File> callback)
@@ -33,6 +51,8 @@ public final class UIFileDialogs
 
         open(() ->
         {
+            utf8();
+
             try (MemoryStack stack = MemoryStack.stackPush())
             {
                 PointerBuffer filters = null;
@@ -51,6 +71,11 @@ public final class UIFileDialogs
         }, callback);
     }
 
+    private static void utf8()
+    {
+        TinyFileDialogs.tinyfd_setGlobalInt(TinyFileDialogs.tinyfd_winUtf8, 1);
+    }
+
     private static void open(Supplier<String> dialog, Consumer<File> callback)
     {
         if (!OPEN.compareAndSet(false, true))
@@ -63,7 +88,6 @@ public final class UIFileDialogs
             String picked = null;
             try
             {
-                TinyFileDialogs.tinyfd_setGlobalInt(TinyFileDialogs.tinyfd_winUtf8, 1);
                 picked = dialog.get();
             }
             catch (Throwable error)

@@ -46,7 +46,7 @@ public class CubicModelAnimator
                 segment.a.getTick(), segment.b.getTick(),
                 segment.a.rx, segment.a.ry,
                 segment.b.lx, segment.b.ly,
-                segment.x
+                segment.getInterpolationProgress(true)
             );
         }
 
@@ -60,7 +60,7 @@ public class CubicModelAnimator
 
         try
         {
-            return segment.b.getInterpolation().interpolate(IInterp.context.set(pre, start, destination, post, segment.x));
+            return segment.b.getInterpolation().interpolate(IInterp.context.set(pre, start, destination, post, segment.getInterpolationProgress(true)));
         }
         finally
         {

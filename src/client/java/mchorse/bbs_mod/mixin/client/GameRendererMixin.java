@@ -11,6 +11,7 @@ import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.PixelArt;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.items.GunZoom;
 import net.minecraft.client.Camera;
@@ -19,6 +20,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.ShaderInstance;
 import org.joml.Matrix4f;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
@@ -31,6 +33,28 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(GameRenderer.class)
 public class GameRendererMixin
 {
+    @Inject(method = "getRendertypeTextShader", at = @At("HEAD"), cancellable = true)
+    private static void bbs$pixelArtText(CallbackInfoReturnable<ShaderInstance> info)
+    {
+        ShaderInstance program = PixelArt.getTextProgram(false);
+
+        if (program != null)
+        {
+            info.setReturnValue(program);
+        }
+    }
+
+    @Inject(method = "getRendertypeTextIntensityShader", at = @At("HEAD"), cancellable = true)
+    private static void bbs$pixelArtTextIntensity(CallbackInfoReturnable<ShaderInstance> info)
+    {
+        ShaderInstance program = PixelArt.getTextProgram(true);
+
+        if (program != null)
+        {
+            info.setReturnValue(program);
+        }
+    }
+
     @WrapMethod(method = "render")
     private void bbs$ownRenderFrame(DeltaTracker deltaTracker, boolean renderLevel, Operation<Void> original)
     {

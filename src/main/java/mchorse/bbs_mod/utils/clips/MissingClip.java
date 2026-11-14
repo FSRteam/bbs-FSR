@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.utils.clips;
 
+import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.factory.IUnknownType;
@@ -7,11 +8,22 @@ import mchorse.bbs_mod.utils.factory.IUnknownType;
 /** Non-executing, data-preserving placeholder for an unavailable clip type. */
 public final class MissingClip extends Clip implements IUnknownType
 {
-    private final MapType source;
+    private MapType source = new MapType();
 
     public MissingClip(MapType source)
     {
-        this.source = source == null ? new MapType() : (MapType) source.copy();
+        this.fromData(source == null ? new MapType() : source);
+    }
+
+    @Override
+    public void fromData(BaseType data)
+    {
+        if (data instanceof MapType map)
+        {
+            this.source = (MapType) map.copy();
+        }
+
+        super.fromData(data);
         this.enabled.set(false);
         this.tick.set(this.source.getInt("tick"));
         this.duration.set(Math.max(1, this.source.getInt("duration", 1)));
@@ -22,6 +34,18 @@ public final class MissingClip extends Clip implements IUnknownType
     public MapType sourceData()
     {
         return (MapType) this.source.copy();
+    }
+
+    @Override
+    public BaseType toData()
+    {
+        return this.sourceData();
+    }
+
+    @Override
+    public Clip copy()
+    {
+        return new MissingClip(this.source);
     }
 
     public String typeId()

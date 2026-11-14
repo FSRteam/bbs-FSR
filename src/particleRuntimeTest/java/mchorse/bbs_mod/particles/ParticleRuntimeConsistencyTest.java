@@ -1,6 +1,11 @@
 package mchorse.bbs_mod.particles;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.IntType;
 import mchorse.bbs_mod.data.types.ListType;
@@ -10,6 +15,12 @@ import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.particles.components.appearance.ParticleComponentCollisionAppearance;
+import mchorse.bbs_mod.particles.components.appearance.BillboardDirection;
+import mchorse.bbs_mod.particles.components.appearance.CameraFacing;
+import mchorse.bbs_mod.particles.components.appearance.ParticleComponentAppearanceBillboard;
+import mchorse.bbs_mod.particles.components.motion.MotionComponents;
+import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionDynamic;
+import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionParametric;
 import mchorse.bbs_mod.particles.components.events.ParticleComponentEmitterLifetimeEvents;
 import mchorse.bbs_mod.particles.emitter.Particle;
 import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
@@ -26,6 +37,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.server.Bootstrap;
 import net.neoforged.fml.loading.LoadingModList;
 import org.joml.Vector3d;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -43,10 +56,11 @@ public final class ParticleRuntimeConsistencyTest
     private ParticleRuntimeConsistencyTest()
     {}
 
-    public static void main(String[] args)
+    public static void main(String[] args) throws Exception
     {
         bootstrapStandaloneMinecraftRuntime();
 
+        ParticleMotionEditorTest.run();
         testRootPlacementRebasesDistance();
         testCollisionCrossingRearms();
         testTimelineZeroFiresOnce();
@@ -58,8 +72,171 @@ public final class ParticleRuntimeConsistencyTest
         testOuterWorldDepthSnapshot();
         testVanillaParticlePreviewWiring();
         testTextboxContentInsetBounds();
+        testBillboardDirectionHistory();
+        testBillboardDirectionGeometry();
+        testIndependentMotionAxes();
 
         System.out.println("ParticleRuntimeConsistencyTest: all tests passed");
+    }
+
+    private static void testBillboardDirectionHistory() throws Exception
+    {
+        ParticleScheme scheme = new ParticleScheme();
+        ParticleComponentAppearanceBillboard billboard = new ParticleComponentAppearanceBillboard();
+        ParticleEmitter emitter = new ParticleEmitter();
+        Particle first = new Particle(0, 0F);
+        Particle second = new Particle(1, 0F);
+        Method update = ParticleComponentAppearanceBillboard.class.getDeclaredMethod("updateFacingDirection", ParticleEmitter.class, Particle.class, boolean.class);
+
+        update.setAccessible(true);
+        billboard.minSpeedThreshold = 1F;
+        first.speed.set(0F, -100F, 0F);
+        first.position.set(0D, 0D, 0.1D);
+        update.invoke(billboard, emitter, first, false);
+        check(first.facingDirection.distance(0F, 0F, 1F) < 1.0E-6F,
+            "billboard direction used velocity instead of actual per-tick movement");
+
+        first.position.set(0.02D, 0D, 0D);
+        update.invoke(billboard, emitter, first, false);
+        check(first.facingDirection.distance(0F, 0F, 1F) < 1.0E-6F,
+            "sub-threshold movement discarded the previous particle direction");
+
+        second.position.set(0.1D, 0D, 0D);
+        update.invoke(billboard, emitter, second, false);
+        first.position.zero();
+        update.invoke(billboard, emitter, first, false);
+        check(second.facingDirection.distance(1F, 0F, 0F) < 1.0E-6F
+                && first.facingDirection.distance(0F, 0F, 1F) < 1.0E-6F,
+            "particles shared direction history through the billboard component");
+
+        emitter.rotation.rotationY((float) Math.PI / 2F);
+        first.position.set(0D, 0D, 0.1D);
+        update.invoke(billboard, emitter, first, true);
+        check(first.facingDirection.distance(1F, 0F, 0F) < 1.0E-6F,
+            "static emitter space did not rotate particle movement into world direction");
+
+        billboard.directionMode = BillboardDirection.CUSTOM_DIRECTION;
+        billboard.customDirection[0] = scheme.parser.parseExpression("3");
+        billboard.customDirection[1] = scheme.parser.parseExpression("4");
+        update.invoke(billboard, emitter, first, false);
+        check(first.facingDirection.distance(0.6F, 0.8F, 0F) < 1.0E-6F,
+            "custom billboard direction was not evaluated and normalized");
+        MapType data = billboard.toData().asMap();
+        check("custom_direction".equals(data.getMap("direction").getString("mode")),
+            "billboard did not save the canonical FS direction mode");
+        ParticleComponentAppearanceBillboard reopened = new ParticleComponentAppearanceBillboard();
+
+        reopened.fromData(data, scheme.parser);
+        check(reopened.directionMode == BillboardDirection.CUSTOM_DIRECTION
+                && reopened.customDirection[1].get() == 4D,
+            "custom billboard direction did not survive save/reopen");
+        data.getMap("direction").putString("mode", "custom");
+        reopened.fromData(data, scheme.parser);
+        check(reopened.directionMode == BillboardDirection.CUSTOM_DIRECTION,
+            "an existing FSR custom-direction particle file lost its mode");
+    }
+
+    private static void testBillboardDirectionGeometry() throws Exception
+    {
+        ParticleComponentAppearanceBillboard billboard = new ParticleComponentAppearanceBillboard();
+        ParticleEmitter emitter = new ParticleEmitter();
+        Particle particle = new Particle(0, 0F);
+        CameraFacing[] modes = {CameraFacing.DIRECTION_X, CameraFacing.DIRECTION_Y, CameraFacing.DIRECTION_Z};
+        Vector3f[] expected = {new Vector3f(-1F, 0F, 0F), new Vector3f(0F, 1F, 0F), new Vector3f(0F, 0F, 1F)};
+        Field transform = ParticleComponentAppearanceBillboard.class.getDeclaredField("transform");
+
+        transform.setAccessible(true);
+        particle.position.set(0D, 0D, 1D);
+
+        for (int i = 0; i < modes.length; i++)
+        {
+            billboard.facing = modes[i];
+
+            for (float cameraYaw : new float[] {0F, 71F, -123F})
+            {
+                emitter.cYaw = cameraYaw;
+                emitter.cPitch = cameraYaw / 2F;
+
+                try (ByteBufferBuilder buffer = new ByteBufferBuilder(4096))
+                {
+                    BufferBuilder builder = new BufferBuilder(buffer, VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.PARTICLE);
+
+                    billboard.render(emitter, DefaultVertexFormat.PARTICLE, particle, builder, new Matrix4f(), 0, 1F);
+
+                    try (MeshData mesh = builder.buildOrThrow())
+                    {
+                        check(mesh.drawState().vertexCount() == 6, "direction billboard did not emit its quad");
+                    }
+                }
+
+                Vector3f normal = ((Matrix4f) transform.get(billboard)).transformDirection(new Vector3f(0F, 0F, 1F));
+
+                check(normal.distance(expected[i]) < 1.0E-6F,
+                    modes[i] + " had the wrong plane or changed direction with the camera");
+            }
+        }
+    }
+
+    private static void testIndependentMotionAxes() throws Exception
+    {
+        for (boolean positionParametric : new boolean[] {false, true})
+        {
+            for (boolean rotationParametric : new boolean[] {false, true})
+            {
+                ParticleScheme scheme = new ParticleScheme();
+
+                MotionComponents.setModes(scheme, positionParametric, rotationParametric);
+
+                ParticleComponentMotionDynamic dynamic = MotionComponents.dynamic(scheme);
+                ParticleComponentMotionParametric parametric = MotionComponents.parametric(scheme);
+
+                if (dynamic != null)
+                {
+                    dynamic.rotationAcceleration = scheme.parser.parseExpression("2");
+                }
+
+                if (parametric != null)
+                {
+                    parametric.position[0] = scheme.parser.parseExpression("2");
+                    parametric.rotation = scheme.parser.parseExpression("30");
+                }
+
+                ParticleScheme reopened = ParticleScheme.parse(ParticleScheme.toData(scheme));
+
+                check(reopened != null && MotionComponents.isPositionParametric(reopened) == positionParametric
+                        && MotionComponents.isRotationParametric(reopened) == rotationParametric,
+                    "independent position/rotation modes changed after save/reopen");
+
+                ParticleEmitter emitter = new ParticleEmitter();
+                Particle particle = new Particle(0, 0F);
+
+                emitter.scheme = reopened;
+                parametric = MotionComponents.parametric(reopened);
+
+                if (parametric != null)
+                {
+                    parametric.apply(emitter, particle);
+                }
+
+                particle.speed.set(20F, 0F, 0F);
+                particle.rotationVelocity = 2F;
+                particle.age = 1;
+                particle.update(emitter);
+                check(close(particle.position.x, positionParametric ? 2D : 1D)
+                        && close(particle.rotation, rotationParametric ? 30D : 2D),
+                    "one parametric motion axis suppressed the other dynamic axis");
+
+                MotionComponents.setModes(reopened, true, true);
+                check(MotionComponents.dynamic(reopened) == null
+                        && reopened.particleUpdates.stream().noneMatch(ParticleComponentMotionDynamic.class::isInstance),
+                    "removed dynamic motion remained in cached update components");
+                MotionComponents.setModes(reopened, false, false);
+                check(MotionComponents.parametric(reopened) == null
+                        && reopened.particleUpdates.stream().noneMatch(ParticleComponentMotionParametric.class::isInstance)
+                        && reopened.particleInitializes.stream().noneMatch(ParticleComponentMotionParametric.class::isInstance),
+                    "removed parametric motion remained in cached update/initialization components");
+            }
+        }
     }
 
     private static void testTextboxContentInsetBounds()
@@ -368,6 +545,16 @@ public final class ParticleRuntimeConsistencyTest
         String formViewport = source("src/client/java/mchorse/bbs_mod/ui/forms/editors/utils/UIFormRenderer.java");
         String pickViewport = source("src/client/java/mchorse/bbs_mod/ui/forms/editors/utils/UIPickableFormRenderer.java");
         String mixins = source("src/client/resources/bbs.client.mixins.json");
+        String samples = source("src/client/java/mchorse/bbs_mod/particles/vanilla/VanillaParticlePreview.java");
+        String picker = source("src/client/java/mchorse/bbs_mod/ui/forms/editors/utils/UIParticleSettings.java");
+        String bootstrap = source("src/client/java/mchorse/bbs_mod/BBSModClient.java");
+
+        check(renderer.contains("VanillaParticlePreview.render(context, this.form.settings.get().particle")
+                && picker.contains("UIVanillaParticleList::new")
+                && samples.contains("ParticleDescription.fromJson")
+                && samples.contains("atlas.getSprite(preview.sprite())")
+                && bootstrap.contains("VanillaParticlePreview.clearCache();"),
+            "particle thumbnails, type picker, or resource-reload invalidation still bypass static atlas samples");
 
         check(renderer.contains("this.getScene().render(context.camera")
                 && renderer.contains("!context.isPicking()")

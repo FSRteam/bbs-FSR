@@ -1,5 +1,14 @@
 package mchorse.bbs_mod.cubic;
-
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.LightTexture;
+import mchorse.bbs_mod.utils.interps.Lerps;
+import org.lwjgl.opengl.GL11;
+import mchorse.bbs_mod.forms.renderers.utils.FormPbr;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
+import mchorse.bbs_mod.forms.renderers.utils.FormMaterialLevels;
+import mchorse.bbs_mod.forms.forms.utils.FormMaterial;
+import mchorse.bbs_mod.cubic.render.CubicMaterialRenderer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.bobj.BOBJBone;
@@ -27,6 +36,7 @@ import mchorse.bbs_mod.cubic.render.WeldGeometryCache;
 import mchorse.bbs_mod.cubic.render.vao.BOBJModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.cubic.weld.ModelWeld;
 import mchorse.bbs_mod.cubic.weld.WeldBinding;
 import mchorse.bbs_mod.data.types.MapType;
@@ -57,7 +67,6 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -70,6 +79,8 @@ import java.util.function.Supplier;
 
 public class ModelInstance implements IModelInstance
 {
+    private Link modelFile;
+
     private static final Quaternionf ROTATE_Y_180 = Axis.YP.rotationDegrees(180F);
 
     /** The frame the seams and the CPU bake are computed in: the model's root, camera-independent. */
@@ -116,6 +127,45 @@ public class ModelInstance implements IModelInstance
 
     public transient ModelForm form;
 
+    /* The channels token: which (form, entity, transition, frame, pose version) the asset's
+     * pose currently holds. The instance is one globally cached asset per model id, so the
+     * token must live HERE — two forms sharing a model overwrite each other's pose, and each
+     * write re-stamps it. See ModelFormRenderer#evaluateChannels. */
+    private Object channelsForm;
+    private Object channelsEntity;
+    private float channelsTransition;
+    private long channelsEpoch;
+    private int channelsPoseVersion;
+    private boolean channelsValid;
+
+    public boolean matchesChannels(Object form, Object entity, float transition, long epoch, int poseVersion)
+    {
+        return this.channelsValid
+            && this.channelsForm == form
+            && this.channelsEntity == entity
+            && Float.compare(this.channelsTransition, transition) == 0
+            && this.channelsEpoch == epoch
+            && this.channelsPoseVersion == poseVersion;
+    }
+
+    public void stampChannels(Object form, Object entity, float transition, long epoch, int poseVersion)
+    {
+        this.channelsForm = form;
+        this.channelsEntity = entity;
+        this.channelsTransition = transition;
+        this.channelsEpoch = epoch;
+        this.channelsPoseVersion = poseVersion;
+        this.channelsValid = true;
+    }
+
+    public void clearChannels()
+    {
+        this.channelsValid = false;
+        this.channelsForm = null;
+        this.channelsEntity = null;
+    }
+
+
     /** Per group, the geometry split into one VAO per material name (empty key = default texture). */
     private Map<ModelGroup, Map<String, ModelVAO>> vaos = new HashMap<>();
     private CubicMatrixRenderer matrixRenderer;
@@ -140,6 +190,18 @@ public class ModelInstance implements IModelInstance
     public Pose getSneakingPose()
     {
         return this.config.getSneakingPose();
+    }
+
+    @Override
+    public Map<String, String> getProceduralBones()
+    {
+        return this.config.proceduralBones.get();
+    }
+
+    @Override
+    public Pose getDefaultPose()
+    {
+        return this.config.getDefaultPose();
     }
 
     @Override
@@ -306,6 +368,16 @@ public class ModelInstance implements IModelInstance
 
     public void setup()
     {
+        /* Setup also runs on the asset loader; mutable physics caches belong to the render thread. */
+        if (RenderSystem.isOnRenderThread())
+        {
+            ModelPhysicsRuntime.invalidate(this.id);
+        }
+        else
+        {
+            ModelSetupQueue.add(() -> ModelPhysicsRuntime.invalidate(this.id));
+        }
+
         if (this.model instanceof BOBJModel model)
         {
             ModelSetupQueue.add(model::setup);
@@ -376,19 +448,9 @@ public class ModelInstance implements IModelInstance
 
     public void fillStencilMap(StencilMap stencilMap, ModelForm form)
     {
-        if (this.model instanceof Model model)
+        for (RigBone bone : this.model.getRigBones())
         {
-            for (ModelGroup group : model.getOrderedGroups())
-            {
-                stencilMap.addPicking(form, this.getPickingBone(form, group.id));
-            }
-        }
-        else if (this.model instanceof BOBJModel model)
-        {
-            for (BOBJBone orderedBone : model.getArmature().orderedBones)
-            {
-                stencilMap.addPicking(form, this.getPickingBone(form, orderedBone.name));
-            }
+            stencilMap.addPicking(form, this.getPickingBone(form, bone.getBoneName()));
         }
     }
 
@@ -409,6 +471,8 @@ public class ModelInstance implements IModelInstance
 
     public void captureMatrices(MatrixCache bones)
     {
+        BBSProfiler.count(BBSProfiler.Section.CAPTURE_MATRICES);
+
         if (this.model instanceof Model model)
         {
             if (this.matrixRenderer == null || this.matrixRenderer.matrices.size() != model.getAllGroupKeys().size())
@@ -524,23 +588,7 @@ public class ModelInstance implements IModelInstance
             }
             else
             {
-                CubicCubeRenderer renderProcessor = new CubicCubeRenderer(light, overlay, stencilMap, keys);
-
-                renderProcessor.setColor(color.r, color.g, color.b, color.a);
-                RenderSystem.setShader(() -> shader);
-
-                BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
-
-                CubicRenderer.processRenderModel(renderProcessor, builder, stack, model);
-
-                /* The plain CPU path bakes in the caller's frame, so the global model-view applies as is. */
-                Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
-
-                this.drawImmediate(builder.buildOrThrow(), null, shader, modelView, null,
-                    modelView.transformPosition(stack.last().pose().getTranslation(new Vector3f())),
-                    stencilMap, BBSModClient.getTextures().getLastBound(), color.a, false);
-
-                this.renderGlintImmediate(stack, model, light, overlay, stencilMap, keys, null);
+                this.renderHybrid(stack, shader, color, light, overlay, stencilMap, keys, textureResolver, model, bindings);
             }
         }
         else if (this.model instanceof BOBJModel model)
@@ -567,22 +615,57 @@ public class ModelInstance implements IModelInstance
                 Map<String, Texture> textures = new HashMap<>();
                 List<BOBJModelVAO.BatchDraw> batch = new ArrayList<>();
                 Texture batchTexture = null;
+                Color batchOverlay = null;
+                boolean batchCull = this.isCulling();
+                ModelForm modelForm = this.form instanceof ModelForm form ? form : null;
 
                 for (BOBJModelVAO vao : vaos)
                 {
-                    Texture texture = this.resolveBOBJTexture(textures, textureResolver, vao.data.mesh.name);
+                    String material = vao.data.mesh.name;
+                    if (!FormMaterialLevels.materialVisible(modelForm, material)) continue;
+                    Texture texture = this.resolveBOBJTexture(textures, textureResolver, material);
+                    Color tint = stencilMap == null && modelForm != null ? FormMaterialLevels.materialColor(modelForm, material) : null;
+                    float r = color.r * (tint == null ? 1F : tint.r);
+                    float g = color.g * (tint == null ? 1F : tint.g);
+                    float b = color.b * (tint == null ? 1F : tint.b);
+                    float alpha = color.a * (tint == null ? 1F : tint.a);
+                    int materialLight = light;
+                    if (stencilMap == null && modelForm != null)
+                    {
+                        int u = (int) Lerps.lerp(light & 0xffff,
+                            LightTexture.FULL_BLOCK, FormMaterialLevels.materialGlow(modelForm, material));
+                        materialLight = u | (light & 0xffff0000);
+                    }
+                    Color materialOverlay = stencilMap == null && overlay == OverlayTexture.NO_OVERLAY
+                        ? FormOverlay.combine(modelForm, material, null) : null;
+                    int materialOverlayUv = materialOverlay == null ? overlay : 0;
+                    boolean materialCull = this.isCulling();
+                    int culling = FormMaterialLevels.materialCulling(modelForm, material);
+                    if (culling != FormMaterial.CULLING_MODEL) materialCull = culling == FormMaterial.CULLING_ON;
 
                     vao.updateMesh(stencilMap, armatureMatrices, armatureChanged);
                     Matrix4f modelView = ModelVAORenderer.captureModelView(stack);
                     Matrix3f normalMat = new Matrix3f(stack.last().normal());
 
-                    if (FormTranslucentQueue.needsSplit(shader, stencilMap, texture, color.a))
+                    if (FormTranslucentQueue.needsSplit(shader, stencilMap, texture, alpha))
                     {
-                        this.renderBOBJBatch(shader, batchTexture, batch, stencilMap);
+                        this.renderBOBJBatch(shader, batchTexture, batch, stencilMap, batchOverlay, batchCull);
 
-                        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
-                        vao.render(shader, modelView, normalMat, color.r, color.g, color.b, color.a, stencilMap, light, overlay);
-                        FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
+                        int previousOverlay = materialOverlay == null ? -1 : FormOverlay.bind(materialOverlay);
+                        boolean previousCull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+                        try
+                        {
+                            if (materialCull) RenderSystem.enableCull(); else RenderSystem.disableCull();
+                            if (texture != null) BBSModClient.getTextures().bindTexture(texture);
+                            FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_OPAQUE);
+                            vao.render(shader, modelView, normalMat, r, g, b, alpha, stencilMap, materialLight, materialOverlayUv);
+                        }
+                        finally
+                        {
+                            FormTranslucentQueue.setPassMode(shader, FormTranslucentQueue.PASS_SINGLE);
+                            if (previousCull) RenderSystem.enableCull(); else RenderSystem.disableCull();
+                            if (previousOverlay != -1) FormOverlay.unbind(previousOverlay);
+                        }
 
                         if (!deferredSnapshotTaken)
                         {
@@ -592,11 +675,11 @@ public class ModelInstance implements IModelInstance
 
                         FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
                             deferredArmature, vao.getUploadCount(), texture, modelView, normalMat,
-                            color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                            r, g, b, alpha, materialLight, materialOverlayUv, materialCull).overlayColor(materialOverlay));
                     }
-                    else if (FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, color.a))
+                    else if (FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, alpha))
                     {
-                        this.renderBOBJBatch(shader, batchTexture, batch, stencilMap);
+                        this.renderBOBJBatch(shader, batchTexture, batch, stencilMap, batchOverlay, batchCull);
 
                         ShaderInstance capturedShader = shader;
 
@@ -613,36 +696,39 @@ public class ModelInstance implements IModelInstance
                             FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
                                 () -> capturedShader, FormTranslucentQueue.PASS_TEX_OPAQUE, true,
                                 deferredArmature, uploadCount, texture, modelView, normalMat,
-                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                                r, g, b, alpha, materialLight, materialOverlayUv, materialCull).overlayColor(materialOverlay));
                             FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
                                 () -> capturedShader, FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true,
                                 deferredArmature, uploadCount, texture, modelView, normalMat,
-                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                                r, g, b, alpha, materialLight, materialOverlayUv, materialCull).overlayColor(materialOverlay));
                         }
                         else
                         {
                             FormTranslucentQueue.add(new FormTranslucentQueue.BOBJCommand(vao,
                                 () -> capturedShader, FormTranslucentQueue.PASS_SINGLE, true,
                                 deferredArmature, uploadCount, texture, modelView, normalMat,
-                                color.r, color.g, color.b, color.a, light, overlay, this.isCulling()));
+                                r, g, b, alpha, materialLight, materialOverlayUv, materialCull).overlayColor(materialOverlay));
                         }
                     }
                     else
                     {
                         /* Same-texture continuation only: an immediate mesh keeps the traversal
                          * order of translucent mixes, while opaque runs could regroup freely. */
-                        if (!batch.isEmpty() && texture != batchTexture)
+                        if (!batch.isEmpty() && (texture != batchTexture || batchCull != materialCull
+                            || (batchOverlay == null ? 0 : batchOverlay.getARGBColor()) != (materialOverlay == null ? 0 : materialOverlay.getARGBColor())))
                         {
-                            this.renderBOBJBatch(shader, batchTexture, batch, stencilMap);
+                            this.renderBOBJBatch(shader, batchTexture, batch, stencilMap, batchOverlay, batchCull);
                         }
 
                         batchTexture = texture;
+                        batchOverlay = materialOverlay == null ? null : materialOverlay.copy();
+                        batchCull = materialCull;
                         batch.add(new BOBJModelVAO.BatchDraw(vao, modelView, normalMat,
-                            color.r, color.g, color.b, color.a, light, overlay));
+                            r, g, b, alpha, materialLight, materialOverlayUv));
                     }
                 }
 
-                this.renderBOBJBatch(shader, batchTexture, batch, stencilMap);
+                this.renderBOBJBatch(shader, batchTexture, batch, stencilMap, batchOverlay, batchCull);
 
                 stack.popPose();
             }
@@ -682,6 +768,7 @@ public class ModelInstance implements IModelInstance
         Link link = textureResolver.apply(material);
         Texture texture = link == null ? null : BBSModClient.getTextures().getTexture(link);
 
+        texture = FormPbr.resolveAlbedo(this.form instanceof ModelForm modelForm ? modelForm : null, material, link, texture);
         textures.put(material, texture);
 
         return texture;
@@ -691,7 +778,7 @@ public class ModelInstance implements IModelInstance
      * Flush the pending immediate meshes under one shared shader lifetime. A null texture keeps
      * whatever is bound — matching the old path, which fell back to the last bound texture.
      */
-    private void renderBOBJBatch(ShaderInstance shader, Texture texture, List<BOBJModelVAO.BatchDraw> batch, StencilMap stencilMap)
+    private void renderBOBJBatch(ShaderInstance shader, Texture texture, List<BOBJModelVAO.BatchDraw> batch, StencilMap stencilMap, Color overlay, boolean cull)
     {
         if (batch.isEmpty())
         {
@@ -703,8 +790,19 @@ public class ModelInstance implements IModelInstance
             BBSModClient.getTextures().bindTexture(texture);
         }
 
-        BOBJModelVAO.renderBatch(shader, stencilMap, batch);
-        batch.clear();
+        int previousOverlay = overlay == null ? -1 : FormOverlay.bind(overlay);
+        boolean previousCull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+        try
+        {
+            if (cull) RenderSystem.enableCull(); else RenderSystem.disableCull();
+            BOBJModelVAO.renderBatch(shader, stencilMap, batch);
+        }
+        finally
+        {
+            if (previousCull) RenderSystem.enableCull(); else RenderSystem.disableCull();
+            if (previousOverlay != -1) FormOverlay.unbind(previousOverlay);
+            batch.clear();
+        }
     }
 
     /**
@@ -747,7 +845,7 @@ public class ModelInstance implements IModelInstance
 
                 for (ModelGroup group : model.getAllGroups())
                 {
-                    if (group.visible && group.glintMode == mode
+                    if (group.isVisible() && group.glintMode == mode
                         && (restrictTo == null || restrictTo.contains(group))
                         && group.glintTransform.isDefault() != transformed)
                     {
@@ -769,6 +867,7 @@ public class ModelInstance implements IModelInstance
                 Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
                 CubicGlintCubeRenderer processor = new CubicGlintCubeRenderer(light, overlay, keys,
                     mode, batchGroups, GlintRenderState.getViewOrigin(modelView));
+                processor.setMaterialForm(this.form instanceof ModelForm form ? form : null);
 
                 BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
 
@@ -804,19 +903,42 @@ public class ModelInstance implements IModelInstance
      * frame — which is exactly what the global model-view already describes — and keeps drawing the
      * mesh directly, as it did before this cache existed.</p>
      */
+    private void drawMaterialGeometry(WeldGeometryCache.Entry geometry, boolean owned,
+        ShaderInstance shader, Matrix4f modelView, Matrix3f normalMat, StencilMap stencilMap,
+        Texture texture, float alpha, Color overlay, boolean cull)
+    {
+        if (texture != null) BBSModClient.getTextures().bindTexture(texture);
+        int previousOverlay = overlay == null ? -1 : FormOverlay.bind(overlay);
+        boolean previousCull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+
+        try
+        {
+            if (cull) RenderSystem.enableCull(); else RenderSystem.disableCull();
+            Uniform normal = shader.getUniform("NormalMat");
+            if (normal != null) normal.set(normalMat);
+            this.drawImmediate(null, geometry, shader, modelView, normalMat,
+                modelView.transformPosition(new Vector3f()), stencilMap, texture, alpha, true, owned, overlay, cull);
+        }
+        finally
+        {
+            if (previousCull) RenderSystem.enableCull(); else RenderSystem.disableCull();
+            if (previousOverlay != -1) FormOverlay.unbind(previousOverlay);
+        }
+    }
+
     private void drawImmediate(MeshData mesh, WeldGeometryCache.Entry cached, ShaderInstance shader,
         Matrix4f modelView, Matrix3f normalMat, Vector3f origin, StencilMap stencilMap, Texture texture,
-        float alpha, boolean rootFrame)
+        float alpha, boolean rootFrame, boolean ownsCachedBuffer, Color colorOverlay, boolean cull)
     {
         boolean bbsModelShader = shader != null && shader.getUniform("PassMode") != null;
         boolean split = FormTranslucentQueue.needsSplit(shader, stencilMap, texture, alpha);
         boolean whole = !split && FormTranslucentQueue.needsWholeDefer(shader, stencilMap, texture, alpha);
-        boolean owned = cached == null;
+        boolean owned = cached == null || ownsCachedBuffer;
 
         /* The plain CPU path baked straight into the caller's frame, which is exactly what the global
          * model-view already describes — so a single direct draw stays exactly as it was, with no GL
          * buffer to create and free. Only the ROOT-frame hybrid bake needs one. */
-        if (owned && !rootFrame && !split && !whole)
+        if (cached == null && owned && !rootFrame && !split && !whole)
         {
             drawWithStableModelColor(mesh, shader, bbsModelShader);
 
@@ -825,7 +947,7 @@ public class ModelInstance implements IModelInstance
 
         VertexBuffer buffer;
 
-        if (owned)
+        if (cached == null)
         {
             buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
             buffer.bind();
@@ -842,7 +964,7 @@ public class ModelInstance implements IModelInstance
             /* The ring was full, so this ROOT-frame bake is a throwaway: drawn here, freed here. */
             drawWithStableModelColor(buffer, shader, modelView, bbsModelShader);
             VertexBuffer.unbind();
-            buffer.close();
+            if (owned) buffer.close();
 
             return;
         }
@@ -873,7 +995,7 @@ public class ModelInstance implements IModelInstance
              * the ones behind them inside the same model. */
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_TRANSLUCENT, true, texture, modelView, normalMat,
-                origin, this.isCulling(), null, null, owned));
+                origin, cull, null, null, owned).overlayColor(colorOverlay));
         }
         else if (texture != null && texture.hasTranslucency())
         {
@@ -881,16 +1003,16 @@ public class ModelInstance implements IModelInstance
              * share one buffer, so only the second may free it at the flush. */
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_TEX_OPAQUE, true, texture, modelView, normalMat,
-                origin, this.isCulling(), null, null, false));
+                origin, cull, null, null, false).overlayColor(colorOverlay));
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true, texture, modelView, normalMat,
-                origin, this.isCulling(), null, null, owned));
+                origin, cull, null, null, owned).overlayColor(colorOverlay));
         }
         else
         {
             FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer, () -> shader,
                 FormTranslucentQueue.PASS_SINGLE, true, texture, modelView, normalMat,
-                origin, this.isCulling(), null, null, owned));
+                origin, cull, null, null, owned).overlayColor(colorOverlay));
         }
     }
 
@@ -1002,81 +1124,49 @@ public class ModelInstance implements IModelInstance
         long key = this.weldKey(model, keys, light, overlay, color, stencilMap);
         WeldGeometryCache.Entry entry = this.weldCache.find(key);
         Set<ModelGroup> cpuGroups;
-        BufferBuilder builder = null;
+        List<CubicMaterialRenderer.Batch> cpuBatches;
 
         if (entry == null)
         {
-            /* Capture the seams for the visible draw AND for picking: the stencil must match the deformed
-             * geometry, or hovering a bent welded bone highlights its un-sealed rest silhouette at the joint. */
-            if (!bindings.isEmpty())
+            BBSProfiler.begin(BBSProfiler.Timer.WELDS);
+
+            try
             {
-                this.captureWelds(bindings, ROOT, model, light, overlay, stencilMap, keys);
-            }
+                if (!bindings.isEmpty()) this.captureWelds(bindings, ROOT, model, light, overlay, stencilMap, keys);
+                cpuGroups = this.collectCpuGroups(model, bindings, weldedGroups);
+                ModelForm modelForm = this.form instanceof ModelForm form ? form : null;
 
-            cpuGroups = this.collectCpuGroups(model, bindings, weldedGroups);
-
-            if (!cpuGroups.isEmpty())
-            {
-                CubicVAORenderer bake = new CubicVAORenderer(drawShader, this, light, overlay, stencilMap, keys, textureResolver);
-
-                bake.setColor(color.r, color.g, color.b, color.a);
-                bake.setWelds(bindings);
-                bake.setWeldedGroups(weldedGroups);
-                bake.setCpuGroups(cpuGroups);
-                bake.setHybridPasses(false, true);
-
-                builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
-                CubicRenderer.processRenderModel(bake, builder, ROOT, model);
-            }
-
-            entry = this.weldCache.acquire(epoch);
-
-            if (entry != null)
-            {
-                entry.key = key;
-                entry.cpuGroups = cpuGroups;
-                entry.hasGeometry = false;
-
-                if (builder != null)
+                try (CubicMaterialRenderer bake = new CubicMaterialRenderer(modelForm, cpuGroups, color, light, overlay, stencilMap, keys))
                 {
-                    /* Since 1.21.1 an empty buffer builds to null, so the built result decides
-                     * whether this entry has any geometry at all. */
-                    MeshData baked = builder.build();
-
-                    if (baked != null)
-                    {
-                        entry.hasGeometry = true;
-
-                        VertexBuffer buffer = entry.buffer();
-
-                        buffer.bind();
-                        buffer.upload(baked);
-                        VertexBuffer.unbind();
-                    }
-
-                    builder = null;
+                    bake.setWelds(bindings);
+                    CubicRenderer.processRenderModel(bake, null, ROOT, model);
+                    cpuBatches = bake.upload();
                 }
 
-                /* Marked valid even with no geometry: it stops every later pass from re-walking the
-                 * tree for a pose that bakes nothing. */
-                entry.valid = true;
+                entry = this.weldCache.acquire(epoch);
+
+                if (entry != null)
+                {
+                    entry.close();
+                    entry.key = key;
+                    entry.cpuGroups = cpuGroups;
+                    entry.materialBatches = cpuBatches;
+                    entry.hasGeometry = !cpuBatches.isEmpty();
+                    entry.valid = true;
+                }
+            }
+            finally
+            {
+                BBSProfiler.end(BBSProfiler.Timer.WELDS);
             }
         }
         else
         {
             cpuGroups = entry.cpuGroups;
+            cpuBatches = entry.materialBatches;
         }
 
-        boolean cpuGeometry = !cpuGroups.isEmpty();
-
-        /* Past the ring's cap the caller owns its bake the old way. Built here (rather than with
-         * buildOrThrow()) so a bake that emitted nothing is a miss, not an exception. */
-        MeshData owned = null;
-
-        if (entry == null && builder != null)
-        {
-            owned = builder.build();
-        }
+        boolean cpuGeometry = !cpuBatches.isEmpty();
 
         /* The VAO bones ride the GPU every pass, in the caller's frame; the CPU set is the bake's, so the two
          * halves always agree on which bones are which — even when the cache serves a bake whose seams have
@@ -1091,35 +1181,28 @@ public class ModelInstance implements IModelInstance
 
         RenderSystem.setShader(() -> drawShader);
 
-        /* The CPU path doesn't switch textures per material — it draws with whatever's bound. The VAO bones rebind
-         * per material as they draw, so remember the caller's default texture and restore it for the CPU draw
-         * (matches the old all-CPU path, which drew the welded cubes with that same default). */
-        int defaultTexture = RenderSystem.getShaderTexture(0);
-
+        Texture defaultTexture = BBSModClient.getTextures().getLastBound();
         CubicRenderer.processRenderModel(renderProcessor, null, stack, model);
 
-        boolean hasGeometry = entry != null ? entry.hasGeometry : owned != null;
+        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose());
+        Matrix3f normalMat = new Matrix3f(stack.last().normal());
+        ModelForm modelForm = this.form instanceof ModelForm form ? form : null;
+        Map<String, Texture> textures = new HashMap<>();
 
-        if (hasGeometry)
+        for (CubicMaterialRenderer.Batch batch : cpuBatches)
         {
-            RenderSystem.setShaderTexture(0, defaultTexture);
+            String material = batch.key().material();
+            Texture texture = this.resolveBOBJTexture(textures, textureResolver, material);
+            if (texture == null) texture = defaultTexture;
+            Color colorOverlay = stencilMap == null && overlay == OverlayTexture.NO_OVERLAY
+                ? FormOverlay.combine(modelForm, material, batch.key().group()) : null;
+            boolean cull = this.isCulling();
+            int culling = FormMaterialLevels.materialCulling(modelForm, material);
+            if (culling != FormMaterial.CULLING_MODEL) cull = culling == FormMaterial.CULLING_ON;
 
-            /* Root-frame geometry drawn in the caller's frame: the caller's stack goes into the model-view, and
-             * its normal matrix takes the baked normals into the same space the VAO path's NormalMat*Normal lands
-             * in. The two products — (modelView * stack) * v here and modelView * (stack * v) before — are the
-             * same transform. */
-            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose());
-            Matrix3f normalMat = new Matrix3f(stack.last().normal());
-            Uniform normalUniform = drawShader.getUniform("NormalMat");
-
-            if (normalUniform != null)
-            {
-                normalUniform.set(normalMat);
-            }
-
-            this.drawImmediate(owned, entry, drawShader, modelView, normalMat,
-                modelView.transformPosition(new Vector3f()), stencilMap,
-                BBSModClient.getTextures().getLastBound(), color.a, true);
+            this.drawMaterialGeometry(batch.geometry(), entry == null, drawShader, modelView, normalMat,
+                stencilMap, texture, batch.alpha(), colorOverlay, cull);
+            if (entry != null && batch.geometry().lentEpoch == epoch) entry.lentEpoch = epoch;
         }
 
         /* Both base paths must finish before either glint path changes RenderType state.
@@ -1139,9 +1222,29 @@ public class ModelInstance implements IModelInstance
      * into the light attribute). Anything here that a pass varies must be in the key, or a pass would be
      * served a bake made for another one.
      */
+    private static int colorOverridesHash(Map<String, Color> colors)
+    {
+        int hash = 0;
+        for (Map.Entry<String, Color> entry : colors.entrySet())
+        {
+            hash += entry.getKey().hashCode() ^ entry.getValue().getARGBColor();
+        }
+        return hash;
+    }
+
     private long weldKey(Model model, ShapeKeys keys, int light, int overlay, Color color, StencilMap stencilMap)
     {
         long hash = weldPoseKey(this.vaos.size(), model.getAllGroups());
+
+        if (this.form instanceof ModelForm form)
+        {
+            hash = hash * 31 + form.materials.appearanceHash();
+            hash = hash * 31 + colorOverridesHash(form.materialColorOverrides);
+            hash = hash * 31 + form.materialLightingOverrides.hashCode();
+            hash = hash * 31 + form.materialVisibilityOverrides.hashCode();
+            hash = hash * 31 + colorOverridesHash(form.materialOverlayOverrides);
+            hash = hash * 31 + form.overlayColor.get().getARGBColor();
+        }
 
         return weldDrawKey(hash, light, overlay, color.r, color.g, color.b, color.a,
             stencilMap == null ? 0 : (stencilMap.increment ? 2 : 1),
@@ -1168,12 +1271,13 @@ public class ModelInstance implements IModelInstance
 
         for (ModelGroup group : groups)
         {
-            hash = hash * 31 + (group.visible ? 1 : 0);
+            hash = hash * 31 + (group.isVisible() ? 1 : 0);
             hash = hash * 31 + poseHash(group.current);
             hash = hash * 31 + poseHash(group.initial);
             hash = hash * 31 + (group.orient == null ? 0 : group.orient.hashCode());
             hash = hash * 31 + (group.offset == null ? 0 : group.offset.hashCode());
             hash = hash * 31 + group.color.getARGBColor();
+            hash = hash * 31 + group.overlay.getARGBColor();
             hash = hash * 31 + Float.floatToIntBits(group.lighting);
         }
 
@@ -1226,7 +1330,7 @@ public class ModelInstance implements IModelInstance
 
         for (ModelGroup group : model.getAllGroups())
         {
-            if (!group.visible || (group.cubes.isEmpty() && group.meshes.isEmpty()))
+            if (!group.isVisible() || (group.cubes.isEmpty() && group.meshes.isEmpty()))
             {
                 continue;
             }
@@ -1240,5 +1344,51 @@ public class ModelInstance implements IModelInstance
         }
 
         return groups;
+    }
+
+    public Link getModelFile()
+    {
+        return this.modelFile;
+    }
+
+    public void setModelFile(Link modelFile)
+    {
+        this.modelFile = modelFile;
+    }
+
+    public boolean isEditable()
+    {
+        return this.modelFile != null;
+    }
+
+    public void rebakeGroups(Collection<ModelGroup> groups)
+    {
+        if (this.vaos.isEmpty() || !(this.model instanceof Model cubicModel))
+        {
+            return;
+        }
+
+        List<ModelGroup> rebaked = new ArrayList<>(groups);
+
+        ModelSetupQueue.add(() ->
+        {
+            CubicVAOBuilderRenderer builder = new CubicVAOBuilderRenderer(this.vaos);
+            PoseStack stack = new PoseStack();
+
+            for (ModelGroup group : rebaked)
+            {
+                Map<String, ModelVAO> groupVaos = this.vaos.remove(group);
+
+                if (groupVaos != null)
+                {
+                    for (ModelVAO vao : groupVaos.values())
+                    {
+                        vao.delete();
+                    }
+                }
+
+                builder.renderGroup(null, stack, group, cubicModel);
+            }
+        });
     }
 }

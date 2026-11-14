@@ -12,11 +12,24 @@ public class BaseKeyframeFactoryValue<T> extends BaseValueBasic<T>
         super(id, value);
 
         this.factory = factory;
+        this.captureDefault();
     }
 
     public IKeyframeFactory<T> getFactory()
     {
         return this.factory;
+    }
+
+    @Override
+    protected T copyValue(T value)
+    {
+        return this.factory == null || value == null ? value : this.factory.copy(value);
+    }
+
+    @Override
+    protected boolean compareValue(T a, T b)
+    {
+        return this.factory == null ? super.compareValue(a, b) : this.factory.compare(a, b);
     }
 
     @Override

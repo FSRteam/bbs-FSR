@@ -69,6 +69,13 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
     }
 
     @Override
+    public void update()
+    {
+        super.update();
+        if (this.followsPlayhead()) this.poseEditor.updatePoseDisplay(this.getDisplayValue());
+    }
+
+    @Override
     public void resize()
     {
         this.poseEditor.removeAll();
@@ -76,13 +83,13 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         if (this.getFlex().getW() > 240)
         {
             this.poseEditor.add(UI.row(
-                UI.column(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform),
+                UI.column(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), this.poseEditor.materialSection, this.poseEditor.transform),
                 UI.column(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups)
             ));
         }
         else
         {
-            this.poseEditor.add(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), UI.row(this.poseEditor.color, this.poseEditor.lighting), this.poseEditor.transform);
+            this.poseEditor.add(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), this.poseEditor.materialSection, this.poseEditor.transform);
         }
 
         /* Ew... */
@@ -113,7 +120,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
         public static void apply(UIKeyframes editor, Keyframe keyframe, String group, Consumer<PoseTransform> consumer)
         {
-            apply(editor, keyframe, (pose) -> consumer.accept(pose.get(group)));
+            apply(editor, keyframe, (pose) -> consumer.accept(pose.getOrCreate(group)));
         }
 
         /**
@@ -130,7 +137,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             {
                 for (String bone : boneNames)
                 {
-                    consumer.accept(pose.get(bone));
+                    consumer.accept(pose.getOrCreate(bone));
                 }
             });
         }
@@ -151,7 +158,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             {
                 for (String bone : boneNames)
                 {
-                    consumer.accept(bone, pose.get(bone));
+                    consumer.accept(bone, pose.getOrCreate(bone));
                 }
             });
         }
@@ -164,6 +171,12 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
             this.keyframe = keyframe;
 
             ((UIPoseTransforms) this.transform).setKeyframe(this);
+        }
+
+        @Override
+        protected UIElement selectionAnchor()
+        {
+            return this.editor;
         }
 
         private String getGroup(PoseTransform transform)
@@ -213,6 +226,48 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
         protected void setColor(PoseTransform transform, int value)
         {
             apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.color.set(value));
+        }
+
+        @Override
+        protected void setOverlay(PoseTransform transform, int value)
+        {
+            apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.overlay.set(value));
+        }
+
+        @Override
+        protected void setVisible(PoseTransform transform, boolean value)
+        {
+            apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.visible = value);
+        }
+
+        @Override
+        protected void setGlow(PoseTransform transform, float value)
+        {
+            apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.lighting = value);
+        }
+
+        @Override
+        protected void setGlintMode(PoseTransform transform, int value)
+        {
+            apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.glintMode = value);
+        }
+
+        @Override
+        protected void setGlintColor(PoseTransform transform, int value)
+        {
+            apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.glintColor.set(value));
+        }
+
+        @Override
+        protected void setGlintSpeed(PoseTransform transform, float value)
+        {
+            apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.glintSpeed = value);
+        }
+
+        @Override
+        protected void setGlintTransform(PoseTransform transform, Transform value)
+        {
+            apply(this.editor, this.keyframe, this.getGroup(transform), (poseT) -> poseT.glintTransform.copy(value));
         }
 
         @Override
@@ -267,7 +322,23 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
                 return null;
             }
 
-            return recorded.getValue().get(bone);
+            return recorded.getValue().getOrCreate(bone);
+        }
+
+        @Override
+        protected Transform getAutoKeyTransform(float tick)
+        {
+            UIKeyframeSheet sheet = this.editor.editor.getGraph().getSheet(this.editor.keyframe);
+            Pose sampled = (Pose) UIReplaysEditorUtils.sampleKeyframeValue(sheet, tick);
+
+            if (sampled == null)
+            {
+                return null;
+            }
+
+            PoseTransform transform = sampled.get(this.editor.getGroup());
+
+            return transform == null ? new PoseTransform() : transform;
         }
 
         public static void applyRecording(UIKeyframes editor, Keyframe keyframe, int tick, List<String> bones, Consumer<PoseTransform> consumer)
@@ -284,7 +355,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
                 for (String bone : bones)
                 {
-                    consumer.accept(pose.get(bone));
+                    consumer.accept(pose.getOrCreate(bone));
                 }
 
                 recorded.postNotify();
@@ -305,7 +376,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
                 for (String bone : bones)
                 {
-                    consumer.accept(bone, pose.get(bone));
+                    consumer.accept(bone, pose.getOrCreate(bone));
                 }
 
                 recorded.postNotify();

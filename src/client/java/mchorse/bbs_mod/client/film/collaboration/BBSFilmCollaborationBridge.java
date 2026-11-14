@@ -576,7 +576,7 @@ public final class BBSFilmCollaborationBridge
 
             return new TimelineProjection(
                 clips.area,
-                clips::fromGraphX,
+                x -> (int) Math.round(clips.fromGraphX(x)),
                 clips::toGraphX,
                 BBSFilmEditorView.CLIP_TIMELINE,
                 clips,

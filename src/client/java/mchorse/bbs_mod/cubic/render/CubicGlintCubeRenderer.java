@@ -4,6 +4,10 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
+import mchorse.bbs_mod.cubic.data.model.ModelCube;
+import mchorse.bbs_mod.cubic.data.model.ModelMesh;
+import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.utils.FormMaterialLevels;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
@@ -23,6 +27,12 @@ import org.joml.Vector3f;
 public class CubicGlintCubeRenderer extends CubicCubeRenderer
 {
     private final int mode;
+    private ModelForm materialForm;
+
+    public void setMaterialForm(ModelForm form)
+    {
+        this.materialForm = form;
+    }
     private final Set<ModelGroup> restrictTo;
     private final Color previousColor = new Color();
     private final Vector3f viewOrigin = new Vector3f();
@@ -82,6 +92,18 @@ public class CubicGlintCubeRenderer extends CubicCubeRenderer
             stack.popPose();
             group.color.copy(this.previousColor);
         }
+    }
+
+    @Override
+    protected void renderCube(BufferBuilder builder, PoseStack stack, ModelGroup group, ModelCube cube)
+    {
+        if (FormMaterialLevels.materialVisible(this.materialForm, cube.material)) super.renderCube(builder, stack, group, cube);
+    }
+
+    @Override
+    protected void renderMesh(BufferBuilder builder, PoseStack stack, Model model, ModelGroup group, ModelMesh mesh)
+    {
+        if (FormMaterialLevels.materialVisible(this.materialForm, mesh.material)) super.renderMesh(builder, stack, model, group, mesh);
     }
 
     @Override

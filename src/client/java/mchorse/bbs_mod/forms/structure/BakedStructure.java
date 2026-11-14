@@ -10,6 +10,9 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
+import mchorse.bbs_mod.forms.renderers.BlockFormRenderer;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
+import mchorse.bbs_mod.utils.MathUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
@@ -55,6 +58,9 @@ import java.util.function.Function;
  */
 public class BakedStructure
 {
+    /** A separate overlay pass keeps the terrain bake's original diffuse shading. */
+    public static final RenderType OVERLAY_LAYER = RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS, false);
+
     private static int globalGeneration;
 
     private static final Direction[] DIRECTIONS = Direction.values();
@@ -246,7 +252,8 @@ public class BakedStructure
     {
         if (isTranslucent(blockLayer))
         {
-            return Sheets.translucentCullBlockSheet();
+            return FormOverlay.active() == null ? Sheets.translucentCullBlockSheet()
+                : BlockFormRenderer.OVERLAY_TRANSLUCENT_LAYER;
         }
 
         return Sheets.cutoutBlockSheet();
@@ -308,6 +315,28 @@ public class BakedStructure
             }
 
             replay(consumers.getBuffer(target), baked, matrix, normalMatrix, contextBlock, contextSky, tint);
+        }
+    }
+
+    /** Replay a flat overlay over terrain shaders, which have no overlay channel of their own. */
+    public void renderOverlay(PoseStack.Pose pose, CustomVertexConsumerProvider consumers, int contextLight, float strength)
+    {
+        int alpha = (int) (MathUtils.clamp(strength, 0F, 1F) * 255F);
+
+        if (alpha <= 0)
+        {
+            return;
+        }
+
+        SodiumSpriteHook.markActive(this.sprites);
+        VertexConsumer out = consumers.getBuffer(OVERLAY_LAYER);
+        int contextBlock = contextLight & 0xFFFF;
+        int contextSky = (contextLight >> 16) & 0xFFFF;
+        int tint = (alpha << 24) | 0xFFFFFF;
+
+        for (BakedLayer baked : this.layers)
+        {
+            replay(out, baked, pose.pose(), pose.normal(), contextBlock, contextSky, tint);
         }
     }
 
@@ -429,7 +458,7 @@ public class BakedStructure
         out.addVertex(x, y, z)
             .setColor(r, g, b, a)
             .setUv(u, v)
-            .setUv1(overlay, overlay)
+            .setUv1(overlay & 0xFFFF, overlay >> 16 & 0xFFFF)
             .setUv2(blockLight, skyLight)
             .setNormal(nx, ny, nz);
     }

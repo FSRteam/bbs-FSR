@@ -22,6 +22,7 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -41,6 +42,7 @@ public class UIContext implements IViewportStack
     public UIContextMenu contextMenu;
     private long contextMenuIntentGeneration;
     private final Set<UIContextMenu> pendingContextMenuRemovals = new LinkedHashSet<>();
+    private final List<UIContextMenu> menuStack = new ArrayList<>();
 
     /* Mouse states */
     public int mouseX;
@@ -289,11 +291,6 @@ public class UIContext implements IViewportStack
     public boolean isReleased(int keyCode)
     {
         return this.keyCode == keyCode && this.keyAction == KeyAction.RELEASED;
-    }
-
-    public boolean isRepeated(int keyCode)
-    {
-        return this.keyCode == keyCode && this.keyAction == KeyAction.REPEAT;
     }
 
     public boolean isHeld(int keyCode)
@@ -547,13 +544,12 @@ public class UIContext implements IViewportStack
 
         if (previous != null)
         {
-            this.pendingContextMenuRemovals.add(previous);
+            this.menuStack.add(previous);
+            previous.setVisible(false);
         }
 
         this.menu.runAfterCapturedMouseRelease(() ->
         {
-            this.removePendingContextMenu(previous);
-
             if (generation != this.contextMenuIntentGeneration)
             {
                 return;
@@ -568,12 +564,85 @@ public class UIContext implements IViewportStack
         });
     }
 
+    public boolean canGoBack()
+    {
+        return !this.menuStack.isEmpty();
+    }
+
+    public void backContextMenu()
+    {
+        if (this.menuStack.isEmpty())
+        {
+            return;
+        }
+
+        UIContextMenu current = this.contextMenu;
+        UIContextMenu previous = this.menuStack.remove(this.menuStack.size() - 1);
+        long generation = this.advanceContextMenuIntentGeneration();
+
+        this.contextMenu = previous;
+
+        this.menu.runAfterCapturedMouseRelease(() ->
+        {
+            this.removePendingContextMenu(current);
+
+            if (generation == this.contextMenuIntentGeneration)
+            {
+                previous.setVisible(true);
+                this.menu.overlay.moveToFront(previous);
+            }
+        });
+    }
+
+    public void dismissContextMenu(UIContextMenu removed)
+    {
+        if (removed == this.contextMenu)
+        {
+            this.contextMenu = null;
+            this.advanceContextMenuIntentGeneration();
+            this.clearParkedContextMenus();
+        }
+        else
+        {
+            int index = this.menuStack.indexOf(removed);
+
+            if (index >= 0)
+            {
+                List<UIContextMenu> descendants = new ArrayList<>(this.menuStack.subList(index, this.menuStack.size()));
+
+                this.menuStack.subList(index, this.menuStack.size()).clear();
+
+                for (UIContextMenu menu : descendants)
+                {
+                    if (menu != removed)
+                    {
+                        this.queueContextMenuRemoval(menu);
+                    }
+                }
+            }
+        }
+    }
+
+    private void clearParkedContextMenus()
+    {
+        List<UIContextMenu> parked = new ArrayList<>(this.menuStack);
+
+        this.menuStack.clear();
+
+        for (UIContextMenu menu : parked)
+        {
+            this.queueContextMenuRemoval(menu);
+        }
+    }
+
     public void closeContextMenu()
     {
         UIContextMenu previous = this.contextMenu;
 
         this.contextMenu = null;
         this.advanceContextMenuIntentGeneration();
+
+        this.clearParkedContextMenus();
 
         if (previous == null)
         {
@@ -602,6 +671,9 @@ public class UIContext implements IViewportStack
     public void invalidateContextMenus()
     {
         this.advanceContextMenuIntentGeneration();
+
+        this.pendingContextMenuRemovals.addAll(this.menuStack);
+        this.menuStack.clear();
 
         if (this.contextMenu != null)
         {

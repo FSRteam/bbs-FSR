@@ -23,6 +23,7 @@ public class UIText extends UIElement implements ITextColoring
     private int lines;
     private boolean updates;
     private String lastString;
+    private int wrappedWidth = -1;
 
     public UIText(String text)
     {
@@ -125,12 +126,49 @@ public class UIText extends UIElement implements ITextColoring
         this.color(color, shadow);
     }
 
+    private boolean wrap()
+    {
+        int width = this.area.w - this.paddingH * 2;
+
+        if (this.text != null && this.wrappedWidth == width)
+        {
+            return false;
+        }
+
+        boolean fresh = this.text == null;
+        int before = this.height();
+        this.text = Batcher2D.getDefaultTextRenderer().wrap(this.temp.get(), width);
+        this.lines = this.text.size();
+        this.wrappedWidth = width;
+        this.h(this.height());
+
+        return fresh || this.height() != before;
+    }
+
     @Override
     public void resize()
     {
+        if (this.area.w > 0)
+        {
+            this.wrap();
+        }
+
         super.resize();
 
-        this.text = null;
+        if (this.area.w > 0 && this.wrap())
+        {
+            this.requestLayout();
+        }
+    }
+
+    private void requestLayout()
+    {
+        UIElement container = this.getParentContainer();
+
+        if (container != null)
+        {
+            container.invalidateLayout();
+        }
     }
 
     @Override
@@ -153,17 +191,9 @@ public class UIText extends UIElement implements ITextColoring
 
         if (this.area.w > 0)
         {
-            if (this.text == null)
+            if (this.wrap())
             {
-                List<String> text = font.wrap(this.temp.get(), this.area.w - this.paddingH * 2);
-
-                this.lines = text.size();
-
-                this.h(this.height());
-                this.getParentContainer().resize();
-
-                this.text = text;
-                this.lines = text.size();
+                this.requestLayout();
             }
 
             int y = this.paddingV;

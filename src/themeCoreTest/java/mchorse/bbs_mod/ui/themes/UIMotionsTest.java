@@ -15,8 +15,7 @@ import java.lang.reflect.Method;
 /**
  * Executable regressions for the motion layer basics: snap semantics,
  * disabled short-circuit, duration composition and tween settling.
- * Runs without Minecraft; ThemeManager falls back to code-level dark
- * defaults when no asset provider is present.
+ * Runs without Minecraft using an explicitly installed code-level dark theme.
  */
 public final class UIMotionsTest
 {
@@ -31,19 +30,35 @@ public final class UIMotionsTest
 
     public static void main(String[] args) throws Exception
     {
-        testDurationComposition();
-        testSnapAndDisabled();
-        testTweenProgression();
-        testSelectedInterpolationOverridesEveryMotionType();
-        testSpringClosedFormBranches();
-        testSpringInterruptVelocityContinuity();
-        testSpringSettlingAndSameTarget();
-        testExitReverseTween();
-        testCoverageEntriesDefaults();
-        testScrollUsesThemeCurve();
-        testLayoutTransitionInterpolation();
+        Field currentField = field(ThemeManager.class, "current");
+        Field currentIdField = field(ThemeManager.class, "currentId");
+        Object previousTheme = currentField.get(null);
+        Object previousId = currentIdField.get(null);
 
-        System.out.println("UIMotionsTest: all tests passed");
+        try
+        {
+            currentField.set(null, ThemeParser.defaultDark("dark"));
+            currentIdField.set(null, "dark");
+
+            testDurationComposition();
+            testSnapAndDisabled();
+            testTweenProgression();
+            testSelectedInterpolationOverridesEveryMotionType();
+            testSpringClosedFormBranches();
+            testSpringInterruptVelocityContinuity();
+            testSpringSettlingAndSameTarget();
+            testExitReverseTween();
+            testCoverageEntriesDefaults();
+            testScrollUsesThemeCurve();
+            testLayoutTransitionInterpolation();
+
+            System.out.println("UIMotionsTest: all tests passed");
+        }
+        finally
+        {
+            currentField.set(null, previousTheme);
+            currentIdField.set(null, previousId);
+        }
     }
 
     /**

@@ -1,13 +1,13 @@
 package mchorse.bbs_mod.ui.dashboard.textures;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -15,8 +15,10 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.textures.IFolderTreeHost;
 import mchorse.bbs_mod.ui.textures.TextureEntry;
+import mchorse.bbs_mod.ui.textures.TextureCellRenderer;
 import mchorse.bbs_mod.ui.textures.TextureFiles;
 import mchorse.bbs_mod.ui.textures.UIFolderTree;
+import mchorse.bbs_mod.ui.textures.UITexturePickGrid;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.StringUtils;
@@ -32,9 +34,6 @@ import java.util.function.Predicate;
  * with the folder's own textures listed above it so an existing one can be picked to
  * overwrite (after a word of warning), and a thumbnail of what's about to be written.
  * Enter saves, Escape cancels.
- *
- * <p>FSR note: the file column is a plain list, not upstream's tile grid — that one is a
- * UIItemGrid the FSR browser doesn't run on yet (B7's wave).</p>
  */
 public class UISaveTextureOverlayPanel extends UIOverlayPanel implements IFolderTreeHost
 {
@@ -43,7 +42,7 @@ public class UISaveTextureOverlayPanel extends UIOverlayPanel implements IFolder
     private static final int PAD = 10;
 
     public UIFolderTree tree;
-    public UIStringList files;
+    public UITexturePickGrid files;
     public UITextbox name;
     public UIButton save;
 
@@ -64,8 +63,12 @@ public class UISaveTextureOverlayPanel extends UIOverlayPanel implements IFolder
         this.writer = writer;
 
         this.tree = new UIFolderTree(this);
-        /* Picking a texture takes its name (that is what saving over it means) */
-        this.files = new UIStringList((list) -> this.pickName(list.get(0)));
+        this.files = new UITexturePickGrid(this::pickFile, (entry) ->
+        {
+            this.pickFile(entry);
+            this.trySave();
+        });
+        this.files.current(this::target);
         this.files.background();
         this.name = new UITextbox(1000, (text) -> {})
             .validator((text) -> UITextbox.FILENAME_PREDICATE.test(text.replace(" ", "")));
@@ -80,16 +83,17 @@ public class UISaveTextureOverlayPanel extends UIOverlayPanel implements IFolder
 
         /* Where it goes (20), the folder's textures (the rest), the name (20), then the
          * thumbnail row with the save button — each part 5 apart */
-        this.files.relative(this.right).xy(0, 20).w(1F).h(1F, -20 - 5 - 20 - 5 - PREVIEW);
         this.name.relative(this.right).x(0).y(1F, -PREVIEW - 5).w(1F).h(20).anchorY(1F);
         this.save.relative(this.right).x(1F).y(1F, -(PREVIEW - 20) / 2).w(100).h(20).anchor(1F, 1F);
+        this.files.relative(this.right).xy(0, 20).w(1F).hTo(this.name.area, 0F, -5);
 
-        this.right.add(this.files, this.name, this.save);
+        /* The grid reads the name field's bounds from this layout pass. */
+        this.right.add(this.name, this.save, this.files);
         this.content.add(this.tree, this.right);
 
         Link current = editor.getTexture();
 
-        this.navigate(TextureEntry.folderLink(current));
+        this.navigate(TextureEntry.folderLink(current.parent()));
         this.name.setText(StringUtils.fileName(current.path));
     }
 
@@ -128,32 +132,32 @@ public class UISaveTextureOverlayPanel extends UIOverlayPanel implements IFolder
     }
 
     /** A picked entry takes its name into the box (that is what saving over it means). */
-    private void pickName(String name)
+    private void pickFile(TextureEntry entry)
     {
-        if (name != null)
+        if (entry != null)
         {
-            this.name.setText(name);
+            this.name.setText(StringUtils.fileName(entry.link().path));
         }
     }
 
     private void refreshFiles()
     {
-        List<String> names = new ArrayList<>();
+        List<TextureEntry> entries = new ArrayList<>();
 
         if (!this.folder.source.isEmpty())
         {
             for (Link link : BBSMod.getProvider().getLinksFromPath(this.folder, false))
             {
-                if (link.path.endsWith(".png"))
+                if (TextureFiles.isTexture(link))
                 {
-                    names.add(StringUtils.fileName(link.path));
+                    entries.add(TextureEntry.of(link));
                 }
             }
         }
 
-        names.sort((a, b) -> NaturalOrderComparator.compare(true, a, b));
+        entries.sort((a, b) -> NaturalOrderComparator.compare(true, a.name(), b.name()));
 
-        this.files.setList(names);
+        this.files.setEntries(entries);
         this.save.setEnabled(TextureFiles.isFolder(this.folder));
     }
 
@@ -224,17 +228,12 @@ public class UISaveTextureOverlayPanel extends UIOverlayPanel implements IFolder
         int x = this.right.area.x;
         int y = this.right.area.y;
 
-        /* Where the file goes, in grey, with the gear of a read-only place when it can't */
+        /* Read-only folders use the same muted caption as their texture cells. */
         String where = this.folder.source.isEmpty() ? UIKeys.TEXTURES_SAVE_DIALOG_PICK_FOLDER.get() : this.folder.toString();
         boolean writable = TextureFiles.isFolder(this.folder);
 
-        if (!writable && !this.folder.source.isEmpty())
-        {
-            context.batcher.icon(Icons.GEAR, Colors.LIGHTER_GRAY, x, y - 2);
-            x += 18;
-        }
-
-        context.batcher.text(font.limitToWidth(where, this.right.area.w - (x - this.right.area.x)), x, y + 4, writable ? Colors.LIGHTER_GRAY : Colors.GRAY);
+        int color = writable ? BBSSettings.mutedTextColor() : Colors.mulA(BBSSettings.mutedTextColor(), TextureCellRenderer.READ_ONLY_ALPHA);
+        context.batcher.text(font.limitToWidth(where, this.right.area.w - (x - this.right.area.x)), x, y + 4, color);
 
         /* What's about to be written */
         Texture texture = this.editor.getTemporaryTexture();

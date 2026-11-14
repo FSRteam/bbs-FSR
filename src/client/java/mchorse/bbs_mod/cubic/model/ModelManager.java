@@ -1,9 +1,19 @@
 package mchorse.bbs_mod.cubic.model;
 
+import mchorse.bbs_mod.cubic.data.model.ModelGroup;
+import mchorse.bbs_mod.cubic.data.model.ModelCube;
+import mchorse.bbs_mod.utils.PNGEncoder;
+import mchorse.bbs_mod.utils.resources.Pixels;
+import mchorse.bbs_mod.utils.colors.Colors;
+import org.joml.Vector2f;
+import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.MolangHelper;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
+import mchorse.bbs_mod.cubic.ik.ModelIKRuntime;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
 import mchorse.bbs_mod.cubic.model.loaders.BOBJModelLoader;
 import mchorse.bbs_mod.cubic.model.loaders.CubicModelLoader;
 import mchorse.bbs_mod.cubic.model.loaders.GeoCubicModelLoader;
@@ -23,34 +33,40 @@ import mchorse.bbs_mod.utils.watchdog.IWatchDogListener;
 import mchorse.bbs_mod.utils.watchdog.WatchDogEvent;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
 public class ModelManager implements IWatchDogListener
 {
     public static final String MODELS_PREFIX = "models/";
+    private static final int NEW_MODEL_TEXTURE = 64;
+    private static final int NEW_MODEL_CUBE = 16;
 
     /**
      * Model loaders an addon added.
      *
-     * <p>Suppliers rather than loaders: the list is rebuilt from scratch on every asset reload,
-     * so anything appended to it directly would survive exactly until the user saved a file in the
-     * assets folder.</p>
+     * <p>Each load creates fresh built-in and addon loaders from these suppliers. The public
+     * prototype list is rebuilt on reload, while registered factories survive it.</p>
      */
-    private static final List<Supplier<IModelLoader>> EXTRA_LOADERS = new ArrayList<>();
+    private static final List<Supplier<IModelLoader>> EXTRA_LOADERS = new CopyOnWriteArrayList<>();
 
-    public final Map<String, ModelInstance> models = new HashMap<>();
+    public final Map<String, ModelInstance> models = new ConcurrentHashMap<>();
 
     /** Keys ever queued for the background loader — a failed load is never retried until forgotten. */
-    private final Set<String> requested = new HashSet<>();
+    private final Set<String> requested = ConcurrentHashMap.newKeySet();
 
     public final List<IModelLoader> loaders = new ArrayList<>();
     public final AssetProvider provider;
@@ -92,11 +108,19 @@ public class ModelManager implements IWatchDogListener
     private void setupLoaders()
     {
         this.loaders.clear();
-        this.loaders.add(new BOBJModelLoader());
-        this.loaders.add(new CubicModelLoader());
-        this.loaders.add(new GeoCubicModelLoader());
-        this.loaders.add(new JemModelLoader());
-        this.loaders.add(new VoxModelLoader());
+        this.loaders.addAll(createLoaders());
+    }
+
+    /** Isolate stateful built-ins and addon supplier instances between model loads. */
+    private static List<IModelLoader> createLoaders()
+    {
+        List<IModelLoader> loaders = new ArrayList<>();
+
+        loaders.add(new BOBJModelLoader());
+        loaders.add(new CubicModelLoader());
+        loaders.add(new GeoCubicModelLoader());
+        loaders.add(new JemModelLoader());
+        loaders.add(new VoxModelLoader());
 
         for (Supplier<IModelLoader> extra : EXTRA_LOADERS)
         {
@@ -104,9 +128,11 @@ public class ModelManager implements IWatchDogListener
 
             if (loader != null)
             {
-                this.loaders.add(loader);
+                loaders.add(loader);
             }
         }
+
+        return loaders;
     }
 
     /**
@@ -166,7 +192,7 @@ public class ModelManager implements IWatchDogListener
         Collection<Link> links = this.provider.getLinksFromPath(modelLink, true);
         MapType config = this.loadConfig(modelLink);
 
-        for (IModelLoader loader : this.loaders)
+        for (IModelLoader loader : createLoaders())
         {
             model = loader.load(id, this, modelLink, links, config);
 
@@ -241,6 +267,8 @@ public class ModelManager implements IWatchDogListener
 
         this.models.clear();
         this.requested.clear();
+        ModelIKRuntime.clearCache();
+        ModelPhysicsRuntime.clearCache();
         PoseManager.INSTANCE.clear();
         ShapeKeysManager.INSTANCE.clear();
         this.setupLoaders();
@@ -352,10 +380,171 @@ public class ModelManager implements IWatchDogListener
         /* Un-mark it too, or the next getModel would treat the key as already queued and
          * the edited model would never reload. */
         this.requested.remove(key);
+        ModelPhysicsRuntime.invalidate(key);
 
         if (model != null)
         {
             model.delete();
+        }
+    }
+
+    /** Create a block-sized textured model in a new asset folder. */
+    public boolean createModel(String id)
+    {
+        Link link = Link.assets(MODELS_PREFIX + id);
+        File folder = this.provider.getFile(link);
+
+        if (folder == null || folder.exists() || !folder.mkdirs())
+        {
+            return false;
+        }
+
+        Model model = new Model(this.parser);
+        ModelGroup group = new ModelGroup("group");
+        ModelCube cube = new ModelCube();
+        MapType data = new MapType(false);
+
+        model.textureWidth = NEW_MODEL_TEXTURE;
+        model.textureHeight = NEW_MODEL_TEXTURE;
+
+        cube.size.set(NEW_MODEL_CUBE, NEW_MODEL_CUBE, NEW_MODEL_CUBE);
+        cube.origin.set(-NEW_MODEL_CUBE / 2F, 0F, -NEW_MODEL_CUBE / 2F);
+        cube.setupBoxUV(new Vector2f(0F, 0F), false);
+        group.cubes.add(cube);
+        model.topGroups.add(group);
+        data.put("model", model.toData());
+
+        Pixels pixels = Pixels.fromSize(NEW_MODEL_TEXTURE, NEW_MODEL_TEXTURE);
+
+        try
+        {
+            pixels.drawRect(0, 0, NEW_MODEL_TEXTURE, NEW_MODEL_TEXTURE, Colors.WHITE);
+            PNGEncoder.writeToFile(pixels, new File(folder, "model.png"));
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+
+            return false;
+        }
+        finally
+        {
+            pixels.delete();
+        }
+
+        if (!DataToString.writeSilently(new File(folder, "model.bbs.json"), data, true))
+        {
+            return false;
+        }
+
+        /* A model once asked for under this name and not found is never looked for again. */
+        this.forget(id);
+
+        return true;
+    }
+
+    public boolean saveModel(ModelInstance instance, List<String[]> renames)
+    {
+        Link link = instance.getModelFile();
+        File file = link == null ? null : this.provider.getFile(link);
+
+        if (file == null || !instance.isEditable() || !(instance.getModel() instanceof Model model))
+        {
+            return false;
+        }
+
+        MapType data = this.readModelFile(file);
+
+        if (data == null)
+        {
+            return false;
+        }
+
+        data.put("model", model.toData());
+
+        if (!renames.isEmpty() && data.has("animations"))
+        {
+            renameAnimationBones(data.getMap("animations"), renames);
+        }
+
+        Path temporary = null;
+
+        try
+        {
+            Path destination = file.toPath().toAbsolutePath();
+            temporary = Files.createTempFile(destination.getParent(), ".bbs-model-", ".tmp");
+
+            if (!DataToString.writeSilently(temporary.toFile(), data, true))
+            {
+                return false;
+            }
+
+            try
+            {
+                Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            }
+            catch (AtomicMoveNotSupportedException exception)
+            {
+                Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            return true;
+        }
+        catch (IOException exception)
+        {
+            System.err.println("Failed to save the model file: " + file);
+            return false;
+        }
+        finally
+        {
+            if (temporary != null)
+            {
+                try
+                {
+                    Files.deleteIfExists(temporary);
+                }
+                catch (IOException exception)
+                {
+                    System.err.println("Failed to remove the temporary model file: " + temporary);
+                }
+            }
+        }
+    }
+
+    private static void renameAnimationBones(MapType animations, List<String[]> renames)
+    {
+        for (Map.Entry<String, BaseType> entry : animations)
+        {
+            if (!entry.getValue().isMap() || !entry.getValue().asMap().has("groups"))
+            {
+                continue;
+            }
+
+            MapType groups = entry.getValue().asMap().getMap("groups");
+
+            for (String[] rename : renames)
+            {
+                if (groups.has(rename[0]))
+                {
+                    BaseType part = groups.get(rename[0]);
+
+                    groups.remove(rename[0]);
+                    groups.put(rename[1], part);
+                }
+            }
+        }
+    }
+
+    private MapType readModelFile(File file)
+    {
+        try (InputStream stream = Files.newInputStream(file.toPath()))
+        {
+            return DataToString.mapFromString(IOUtils.readText(stream));
+        }
+        catch (Exception exception)
+        {
+            System.err.println("Failed to read the model file before saving it: " + file);
+            return null;
         }
     }
 }

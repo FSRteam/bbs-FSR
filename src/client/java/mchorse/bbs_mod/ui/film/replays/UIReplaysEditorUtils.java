@@ -1,6 +1,12 @@
 package mchorse.bbs_mod.ui.film.replays;
 
 import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.film.replays.tracks.TrackDescriptor;
+import mchorse.bbs_mod.film.replays.tracks.TrackCatalog;
+import mchorse.bbs_mod.film.replays.tracks.TrackKind;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.animation.Animation;
@@ -16,7 +22,10 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.FilmMatrices;
 import mchorse.bbs_mod.film.replays.FormControlKeys;
 import mchorse.bbs_mod.film.replays.FormProperties;
+import mchorse.bbs_mod.film.replays.tracks.ConstraintTracks;
 import mchorse.bbs_mod.film.replays.PerLimbService;
+import mchorse.bbs_mod.film.replays.tracks.MaterialTracks;
+import mchorse.bbs_mod.film.replays.tracks.TrackId;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -24,6 +33,7 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.IPosedForm;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
 import mchorse.bbs_mod.forms.forms.sound.SoundKeyframeValue;
 import mchorse.bbs_mod.forms.forms.PoseForm;
@@ -31,13 +41,16 @@ import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
 import mchorse.bbs_mod.ui.film.ICursor;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.film.FilmTarget;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
+import mchorse.bbs_mod.ui.framework.elements.input.items.FoldState;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
@@ -50,6 +63,7 @@ import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.pose.PoseBones;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
@@ -79,32 +93,92 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 public class UIReplaysEditorUtils
 {
     private static final int BONE_TRACK_HUE_COUNT = 12;
 
+    /** The overlay creation action is shared by Film and animation-state timelines. */
+    public static void addOverlayTrackAction(ContextMenuManager menu, UIKeyframeSheet sheet, Consumer<TrackId> refresh)
+    {
+        if (sheet == null) return;
+        TrackId track = TrackId.parse(sheet.id);
+        Form owner = UIReplaysEditor.getSheetForm(sheet);
+        if (track == null || track.kind() != TrackKind.PROPERTY || owner == null) return;
+        boolean pose = track.subject().equals("pose") || track.subject().startsWith("pose_overlay");
+        boolean transform = track.subject().equals("transform") || track.subject().startsWith("transform_overlay");
+        if ((!pose && !transform) || (pose && !(owner instanceof IPosedForm))) return;
+        ValueInt count = pose ? BBSSettings.recordingPoseOverlays : BBSSettings.recordingTransformOverlays;
+        if (count == null || count.get() >= count.getMax()) return;
+        menu.action(Icons.ADD, L10n.lang(pose ? "bbs.ui.keyframes.context.add_pose_track" : "bbs.ui.keyframes.context.add_transform_track"), () ->
+        {
+            if (count.get() >= count.getMax()) return;
+            count.set(count.get() + 1);
+            owner.syncOverlayTracks();
+            refresh.accept(TrackId.property(track.formPath(), pose ? "pose" : "transform"));
+        });
+    }
+
+    public static void buildSheets(List<TrackDescriptor> catalog, List<UIKeyframeSheet> sheets)
+    {
+        Map<TrackId, UIKeyframeSheet> rows = new HashMap<>();
+        for (TrackDescriptor track : catalog)
+        {
+            UIKeyframeSheet sheet = new UIKeyframeSheet(track);
+            rows.put(track.id(), sheet);
+            sheets.add(sheet);
+        }
+        for (TrackDescriptor track : catalog)
+            if (track.parent() != null) rows.get(track.id()).setParent(rows.get(track.parent()));
+    }
+
+    public static void pruneTree(List<UIKeyframeSheet> sheets)
+    {
+        Set<UIKeyframeSheet> present = new HashSet<>(sheets);
+        for (UIKeyframeSheet sheet : sheets)
+        {
+            sheet.children.removeIf(child -> !present.contains(child));
+            if (sheet.parent != null && !present.contains(sheet.parent)) sheet.setParent(null);
+        }
+    }
+
     public static void insertPoseKeyframesAtTick(Replay replay, float tick, Set<String> expandedPoseIds)
+    {
+        FoldState<String> expanded = new FoldState<>();
+
+        if (expandedPoseIds != null)
+        {
+            expanded.expandAll(expandedPoseIds);
+        }
+
+        insertPoseKeyframesAtTick(replay, tick, expanded);
+    }
+
+    /** The active timeline supplies its shared folds, including branches absent from the current tab. */
+    public static void insertPoseKeyframesAtTick(Replay replay, float tick, FoldState<String> expandedPoseIds)
     {
         if (replay == null)
         {
             return;
         }
 
-        Set<String> expanded = expandedPoseIds == null ? Collections.emptySet() : expandedPoseIds;
+        FoldState<String> expanded = expandedPoseIds == null ? new FoldState<>() : expandedPoseIds;
         Form form = replay.form.get();
         BaseValue.edit(replay.properties, (props) ->
         {
-            for (KeyframeChannel<?> channel : props.properties.values())
+            for (Map.Entry<TrackId, KeyframeChannel> entry : props.tracks.entrySet())
             {
-                String id = channel.getId();
+                TrackId track = entry.getKey();
+                KeyframeChannel<?> channel = entry.getValue();
+                String id = track.toKey();
 
-                if (PerLimbService.isPoseBoneChannel(id))
+                if (track.is(TrackKind.BONE))
                 {
-                    PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(id);
-                    String parent = path == null || path.formPath().isEmpty() ? "pose" : path.formPath() + FormUtils.PATH_SEPARATOR + "pose";
+                    String parent = TrackId.property(track.formPath(), FormProperties.POSE_PROPERTY).toKey();
 
-                    if (!expanded.contains(parent))
+                    if (!expanded.isExpanded(parent))
                     {
                         continue;
                     }
@@ -120,7 +194,8 @@ public class UIReplaysEditorUtils
                     continue;
                 }
 
-                if (channel.getFactory() == KeyframeFactories.POSE && !id.contains("pose_overlay") && (id.equals("pose") || id.endsWith(FormUtils.PATH_SEPARATOR + "pose")) && !expanded.contains(id))
+                if (track.is(TrackKind.PROPERTY) && track.subject().equals(FormProperties.POSE_PROPERTY)
+                    && channel.getFactory() == KeyframeFactories.POSE && !expanded.isExpanded(id))
                 {
                     KeyframeChannel<Pose> poseChannel = (KeyframeChannel<Pose>) channel;
                     KeyframeSegment<Pose> segment = poseChannel.find(tick);
@@ -153,27 +228,7 @@ public class UIReplaysEditorUtils
     /** One per-form track whose value contains the four glint fields for every bone. */
     public static void addGlintControlSheet(Form form, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        if (!(form instanceof PoseForm poseForm))
-        {
-            return;
-        }
-
-        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
-
-        if (hierarchy.getBones().isEmpty())
-        {
-            return;
-        }
-
-        String path = FormUtils.getPath(form);
-        String id = FormControlKeys.toGlintControlKey(path);
-        IKey title = path.isEmpty()
-            ? UIKeys.POSE_CONTEXT_GLINT_LAYER
-            : IKey.constant(path + "/" + UIKeys.POSE_CONTEXT_GLINT_LAYER.get());
-        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.GLINT);
-
-        out.add(new UIKeyframeSheet(id, title, Colors.MAGENTA, false, channel, null)
-            .icon(Icons.LIGHT).form(form).seed(() -> buildGlintControls(poseForm, hierarchy)));
+        addCatalogSheets(form, properties, out, track -> FormControlKeys.isGlintControlChannel(track.key()), null);
     }
 
     private static GlintControls buildGlintControls(PoseForm form, BoneHierarchy hierarchy)
@@ -190,43 +245,8 @@ public class UIReplaysEditorUtils
 
     public static void addBoneTrackSheets(Form form, FormProperties properties, List<UIKeyframeSheet> out, Map<String, Integer> depthBySheetId)
     {
-        if (!(form instanceof PoseForm poseForm) || !poseForm.getBoneTracks().get())
-        {
-            return;
-        }
-
-        BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(form);
-
-        if (hierarchy.getBones().isEmpty())
-        {
-            return;
-        }
-
-        Map<String, Integer> parentToColor = new HashMap<>();
-        Map<String, String> labels = hierarchy.getLabels();
-        int[] hueIndex = {0};
-
-        for (BoneHierarchy.Bone bone : hierarchy.getBones())
-        {
-            String colorGroup = bone.layerId() + "\u0000" + (bone.parentId() == null ? "" : bone.parentId());
-            int color = parentToColor.computeIfAbsent(colorGroup, (p) ->
-                Colors.HSVtoRGB((hueIndex[0]++ % BONE_TRACK_HUE_COUNT) / (float) BONE_TRACK_HUE_COUNT, 0.7F, 0.7F).getRGBColor()
-            );
-
-            String path = FormUtils.getPath(form);
-            String boneKey = PerLimbService.toPoseBoneKey(path, bone.id());
-            String label = labels.getOrDefault(bone.id(), bone.name());
-            String title = path.isEmpty() ? label : path + "/" + label;
-            KeyframeChannel channel = properties.registerChannel(boneKey, KeyframeFactories.POSE_TRANSFORM);
-            ValueTransform transform = new ValueTransform(boneKey, new PoseTransform());
-
-            out.add(new UIKeyframeSheet(boneKey, IKey.constant(title), color, false, channel, transform, true).form(form));
-
-            if (depthBySheetId != null)
-            {
-                depthBySheetId.put(boneKey, bone.depth());
-            }
-        }
+        addCatalogSheets(form, properties, out,
+            track -> track.kind() == TrackKind.BONE || track.kind() == TrackKind.BONE_CONSTRAINT, depthBySheetId);
     }
 
     private static int getBoneDepth(IModel model, String bone)
@@ -254,47 +274,22 @@ public class UIReplaysEditorUtils
      */
     public static void addMaterialTextureSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+        addCatalogSheets(modelForm, properties, out, track -> track.kind() == TrackKind.MATERIAL_TEXTURE, null);
+    }
 
-        if (model == null)
-        {
-            return;
-        }
+    public static void addMaterialPropertySheets(ModelForm form, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        addCatalogSheets(form, properties, out, track -> track.kind() == TrackKind.MATERIAL_PROP, null);
+    }
 
-        /* A model with at most one material ignores the material system entirely (its single texture is
-         * driven by form.texture), so it exposes no per-material texture tracks - see the renderer. */
-        if (model.materials.size() <= 1)
-        {
-            return;
-        }
-
-        String path = FormUtils.getPath(modelForm);
-
-        for (String material : model.materials)
-        {
-            if (material == null || material.isEmpty())
-            {
-                continue;
-            }
-
-            String id = PerLimbService.toMaterialTextureKey(path, material);
-            String title = path.isEmpty() ? "texture/" + material : path + "/texture/" + material;
-            KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.LINK);
-
-            /* Seed the sheet's value with the material's current default texture (editor pick, else
-             * folder/Kd, else the form/model default) so a new keyframe starts there instead of null -
-             * the texture picker then opens at that texture rather than the root. */
-            Link materialDefault = modelForm.materialTextures.getLink(material);
-
-            if (materialDefault == null)
-            {
-                materialDefault = model.getMaterialTexture(material, model.getTexture());
-            }
-
-            ValueLink property = new ValueLink(id, materialDefault);
-
-            out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.BLUE, false, channel, property).icon(Icons.MATERIAL).form(modelForm));
-        }
+    public static Object sampleKeyframeValue(UIKeyframeSheet sheet, float tick)
+    {
+        if (sheet == null) return null;
+        KeyframeSegment segment = sheet.channel.find(tick);
+        if (segment != null) return segment.createInterpolated();
+        if (sheet.property != null) return sheet.channel.getFactory().copy(sheet.property.get());
+        return sheet.seed == null ? sheet.channel.getFactory().createEmpty()
+            : sheet.channel.getFactory().copy(sheet.seed.get());
     }
 
     public static <T> Keyframe<T> ensureKeyframe(UIKeyframeSheet sheet, float tick)
@@ -303,6 +298,8 @@ public class UIReplaysEditorUtils
         {
             return null;
         }
+
+        tick = sheet.channel.getSourceTick(tick);
 
         for (Keyframe<T> keyframe : (List<Keyframe<T>>) sheet.channel.getKeyframes())
         {
@@ -326,7 +323,7 @@ public class UIReplaysEditorUtils
         }
         else if (sheet.seed != null)
         {
-            value = (T) sheet.seed.get();
+            value = (T) sheet.channel.getFactory().copy(sheet.seed.get());
         }
         else
         {
@@ -336,7 +333,10 @@ public class UIReplaysEditorUtils
         /* The lookup above guarantees no keyframe sits on the tick, so insertInheriting cannot
          * inherit from the keyframe it just wrote — only from the neighbour, as the hand-written
          * pair did (its `template != keyframe` guard could never fire here). */
-        return (Keyframe<T>) sheet.channel.insertInheriting(tick, value);
+        Keyframe<T> inserted = (Keyframe<T>) sheet.channel.insertInheriting(tick, value);
+        sheet.selection.shiftAfterInsert(sheet.channel.indexOf(inserted));
+
+        return inserted;
     }
 
     public static <T> void forEachSelectedKeyframe(UIKeyframes editor, Keyframe<?> keyframe, Consumer<Keyframe<T>> consumer)
@@ -346,6 +346,8 @@ public class UIReplaysEditorUtils
             return;
         }
 
+        Float tick = editor.getAutoKeyframeTick();
+
         for (UIKeyframeSheet sheet : editor.getGraph().getSheets())
         {
             if (sheet.channel.getFactory() != keyframe.getFactory())
@@ -353,9 +355,14 @@ public class UIReplaysEditorUtils
                 continue;
             }
 
-            for (Keyframe selected : sheet.selection.getSelected())
+            if (tick != null && !sheet.selection.getSelected().isEmpty())
             {
-                consumer.accept((Keyframe<T>) selected);
+                Keyframe<T> target = sheet.ensureKeyframe(tick);
+                if (target != null) consumer.accept(target);
+            }
+            else
+            {
+                for (Keyframe selected : sheet.selection.getSelected()) consumer.accept((Keyframe<T>) selected);
             }
         }
     }
@@ -385,29 +392,7 @@ public class UIReplaysEditorUtils
 
     public static void addIKTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        ModelInstance model = ModelFormRenderer.getModel(modelForm);
-
-        if (model == null)
-        {
-            return;
-        }
-
-        model.form = modelForm;
-        List<String> controllers = ModelIKRuntime.getControllers(model);
-        String path = FormUtils.getPath(modelForm);
-
-        for (String controller : controllers)
-        {
-            if (controller == null || controller.isEmpty())
-            {
-                continue;
-            }
-
-            String id = PerLimbService.toIKTargetKey(path, controller);
-            String title = path.isEmpty() ? "ik/" + controller : path + "/ik/" + controller;
-
-            addTargetSheet(out, properties, modelForm, id, title, Colors.CYAN, Icons.IK);
-        }
+        addCatalogSheets(modelForm, properties, out, track -> track.kind() == TrackKind.IK_TARGET, null);
     }
 
     /**
@@ -419,55 +404,12 @@ public class UIReplaysEditorUtils
      */
     public static void addIKControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        ModelInstance model = ModelFormRenderer.getModel(modelForm);
-
-        if (model == null)
-        {
-            return;
-        }
-
-        model.form = modelForm;
-
-        if (ModelIKRuntime.getControllers(model).isEmpty())
-        {
-            return;
-        }
-
-        String path = FormUtils.getPath(modelForm);
-        String id = FormControlKeys.toIKControlKey(path);
-        String title = path.isEmpty() ? "ik" : path + "/ik";
-
-        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
-
-        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.YELLOW, false, channel, null)
-            .icon(Icons.IK).form(modelForm).seed(() -> ModelIKRuntime.ikControls(modelForm)));
+        addCatalogSheets(modelForm, properties, out, track -> track.kind() == TrackKind.IK_CONTROLS, null);
     }
 
     public static void addPoleTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        ModelInstance model = ModelFormRenderer.getModel(modelForm);
-
-        if (model == null)
-        {
-            return;
-        }
-
-        model.form = modelForm;
-        List<String> controllers = ModelIKRuntime.getPoleControllers(model);
-        String path = FormUtils.getPath(modelForm);
-
-        for (String controller : controllers)
-        {
-            if (controller == null || controller.isEmpty())
-            {
-                continue;
-            }
-
-            String id = PerLimbService.toPoleTargetKey(path, controller);
-            String title = path.isEmpty() ? "pole/" + controller : path + "/pole/" + controller;
-
-            addTargetSheet(out, properties, modelForm, id, title, Colors.ORANGE, Icons.IK);
-        }
+        addCatalogSheets(modelForm, properties, out, track -> track.kind() == TrackKind.POLE_TARGET, null);
     }
 
     /**
@@ -479,26 +421,7 @@ public class UIReplaysEditorUtils
      */
     public static void addPhysicsControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        ModelPhysicsConfig physics = null;
-
-        if (modelForm.physics.get() instanceof MapType map)
-        {
-            physics = ModelPhysicsIO.fromData(map);
-        }
-
-        if (physics == null || physics.bones() == null || physics.bones().isEmpty())
-        {
-            return;
-        }
-
-        String path = FormUtils.getPath(modelForm);
-        String id = FormControlKeys.toPhysicsControlKey(path);
-        String title = path.isEmpty() ? "physics" : path + "/physics";
-
-        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.PHYSICS);
-
-        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.GREEN, false, channel, null)
-            .icon(Icons.PHYSICS).form(modelForm).seed(() -> buildPhysicsControls(modelForm)));
+        addCatalogSheets(modelForm, properties, out, track -> track.kind() == TrackKind.PHYSICS_CONTROLS, null);
     }
 
     /** A fully populated physics-controls value seeded from the form's physics config (one entry per chain root), mirroring {@link ModelIKRuntime#ikControls(mchorse.bbs_mod.forms.forms.ModelForm)}. */
@@ -541,26 +464,7 @@ public class UIReplaysEditorUtils
      */
     public static void addWindControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        ModelPhysicsConfig physics = null;
-
-        if (modelForm.physics.get() instanceof MapType map)
-        {
-            physics = ModelPhysicsIO.fromData(map);
-        }
-
-        if (physics == null || physics.bones() == null || physics.bones().isEmpty())
-        {
-            return;
-        }
-
-        String path = FormUtils.getPath(modelForm);
-        String id = FormControlKeys.toWindControlKey(path);
-        String title = path.isEmpty() ? "wind" : path + "/wind";
-
-        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.WIND);
-
-        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.CYAN, false, channel, null)
-            .icon(Icons.ARROW_RIGHT).form(modelForm).seed(() -> buildWindControl(modelForm)));
+        addCatalogSheets(modelForm, properties, out, track -> track.kind() == TrackKind.WIND_CONTROLS, null);
     }
 
     /** A wind-control value seeded from the form's physics wind config, so a fresh keyframe matches the configured wind instead of drifting to defaults. */
@@ -592,34 +496,30 @@ public class UIReplaysEditorUtils
 
     public static void addPhysicsTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+        addCatalogSheets(modelForm, properties, out, track -> track.kind() == TrackKind.PHYSICS_TARGET, null);
+    }
 
-        if (model == null)
+    /** Compatibility collectors share the same descriptor discovery as both active timelines. */
+    private static void addCatalogSheets(Form form, FormProperties properties, List<UIKeyframeSheet> out,
+        Predicate<TrackDescriptor> filter, Map<String, Integer> depths)
+    {
+        if (form == null) return;
+        List<TrackDescriptor> catalog = TrackCatalog.forPart(FormUtils.getRoot(form), properties, FormUtils.getPath(form));
+        List<TrackDescriptor> selected = catalog.stream().filter(filter).toList();
+        buildSheets(selected, out);
+        if (depths == null) return;
+        Map<TrackId, TrackDescriptor> parents = new HashMap<>();
+        for (TrackDescriptor track : catalog) parents.put(track.id(), track);
+        for (TrackDescriptor track : selected)
         {
-            return;
-        }
-
-        ModelPhysicsConfig physics = null;
-
-        if (modelForm.physics.get() instanceof MapType map)
-        {
-            physics = ModelPhysicsIO.fromData(map);
-        }
-
-        if (physics == null || physics.bones() == null)
-        {
-            return;
-        }
-
-        String path = FormUtils.getPath(modelForm);
-
-        for (Map.Entry<String, ModelPhysicsConfig.Bone> entry : physics.bones().entrySet())
-        {
-            String rootBone = entry.getKey();
-            String id = PerLimbService.toPhysicsTargetKey(path, rootBone);
-            String title = path.isEmpty() ? "physics/" + rootBone : path + "/physics/" + rootBone;
-
-            addTargetSheet(out, properties, modelForm, id, title, Colors.MAGENTA, Icons.PHYSICS);
+            int depth = 0;
+            TrackDescriptor parent = parents.get(track.parent());
+            while (parent != null)
+            {
+                if (parent.kind() != TrackKind.PROPERTY) depth++;
+                parent = parents.get(parent.parent());
+            }
+            depths.put(track.key(), depth);
         }
     }
 
@@ -627,48 +527,7 @@ public class UIReplaysEditorUtils
     public static List<UIKeyframeSheet> collectFormTrackSheets(Form form)
     {
         List<UIKeyframeSheet> sheets = new ArrayList<>();
-
-        if (form == null)
-        {
-            return sheets;
-        }
-
-        FormProperties properties = new FormProperties("");
-
-        for (BaseValue property : form.getAll())
-        {
-            if (!property.isVisible() || property.getId().equals("anchor"))
-            {
-                continue;
-            }
-
-            String key = property.getId();
-            KeyframeChannel channel = properties.getOrCreate(form, key);
-
-            if (channel == null)
-            {
-                continue;
-            }
-
-            BaseValueBasic formProperty = FormUtils.getProperty(form, key);
-
-            sheets.add(UIReplaysEditor.createTrackSheet(key, channel, formProperty));
-        }
-
-        if (form instanceof ModelForm modelForm)
-        {
-            addMaterialTextureSheets(modelForm, properties, sheets);
-            addPhysicsControlSheet(modelForm, properties, sheets);
-            addWindControlSheet(modelForm, properties, sheets);
-            addPhysicsTargetSheets(modelForm, properties, sheets);
-            addIKControlSheet(modelForm, properties, sheets);
-            addIKTargetSheets(modelForm, properties, sheets);
-            addPoleTargetSheets(modelForm, properties, sheets);
-        }
-
-        addGlintControlSheet(form, properties, sheets);
-        addBoneTrackSheets(form, properties, sheets);
-
+        if (form != null) addCatalogSheets(form, new FormProperties(""), sheets, track -> true, null);
         return sheets;
     }
 
@@ -676,51 +535,13 @@ public class UIReplaysEditorUtils
     {
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.ANCHOR);
 
-        out.add(new UIKeyframeSheet(id, IKey.constant(title), color, false, channel, null).icon(icon).form(modelForm));
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), color, channel, null).icon(icon).form(modelForm));
     }
 
     public static void addSoundSheets(AbstractSoundForm form, FormProperties properties, List<UIKeyframeSheet> out)
     {
-        for (SoundKeyframeValue.Group group : SoundKeyframeValue.Group.values())
-        {
-            String id = SoundKeyframeValue.channelId(form, group);
-            SoundKeyframeFactory factory = switch (group)
-            {
-                case SOUND -> KeyframeFactories.SOUND;
-                case SHAPE -> KeyframeFactories.SOUND_SHAPE;
-                case VISUALIZATION -> KeyframeFactories.SOUND_VISUALIZATION;
-                case FALLOFF -> KeyframeFactories.SOUND_FALLOFF;
-                case REFLECTIONS -> KeyframeFactories.SOUND_REFLECTIONS;
-            };
-            IKey title = switch (group)
-            {
-                case SOUND -> UIKeys.FORMS_EDITORS_SOUND_TITLE;
-                case SHAPE -> UIKeys.FORMS_EDITORS_SOUND_SHAPE;
-                case VISUALIZATION -> UIKeys.FORMS_EDITORS_SOUND_VISUALIZATION;
-                case FALLOFF -> UIKeys.FORMS_EDITORS_SOUND_FALLOFF;
-                case REFLECTIONS -> UIKeys.FORMS_EDITORS_SOUND_REFLECTIONS;
-            };
-            int color = switch (group)
-            {
-                case SOUND -> Colors.CYAN;
-                case SHAPE -> Colors.YELLOW;
-                case VISUALIZATION -> Colors.GREEN;
-                case FALLOFF -> Colors.BLUE;
-                case REFLECTIONS -> Colors.MAGENTA;
-            };
-            Icon icon = switch (group)
-            {
-                case SOUND -> Icons.SOUND;
-                case SHAPE -> Icons.SHAPES;
-                case VISUALIZATION -> Icons.VISIBLE;
-                case FALLOFF -> Icons.FADING;
-                case REFLECTIONS -> Icons.EXCHANGE;
-            };
-            KeyframeChannel<SoundKeyframeValue> channel = properties.registerChannel(id, factory);
-
-            out.add(new UIKeyframeSheet(id, title, color, false, channel, null)
-                .icon(icon).form(form).seed(() -> SoundKeyframeValue.capture(form, group)));
-        }
+        addCatalogSheets(form, properties, out,
+            track -> SoundKeyframeValue.groupFromChannel(track.key()) != null, null);
     }
 
     public static void clearIKTracks(Replay replay, ModelForm modelForm)
@@ -745,24 +566,14 @@ public class UIReplaysEditorUtils
         {
             for (String controller : controllers)
             {
-                removeChannel(props, PerLimbService.toIKTargetKey(path, controller));
+                props.remove(TrackId.ikTarget(path, controller));
             }
 
             for (String controller : poleControllers)
             {
-                removeChannel(props, PerLimbService.toPoleTargetKey(path, controller));
+                props.remove(TrackId.poleTarget(path, controller));
             }
         });
-    }
-
-    private static void removeChannel(FormProperties props, String id)
-    {
-        KeyframeChannel channel = props.properties.get(id);
-
-        if (channel != null)
-        {
-            channel.removeAll();
-        }
     }
 
     public static UIPropTransform getEditableTransform(UIKeyframeEditor editor)
@@ -792,6 +603,17 @@ public class UIReplaysEditorUtils
         return null;
     }
 
+    public static UIPropTransform getFilmGizmoTransform(UIFilmPanel panel, float transition)
+    {
+        if (panel.getActivePreview().getViewController().getEditTarget().is(FilmTarget.Kind.ROOT))
+        {
+            UIReplayPropTransform transform = panel.replayEditor.replayTransform;
+            transform.syncFromReplay(panel.replayEditor.getReplay(), panel.getController().getCurrentEntity(), panel.getKeyframeCursor(transition));
+            return transform;
+        }
+        return getEditableTransform(panel.replayEditor.keyframeEditor);
+    }
+
     public static boolean startFilmGizmo(UIFilmPanel panel, UIContext context, int stencilIndex, float gizmoTransition)
     {
         return panel != null && startFilmGizmo(panel, panel.getCamera(), panel.preview.getViewport(), context, stencilIndex, gizmoTransition);
@@ -804,7 +626,7 @@ public class UIReplaysEditorUtils
             return false;
         }
 
-        UIPropTransform transform = getEditableTransform(panel.replayEditor.keyframeEditor);
+        UIPropTransform transform = getFilmGizmoTransform(panel, gizmoTransition);
         GizmoDrag drag = buildFilmGizmoDrag(
             panel,
             camera,
@@ -813,12 +635,21 @@ public class UIReplaysEditorUtils
             gizmoTransition
         );
 
-        return transform != null && Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, drag);
+        boolean started = transform != null && Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, drag);
+        if (started && transform instanceof UIReplayPropTransform) panel.replayEditor.showReplayTracks();
+        return started;
     }
 
     public static void configureFilmHotkeyDrag(UIFilmPanel panel, UIContext context)
     {
-        UIPropTransform transform = panel == null ? null : getEditableTransform(panel.replayEditor.keyframeEditor);
+        if (panel == null) return;
+        float transition = panel.replayEditor.getContext() == null ? 0F : panel.replayEditor.getContext().getTransition();
+        UIReplayPropTransform replayTransform = panel.replayEditor.replayTransform;
+        replayTransform.syncFromReplay(panel.replayEditor.getReplay(), panel.getController().getCurrentEntity(), panel.getKeyframeCursor(transition));
+        replayTransform.hotkeyDrag(() -> buildFilmGizmoDrag(panel,
+            panel.getActivePreview().getDisplayedCamera(), panel.getActivePreview().getViewport(), replayTransform,
+            panel.isRunning() ? transition : 0F));
+        UIPropTransform transform = getEditableTransform(panel.replayEditor.keyframeEditor);
 
         if (transform == null)
         {
@@ -901,6 +732,15 @@ public class UIReplaysEditorUtils
             return drag;
         }
 
+        if (transform instanceof UIReplayPropTransform && entity != null)
+        {
+            drag.setRotateAxes(drag.gizmoWorldAxes);
+            Matrix4f placement = FilmMatrices.getMatrixForRenderWithRotation(entity,
+                camera.position.x, camera.position.y, camera.position.z, transition);
+            drag.setFrameAxes(placement, placement);
+            return drag;
+        }
+
         UIKeyframeEditor keyframeEditor = panel.replayEditor.keyframeEditor;
 
         if (keyframeEditor == null)
@@ -921,7 +761,7 @@ public class UIReplaysEditorUtils
             return drag;
         }
 
-        java.util.function.Supplier<Matrix4f> matrixSampler = () ->
+        Supplier<Matrix4f> matrixSampler = () ->
         {
             Matrix4f matrix = sampleFilmBoneMatrix(
                 panel,
@@ -936,11 +776,7 @@ public class UIReplaysEditorUtils
             return matrix == null ? new Matrix4f() : MatrixStackUtils.stripScale(matrix);
         };
 
-        Vector3f rotationOffset = sampleFilmBoneRotationOffset(panel, camera, entity, replay, transition, bone.a);
-
         drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
-        drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, matrixSampler));
-        drag.setRotationParents(transform.getTransform(), rotationOffset, matrixSampler);
 
         Matrix3f translateJacobian = null;
         UIKeyframeSheet sheet = keyframeEditor.editor == null
@@ -989,6 +825,10 @@ public class UIReplaysEditorUtils
 
         drag.setJacobian(GizmoDrag.resolveTranslateJacobian(translateJacobian, mobPoseBone));
         drag.modelPartTranslate(mobPoseBone);
+        drag.setFrameAxes(
+            sampleFilmBoneMatrix(panel, camera, entity, replay, transition, bone.a, true),
+            sampleFilmBoneMatrix(panel, camera, entity, replay, transition, bone.a, false)
+        );
 
         drag.setAdditiveRotationBase(filmPoseRotationBase(keyframeEditor, panel, camera, entity, replay, transition, bone.a));
 
@@ -1070,29 +910,6 @@ public class UIReplaysEditorUtils
         );
     }
 
-    private static Vector3f sampleFilmBoneRotationOffset(
-        UIFilmPanel panel,
-        Camera camera,
-        IEntity entity,
-        Replay replay,
-        float transition,
-        String bone
-    )
-    {
-        applyReplayProperties(panel, entity, replay, transition);
-
-        return FilmMatrices.getGizmoBoneRotationOffset(
-            panel.getController().getEntities(),
-            entity,
-            replay,
-            camera.position.x,
-            camera.position.y,
-            camera.position.z,
-            transition,
-            bone
-        );
-    }
-
     private static Vector3f sampleFilmBoneEvaluatedRotation(
         UIFilmPanel panel,
         Camera camera,
@@ -1126,7 +943,7 @@ public class UIReplaysEditorUtils
         float transition
     )
     {
-        java.util.function.Supplier<Matrix4f> matrixSampler = () ->
+        Supplier<Matrix4f> matrixSampler = () ->
         {
             applyReplayProperties(panel, entity, replay, transition);
 
@@ -1144,8 +961,6 @@ public class UIReplaysEditorUtils
         };
 
         drag.setRotateAxes(GizmoDrag.computeRotateAxes(transform.getTransform(), matrixSampler));
-        drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, matrixSampler));
-        drag.setRotationParents(transform.getTransform(), null, matrixSampler);
         drag.setJacobian(GizmoDrag.computeTranslateJacobian(
             transform.getTransform(),
             () -> matrixSampler.get().getTranslation(new Vector3f())
@@ -1535,60 +1350,70 @@ public class UIReplaysEditorUtils
     @SuppressWarnings("unchecked")
     public static void posesToLimbTracks(Replay replay, UIKeyframeSheet poseSheet)
     {
-        if (replay == null || poseSheet == null)
+        if (replay != null) posesToLimbTracks(replay.properties, poseSheet);
+    }
+
+    public static boolean posesToLimbTracks(FormProperties properties, UIKeyframeSheet poseSheet)
+    {
+        if (properties == null || poseSheet == null || poseSheet.getPosedForm() == null)
         {
-            return;
+            return false;
         }
 
-        String formPath = poseSheet.id.equals("pose") ? "" : poseSheet.id.substring(0, poseSheet.id.length() - (FormUtils.PATH_SEPARATOR + "pose").length());
-        Form form = formPath.isEmpty() ? replay.form.get() : FormUtils.getForm(replay.form.get(), formPath);
+        TrackId track = TrackId.parse(poseSheet.id);
 
-        if (!(form instanceof PoseForm))
-        {
-            return;
-        }
+        if (track == null) return false;
 
-        List<String> bones = FormUtilsClient.getBoneHierarchy(form).getBoneIds();
+        String formPath = track.formPath();
+        Form form = UIReplaysEditor.getSheetForm(poseSheet);
+        ModelForm modelForm = poseSheet.getPoseForm();
+        ModelInstance model = modelForm == null ? null : ModelFormRenderer.getModel(modelForm);
+        List<String> bones = new ArrayList<>(FormUtilsClient.getBoneHierarchy(form).getBoneIds());
+
+        bones.removeIf(bone -> model != null && PoseBones.isHidden(model.getDisabledBones(), bone));
 
         List<Keyframe<Pose>> selectedKeyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.selection.getSelected();
 
-        if (selectedKeyframes.isEmpty())
+        if (selectedKeyframes.isEmpty() || bones.isEmpty() || selectedKeyframes.stream().anyMatch(keyframe -> keyframe.getValue() == null))
         {
-            return;
+            return false;
         }
 
-        for (Keyframe<Pose> keyframe : selectedKeyframes)
+        /* Rest keys remain for animated bones, but untouched bones need no new track. */
+        bones.removeIf(bone -> selectedKeyframes.stream().noneMatch(keyframe ->
         {
-            Pose pose = keyframe.getValue();
+            PoseTransform transform = keyframe.getValue().get(bone);
 
-            if (pose == null)
+            return transform != null && !transform.isDefault();
+        }));
+
+        if (bones.isEmpty()) return false;
+
+        /* Snapshot the collection so undo also removes the channels created by this conversion. */
+        BaseValue.edit(properties, target ->
+        {
+            for (Keyframe<Pose> keyframe : selectedKeyframes)
             {
-                continue;
-            }
+                Pose pose = keyframe.getValue();
 
-            float tick = keyframe.getTick();
-
-            for (String bone : bones)
-            {
-                String boneKey = PerLimbService.toPoseBoneKey(formPath, bone);
-                KeyframeChannel<PoseTransform> limbChannel = (KeyframeChannel<PoseTransform>) replay.properties.getOrCreate(form, boneKey);
-
-                if (limbChannel == null)
+                for (String bone : bones)
                 {
-                    continue;
+                    KeyframeChannel<PoseTransform> limbChannel = (KeyframeChannel<PoseTransform>) target.getOrCreate(TrackId.bone(formPath, bone));
+
+                    if (limbChannel == null) continue;
+
+                    PoseTransform transform = pose.get(bone);
+                    PoseTransform copy = transform == null ? new PoseTransform() : (PoseTransform) transform.copy();
+                    int index = limbChannel.insert(keyframe.getTick(), copy);
+
+                    limbChannel.get(index).copyOverExtra(keyframe);
                 }
-
-                PoseTransform transform = pose.get(bone);
-                PoseTransform copy = (PoseTransform) transform.copy();
-                int index = limbChannel.insert(tick, copy);
-                Keyframe<PoseTransform> limbKf = limbChannel.get(index);
-
-                /* Not insertInheriting: the template is the SOURCE pose keyframe the user selected,
-                 * not this channel's left neighbour — the point is to carry the pose's shaping onto
-                 * every bone track it is split into, which is a different operation. */
-                limbKf.copyOverExtra(keyframe);
             }
-        }
+
+            poseSheet.selection.removeSelected();
+        });
+
+        return true;
     }
 
     /* Offer bone hierarchy options */

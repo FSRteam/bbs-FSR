@@ -295,6 +295,12 @@ public abstract class UINumericInput <T extends UINumericInput<T>> extends UIBas
      */
     public abstract boolean isDragging();
 
+    @Override
+    public boolean isUserEditing()
+    {
+        return super.isUserEditing() || this.isDragging();
+    }
+
     public boolean isDraggingTime()
     {
         return this.isDragging() && System.currentTimeMillis() - this.dragTime > DRAG_DELAY;

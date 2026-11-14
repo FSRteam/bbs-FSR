@@ -265,15 +265,17 @@ public final class ViewportPickIntentTest
     private static void requireProductionPickingFlow()
     {
         String controller = read("src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java");
+        String picker = read("src/client/java/mchorse/bbs_mod/ui/film/controller/FilmStencilPicker.java");
         String replay = read("src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplaysEditor.java");
         String preview = read("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPreview.java");
 
-        check(controller.contains("sample != this.worldContextFrame || sample != BBSRendering.getSceneFrameId()"),
+        check(controller.contains("this.picker.updateViewStencil(context, altPressed);")
+            && picker.contains("sample != this.controller.worldContextFrame || sample != BBSRendering.getSceneFrameId()"),
             "stencil refresh mixed a displayed camera with another scene's actors");
-        check(controller.contains("boolean altPressed = pending ? this.pendingViewportPick.input().alt() : Window.isAltPressed();")
-            && controller.contains("int mouseX = input == null ? context.mouseX : input.x();")
-            && controller.contains("int mouseY = input == null ? context.mouseY : input.y();")
-            && controller.contains("context.render.postRunnable(() -> this.commitViewportPick(context, generation))"),
+        check(picker.contains("boolean altPressed = !this.isPickingTarget() && (pending ? this.pendingViewportPick.input().alt() : Window.isAltPressed());")
+            && picker.contains("int mouseX = input == null ? context.mouseX : input.x();")
+            && picker.contains("int mouseY = input == null ? context.mouseY : input.y();")
+            && picker.contains("context.render.postRunnable(() -> this.commitViewportPick(context, generation))"),
             "controller did not preserve deferred coordinates/mode or schedule selection outside rendering");
         check(replay.contains("controller.deferViewportPick(context, generation)")
             && replay.contains("controller.deferViewportPick(context, 0L)")
@@ -284,8 +286,8 @@ public final class ViewportPickIntentTest
         int rightFallback = replay.indexOf("return this.openViewportContextMenu(context, area, controller, Window.isShiftPressed())");
 
         check(rightPending >= 0 && rightFallback > rightPending
-            && controller.contains("pick.empty() && input.button() == 1")
-            && controller.contains("this.panel.replayEditor.openViewportContextMenu(context, this.getViewArea(), this, input.shift())")
+            && picker.contains("pick.empty() && input.button() == 1")
+            && picker.contains("this.controller.panel.replayEditor.openViewportContextMenu(context, this.controller.getViewArea(), this.controller, input.shift())")
             && preview.contains("this.getViewController().clickViewportOnRelease(context)")
             && controller.contains("this.releaseViewportPick(context, false, 0L);"),
             "stale right clicks bypass readiness or navigation context clicks wait for a second release");

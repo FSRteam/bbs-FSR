@@ -9,17 +9,20 @@ import mchorse.bbs_mod.settings.value.ValueKeyCombo;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIClickable;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.themes.ThemeManager;
+import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
+import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
@@ -76,6 +79,7 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
             UIIcon icon = new UIIcon(settings.icon, (b) -> this.selectConfig(settings.getId(), b));
 
             icon.tooltip(L10n.lang(UIValueFactory.getTitleKey(settings)), Direction.LEFT);
+            icon.highlight(() -> this.currentModule == icon, Direction.LEFT);
             this.icons.add(icon);
             this.moduleButtons.put(settings.getId(), icon);
 
@@ -345,12 +349,6 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
         int ey = this.content.area.ey();
 
         context.batcher.box(x, y, x + SIDE_WIDTH, ey, BBSSettings.chromeSurface());
-        context.batcher.box(x + SIDE_WIDTH, y, x + SIDE_WIDTH + 1, ey, BBSSettings.dividerColor());
-
-        if (this.currentModule != null)
-        {
-            this.currentModule.area.render(context.batcher, BBSSettings.primaryColor(Colors.A100));
-        }
     }
 
     public static class UISectionButton extends UIClickable<UISectionButton>
@@ -381,27 +379,22 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
         protected void renderSkin(UIContext context)
         {
             Icon icon = this.category.icon != null ? this.category.icon : this.panel.settings.icon;
+            boolean current = this.panel.isCurrent(this.category);
 
-            if (this.panel.isCurrent(this.category))
-            {
-                UIDashboardPanels.renderHighlight(context.batcher, this.area, Direction.LEFT);
-            }
-            else if (this.hover)
-            {
-                this.area.render(context.batcher, Colors.setA(Colors.WHITE, 0.1F));
-            }
-
-            context.batcher.icon(icon, Colors.WHITE, this.area.x + 5, this.area.my(), 0F, 0.5F);
+            RowStyle.row(context.batcher, this.area.x, this.area.y, this.area.w, this.area.h, 0, false, this.hover, current);
+            context.batcher.icon(icon, RowStyle.iconColor(this.hover || current), this.area.x + 5, this.area.my(), 0F, 0.5F);
 
             FontRenderer font = context.batcher.getFont();
             String label = font.limitToWidth(this.label.get(), this.area.w - 28);
 
-            context.batcher.text(label, this.area.x + 23, this.area.my(font.getHeight()), BBSSettings.textColor(), true);
+            context.batcher.text(label, this.area.x + 23, this.area.my(font.getHeight()), RowStyle.textColor(this.hover || current), true);
         }
     }
 
     public static class UISectionHeader extends UIElement
     {
+        private static final Area HEADER = new Area();
+
         private final ValueGroup category;
         private final IKey label;
 
@@ -429,28 +422,26 @@ public class UISettingsOverlayPanel extends UIOverlayPanel
 
             if (category.getId().equals("video"))
             {
+                UIIcon swap = new UIIcon(Icons.REFRESH, (b) -> panel.swapVideoResolution());
                 UIIcon presets = new UIIcon(Icons.FILM, (b) -> b.getContext().replaceContextMenu(panel::addVideoPresets));
 
-                presets.tooltip(UIKeys.GENERAL_PRESETS, Direction.LEFT);
-                presets.relative(this).x(1F, -18).y(0.5F, -9).wh(18, 18);
+                swap.tooltip(UIKeys.VIDEO_SETTINGS_SWAP);
+                swap.wh(16, 16);
+                presets.tooltip(UIKeys.GENERAL_PRESETS);
+                presets.wh(16, 16);
 
-                this.add(presets);
+                UIElement row = UI.row(swap, presets);
+
+                row.relative(this).x(1F, -4).y(0.5F, -1).wh(32, 16).anchor(1F, 0.5F);
+                this.add(row);
             }
         }
 
         @Override
         public void render(UIContext context)
         {
-            FontRenderer font = context.batcher.getFont();
-            int x = this.area.x;
-
-            if (this.category.icon != null)
-            {
-                context.batcher.icon(this.category.icon, Colors.WHITE, x, this.area.my() - 1, 0F, 0.5F);
-                x += 20;
-            }
-
-            context.batcher.text(this.label.get(), x, this.area.my(font.getHeight()) - 1, BBSSettings.textColor(), true);
+            HEADER.set(this.area.x, this.area.y - 1, this.area.w, this.area.h);
+            UISection.renderHeader(context, HEADER, this.label, this.category.icon, null, BBSSettings.textColor());
             context.batcher.box(this.area.x, this.area.ey() - 1, this.area.ex(), this.area.ey(), BBSSettings.dividerColor());
 
             super.render(context);

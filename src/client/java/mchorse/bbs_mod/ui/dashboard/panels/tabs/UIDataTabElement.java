@@ -1,17 +1,21 @@
 package mchorse.bbs_mod.ui.dashboard.panels.tabs;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIClickable;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITabStrip;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
-import mchorse.bbs_mod.utils.colors.Colors;
 
+/**
+ * One document tab: icon, label and a close button. The active and hover fills behind it
+ * are the strip's, so it only draws its content.
+ */
 public class UIDataTabElement extends UIClickable<UIDataTabElement>
 {
     private static final int RIGHT_GAP = 0;
@@ -27,21 +31,28 @@ public class UIDataTabElement extends UIClickable<UIDataTabElement>
     private int index;
     private IKey label;
     private Icon icon;
+    private final UITabStrip strip;
     private final IUITabs host;
     private final UIIcon close;
 
     public UIDataTabElement(IUITabs host, int h)
     {
+        this(null, host, h);
+    }
+
+    public UIDataTabElement(UITabStrip strip, IUITabs host, int h)
+    {
         super(null);
 
+        this.strip = strip;
         this.host = host;
         this.h(h);
         this.label = IKey.raw("");
         this.icon = Icons.SEARCH;
 
-        this.callback = (b) -> this.host.switchTab(this.index);
+        this.callback = (b) -> this.select();
 
-        this.close = new UIIcon(Icons.CLOSE, (b) -> this.host.closeTab(this.index));
+        this.close = new UIIcon(Icons.CLOSE, (b) -> this.closeTab());
         this.close.relative(this).x(1F, -(CLOSE_SIZE + CLOSE_GAP + RIGHT_GAP)).y(0.5F).w(CLOSE_SIZE).h(CLOSE_SIZE).anchor(0, 0.5F);
 
         this.add(this.close);
@@ -52,6 +63,30 @@ public class UIDataTabElement extends UIClickable<UIDataTabElement>
             menu.action(Icons.ARROW_LEFT, UIKeys.PANELS_TABS_CONTEXT_CLOSE_LEFT, () -> this.host.closeTabsLeft(this.index));
             menu.action(Icons.ARROW_RIGHT, UIKeys.PANELS_TABS_CONTEXT_CLOSE_RIGHT, () -> this.host.closeTabsRight(this.index));
         });
+    }
+
+    private void select()
+    {
+        if (this.strip == null)
+        {
+            this.host.switchTab(this.index);
+        }
+        else
+        {
+            this.strip.select(this.index);
+        }
+    }
+
+    private void closeTab()
+    {
+        if (this.strip == null)
+        {
+            this.host.closeTab(this.index);
+        }
+        else
+        {
+            this.strip.close(this.index);
+        }
     }
 
     public static int measureWidth(FontRenderer font, IKey label)
@@ -82,7 +117,7 @@ public class UIDataTabElement extends UIClickable<UIDataTabElement>
     {
         if (this.area.isInside(context) && context.mouseButton == 2 && this.host.canCloseTab(this.index))
         {
-            this.host.closeTab(this.index);
+            this.closeTab();
 
             return true;
         }
@@ -99,24 +134,13 @@ public class UIDataTabElement extends UIClickable<UIDataTabElement>
         boolean showClose = this.host.canCloseTab(this.index) && (active || hover);
         this.close.setVisible(showClose);
 
-        int ex = this.area.ex() - RIGHT_GAP;
-
-        if (active)
-        {
-            context.batcher.box(this.area.x, this.area.y, ex, this.area.ey(), BBSSettings.baseSurface());
-        }
-        else if (hover)
-        {
-            context.batcher.box(this.area.x, this.area.y, ex, this.area.ey(), BBSSettings.color(BBSSettings.raisedSurface(), Colors.A25));
-        }
-
         FontRenderer font = context.batcher.getFont();
-        int iconColor = active ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.7F);
+        int iconColor = RowStyle.iconColor(active || hover);
         context.batcher.icon(this.icon, iconColor, this.area.x + ICON_X, this.area.my(), 0F, 0.5F);
 
         int right = showClose ? CLOSE_ZONE : TEXT_RIGHT_PADDING;
         String text = font.limitToWidth(this.label.get(), this.area.w - RIGHT_GAP - TEXT_X - right);
-        int textColor = active ? Colors.WHITE : Colors.setA(Colors.WHITE, 0.7F);
+        int textColor = RowStyle.textColor(active || hover);
 
         context.batcher.text(text, this.area.x + TEXT_X, this.area.my() - font.getHeight() / 2, textColor);
     }

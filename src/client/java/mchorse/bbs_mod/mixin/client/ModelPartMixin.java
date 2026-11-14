@@ -111,6 +111,23 @@ public abstract class ModelPartMixin implements IBBSModelPart
      * <p>This runs for every model part in the game, so the guard is one static field read and
      * nothing else.</p>
      */
+    @Inject(
+        method = "compile(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V",
+        at = @At("HEAD"),
+        cancellable = true
+    )
+    private void bbs$hideMobCuboids(PoseStack.Pose pose, VertexConsumer vertices, int light, int overlay,
+        int color, CallbackInfo info)
+    {
+        PoseTransform transform = MobRenderContext.getTransform((ModelPart) (Object) this);
+
+        /* Visibility belongs to this bone's boxes; its children keep their own visibility. */
+        if (transform != null && !transform.visible)
+        {
+            info.cancel();
+        }
+    }
+
     @ModifyVariable(
         method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V",
         at = @At("HEAD"),

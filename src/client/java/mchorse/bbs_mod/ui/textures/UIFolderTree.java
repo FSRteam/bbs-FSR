@@ -9,13 +9,12 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -221,7 +220,20 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
         });
     }
 
-    private void toggle(Node node)
+    @Override
+    protected int indent(Node node)
+    {
+        return node.depth() * INDENT;
+    }
+
+    @Override
+    protected Boolean branch(Node node)
+    {
+        return node.branch() ? node.expanded() : null;
+    }
+
+    @Override
+    protected void toggle(Node node)
     {
         if (node.header())
         {
@@ -351,9 +363,7 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
             return true;
         }
 
-        int arrowX = this.area.x + 4 + node.depth() * INDENT;
-
-        if (node.branch() && context.mouseX < arrowX + 12)
+        if (node.branch() && this.hitsArrow(node, context.mouseX - this.area.x))
         {
             this.toggle(node);
         }
@@ -387,8 +397,11 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
     @Override
     public void renderListElement(UIContext context, Node node, int i, int x, int y, boolean hover, boolean selected)
     {
+        int h = this.rowHeight();
+
         if (node.header())
         {
+            RowStyle.row(context.batcher, x, y, this.area.w, h, 0, false, hover, false);
             this.renderHeader(context, node, x, y, hover);
 
             return;
@@ -405,13 +418,11 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
             target = true;
         }
 
-        if (current || target)
+        RowStyle.row(context.batcher, x, y, this.area.w, h, 0, false, hover, current);
+
+        if (target)
         {
-            context.batcher.box(x, y, x + this.area.w, y + ROW, Colors.A25 | BBSSettings.primaryColor.get());
-        }
-        else if (hover)
-        {
-            context.batcher.box(x, y, x + this.area.w, y + ROW, Colors.A12 | 0xffffff);
+            RowStyle.dropTarget(context.batcher, x, y, this.area.w, h);
         }
 
         this.renderElementPart(context, node, i, x, y, hover, selected);
@@ -419,7 +430,7 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
         /* The pins are their own group: a divider says where the tree itself begins */
         if (node.pin() && i == this.pinRows - 1)
         {
-            context.batcher.box(x, y + ROW - 1, x + this.area.w, y + ROW, BBSSettings.dividerColor());
+            context.batcher.box(x, y + h - 1, x + this.area.w, y + h, BBSSettings.dividerColor());
         }
     }
 
@@ -433,38 +444,38 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
     protected void renderElementPart(UIContext context, Node node, int i, int x, int y, boolean hover, boolean selected)
     {
         FontRenderer font = context.batcher.getFont();
-        int ix = x + 4 + node.depth() * INDENT;
-        int my = y + ROW / 2;
+        int ix = x + this.rowContentX(node);
+        int h = this.rowHeight();
+        int my = y + h / 2;
         boolean missing = node.pin() && this.isMissing(node);
         boolean lit = hover || this.isCurrent(node);
-        int color = missing ? Colors.GRAY : (lit ? Colors.LIGHTEST_GRAY : Colors.WHITE);
+        int color = missing ? RowStyle.textColor(lit, Colors.GRAY) : RowStyle.textColor(lit);
+        int iconColor = missing ? color : RowStyle.iconColor(lit);
 
-        if (node.branch())
-        {
-            this.renderArrow(context, ix + 6, my, node.expanded());
-        }
+        this.renderArrow(context, node, x, y, lit);
 
         if (node.folder())
         {
-            context.batcher.icon(Icons.FOLDER, color, ix + 12, my - 8);
+            context.batcher.icon(Icons.FOLDER, iconColor, ix + ARROW_SLOT, my - 8);
         }
         else if (missing)
         {
             /* Nothing to show, and nothing to ask the texture manager for either */
-            context.batcher.icon(Icons.IMAGE, color, ix + 12, my - 8);
+            context.batcher.icon(Icons.IMAGE, color, ix + ARROW_SLOT, my - 8);
         }
         else
         {
-            this.renderThumbnail(context, node.link(), ix + 12, my - 8, color);
+            this.renderThumbnail(context, node.link(), ix + ARROW_SLOT, my - 8, iconColor);
         }
 
         /* A folder of the mod's own can't be changed, and its name says so by going faint -
          * the same fade the grid gives such a cell's name. What a pin is, its title says. */
         boolean readOnly = !node.pin() && TextureFiles.isReadOnly(node.link());
         int nameColor = readOnly ? Colors.mulA(color, TextureCellRenderer.READ_ONLY_ALPHA) : color;
-        String name = font.limitToWidth(this.nameOf(node), this.area.ex() - 4 - (ix + 32));
+        int textX = iconRowTextX(ix);
+        String name = font.limitToWidth(this.nameOf(node), this.area.ex() - 4 - textX);
 
-        context.batcher.textShadow(name, ix + 32, y + (ROW - font.getHeight()) / 2 + 1, nameColor);
+        context.batcher.textShadow(name, textX, y + (h - font.getHeight()) / 2 + 1, nameColor);
     }
 
     /**
@@ -475,28 +486,19 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
     private void renderHeader(UIContext context, Node node, int x, int y, boolean hover)
     {
         FontRenderer font = context.batcher.getFont();
-        int ix = x + 4;
-        int my = y + ROW / 2;
-        int color = hover ? Colors.LIGHTEST_GRAY : Colors.WHITE;
+        int ix = x + this.rowContentX(node);
+        int h = this.rowHeight();
+        int my = y + h / 2;
+        int color = RowStyle.textColor(hover);
+        int iconColor = RowStyle.iconColor(hover);
 
-        this.renderArrow(context, ix + 6, my, node.expanded());
-        context.batcher.icon(Icons.BOOKMARK, color, ix + 12, my - 8);
+        this.renderArrow(context, node, x, y, hover);
+        context.batcher.icon(Icons.BOOKMARK, iconColor, ix + ARROW_SLOT, my - 8);
 
-        String title = font.limitToWidth(UIKeys.TEXTURES_BROWSER_PINNED.get(), this.area.ex() - 4 - (ix + 22));
+        int textX = iconRowTextX(ix);
+        String title = font.limitToWidth(UIKeys.TEXTURES_BROWSER_PINNED.get(), this.area.ex() - 4 - textX);
 
-        context.batcher.textShadow(title, ix + 22, y + (ROW - font.getHeight()) / 2 + 1, color);
-    }
-
-    /** Draw {@link Icons#ARROW_SMALL} centred at {@code cx}/{@code cy}, rotated for the open state. */
-    private void renderArrow(UIContext context, float cx, float cy, boolean expanded)
-    {
-        PoseStack matrices = context.batcher.getContext().pose();
-
-        matrices.pushPose();
-        matrices.translate(cx, cy, 0F);
-        matrices.rotateAround(Axis.ZP.rotationDegrees(expanded ? 90F : 0F), 0F, 0F, 0F);
-        context.batcher.icon(Icons.ARROW_SMALL, Colors.WHITE, 0, 0, 0.5F, 0.5F);
-        matrices.popPose();
+        context.batcher.textShadow(title, textX, y + (h - font.getHeight()) / 2 + 1, color);
     }
 
     /** A pinned texture shows itself, fitted into the icon's place, so it's told apart at a glance. */

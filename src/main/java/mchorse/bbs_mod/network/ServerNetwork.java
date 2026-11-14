@@ -956,7 +956,7 @@ public class ServerNetwork
                             tick,
                             countdown,
                             film.replays.getList().size(),
-                            film.camera.calculateDuration()
+                            film.calculateDuration()
                         );
 
                     if (!recordingAllowed)
@@ -1314,7 +1314,7 @@ public class ServerNetwork
                     || !NetworkMutationPolicy.isFilmTickAllowed(
                         actionPlayer == null ? 0 : actionPlayer.tick,
                         tick,
-                        film.camera.calculateDuration(),
+                        film.calculateDuration(),
                         restart
                     ))
                 {

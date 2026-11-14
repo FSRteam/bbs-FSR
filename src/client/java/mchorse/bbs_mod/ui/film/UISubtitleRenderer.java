@@ -90,7 +90,7 @@ public class UISubtitleRenderer
             String label = StringUtils.processColoredText(subtitle.label);
             /* The framebuffer is the subtitle's own size times its scale, so that scale is
              * exactly how many pixels a unit of the layout below covers. */
-            FontRenderer font = BBSModClient.getFonts().get(subtitle.font, subtitle.fontSize, subtitle.placement.scale);
+            FontRenderer font = BBSModClient.getFonts().get(subtitle.font, subtitle.fontSize, subtitle.placement.scaleX);
 
             if (font == null)
             {
@@ -105,7 +105,8 @@ public class UISubtitleRenderer
             int h = 0;
             float x = width * placement.windowX + placement.offsetX;
             float y = height * placement.windowY + placement.offsetY;
-            float scale = placement.scale;
+            float scaleX = placement.scaleX;
+            float scaleY = placement.scaleY;
             int subColor = subtitle.color;
 
             List<String> strings = subtitle.maxWidth <= 10 ? Collections.singletonList(label) : font.wrap(label, subtitle.maxWidth);
@@ -141,8 +142,17 @@ public class UISubtitleRenderer
             float contentW = w + (imgTex != null && imgH > 0 ? (gap + imgW) : 0);
             float contentH = Math.max(h, imgH);
 
-            int fw = (int) ((contentW + 10) * scale);
-            int fh = (int) ((contentH + 10) * scale);
+            int fw = (int) ((contentW + 10) * scaleX);
+            int fh = (int) ((contentH + 10) * scaleY);
+
+            if (fw <= 0 || fh <= 0)
+            {
+                subtitle.box.set(x, y, 0, 0, width);
+
+                continue;
+            }
+
+            subtitle.box.set(x - fw * placement.anchorX, y - fh * placement.anchorY, fw, fh, width);
 
             RenderSystem.setProjectionMatrix(subtitleOrtho.identity().ortho(0, contentW + 10, 0, contentH + 10, -100, 100), VertexSorting.DISTANCE_TO_ORIGIN);
 

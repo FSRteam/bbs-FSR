@@ -202,7 +202,7 @@ public final class IKBakePoseCompositionTest
     private static Pose render(Fixture fixture, Transform track, Transform overlay, State state, Animation animation)
     {
         Pose pose = new Pose();
-        PoseTransform total = pose.get(BONE);
+        PoseTransform total = pose.getOrCreate(BONE);
 
         total.copy(track);
 

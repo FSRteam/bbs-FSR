@@ -1,14 +1,20 @@
 package mchorse.bbs_mod.forms.forms;
 
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.animation.ActionsConfig;
 import mchorse.bbs_mod.cubic.constraints.BoneConstraintsIO;
+import mchorse.bbs_mod.cubic.ik.BoneIKIO;
 import mchorse.bbs_mod.cubic.ik.IKControl;
+import mchorse.bbs_mod.cubic.physics.BonePhysicsIO;
 import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.utils.ValueBones;
+import mchorse.bbs_mod.forms.forms.utils.ValueBoneConfig;
+import mchorse.bbs_mod.forms.forms.utils.ValueMaterials;
 import mchorse.bbs_mod.forms.values.ValueActionsConfig;
 import mchorse.bbs_mod.forms.values.ValueShapeKeys;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
@@ -20,42 +26,21 @@ import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValueLinks;
 import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.settings.values.core.ValueString;
+import mchorse.bbs_mod.settings.values.core.ValueWindControl;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.pose.Pose;
 import org.joml.Vector3f;
-
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class ModelForm extends Form implements PoseForm
 {
-    /**
-     * Children of this form that a build newer than this one writes and this one does not model.
-     *
-     * <p>Upstream keeps the per-material appearance overrides in {@code materials} and the form's
-     * global wind in {@code wind}. This build has neither — it still carries the material data in
-     * its own {@code material_textures} layer and its wind in the {@code wind} blob upstream's
-     * legacy reader shares — so nothing here claims those keys and, without this list, reading such
-     * a file and saving it would delete them.</p>
-     *
-     * <p>Kept as raw data and written back untouched — see
-     * {@link mchorse.bbs_mod.settings.values.core.ValueGroup#preservedUnknownKeys()}. That is a
-     * stopgap, not support: this build still shows no material override from such a file. What it
-     * prevents is the part that cannot be undone: the overrides used to disappear from disk with no
-     * warning and nothing in the editor to suggest anything had been there.</p>
-     *
-     * <p>{@code bones} was on this list until this build learned to store constraints per bone —
-     * see {@link #bones}. The key is claimed by a real child now, so it is no longer an unknown
-     * child of this form.</p>
-     */
-    private static final Set<String> PRESERVED_UNKNOWN_KEYS = Set.of("materials", "wind");
+    public static final Icon ICON = Icons.POSE;
 
     public final ValueLink texture = new ValueLink("texture", null);
+    public final ValueMaterials materials = new ValueMaterials("materials");
     public final ValueLinks materialTextures = new ValueLinks("material_textures");
     public final ValueString model = new ValueString("model", "");
     public final ValuePose pose = new ValuePose("pose", new Pose());
@@ -64,15 +49,12 @@ public class ModelForm extends Form implements PoseForm
     public final ValueColor color = new ValueColor("color", Color.white());
     public final ValueShapeKeys shapeKeys = new ValueShapeKeys("shape_keys", new ShapeKeys());
     public final ValueBoolean boneTracks = new ValueBoolean("bone_tracks", true);
-    /**
-     * The per-bone properties, in the shape a newer build writes them: one entry per bone the
-     * author ever touched. This is where the rotation limits live now — the form-level
-     * {@code constraints} blob they used to travel in is read once and unpacked into here, see
-     * {@link #fromData(BaseType)}.
-     */
+    /** Canonical per-bone constraints, IK, joint freedom and physics configuration. */
     public final ValueBones bones = new ValueBones("bones");
-    public final ValueData ik = new ValueData("ik");
-    public final ValueData physics = new ValueData("physics");
+    public final ValueWindControl wind = new ValueWindControl("wind", new WindControl());
+    /** Legacy exchange views; bones and wind own the persisted configuration. */
+    public final ValueData ik = new ValueBoneConfig("ik", this.bones, null);
+    public final ValueData physics = new ValueBoneConfig("physics", this.bones, this.wind);
     public final ValueData pickingOverrides = new ValueData("picking_overrides");
 
     /**
@@ -91,8 +73,6 @@ public class ModelForm extends Form implements PoseForm
     public final ValueBoolean cemCrawling = new ValueBoolean("cem_crawling", false);
     public final ValueFloat cemHealth = new ValueFloat("cem_health", 1F);
 
-    public final List<ValuePose> additionalOverlays = new ArrayList<>();
-
     /**
      * Runtime per-material texture overrides driven by the per-material animation tracks
      * (keyed by material name). Set each frame by {@code FormProperties} during playback and
@@ -100,6 +80,15 @@ public class ModelForm extends Form implements PoseForm
      * material's default / the form's default texture".
      */
     public final transient Map<String, Link> materialTextureOverrides = new HashMap<>();
+
+    public final transient Map<String, Color> materialColorOverrides = new HashMap<>();
+    public final transient Map<String, Color> materialOverlayOverrides = new HashMap<>();
+    public final transient Map<String, Float> materialLightingOverrides = new HashMap<>();
+    public final transient Map<String, Integer> materialCullingOverrides = new HashMap<>();
+    public final transient Map<String, Boolean> materialVisibilityOverrides = new HashMap<>();
+
+    /** PBR slider overrides (keyed by material name, then by the slider's property name). */
+    public final transient Map<String, Map<String, Float>> materialPbrOverrides = new HashMap<>();
 
     public final transient Map<String, Vector3f> ikTargetOverrides = new HashMap<>();
     public final transient Map<String, Vector3f> poleTargetOverrides = new HashMap<>();
@@ -119,17 +108,13 @@ public class ModelForm extends Form implements PoseForm
         this.add(this.texture);
         this.materialTextures.invisible();
         this.add(this.materialTextures);
+        this.materials.invisible();
+        this.add(this.materials);
         this.add(this.model);
         this.add(this.pose);
         this.add(this.poseOverlay);
 
-        for (int i = 0; i < (BBSSettings.recordingPoseTransformOverlays.get()); i++)
-        {
-            ValuePose valuePose = new ValuePose("pose_overlay" + i, new Pose());
-
-            this.additionalOverlays.add(valuePose);
-            this.add(valuePose);
-        }
+        this.syncOverlayTracks();
 
         this.add(this.actions);
         this.add(this.color);
@@ -140,10 +125,12 @@ public class ModelForm extends Form implements PoseForm
         this.ik.invisible();
         this.physics.invisible();
         this.bones.invisible();
+        this.wind.invisible();
         this.pickingOverrides.invisible();
         this.add(this.ik);
         this.add(this.physics);
         this.add(this.bones);
+        this.add(this.wind);
         this.add(this.pickingOverrides);
 
         /* Visible, so each is a track of its own: a cat that sits down mid-take is a keyframe like
@@ -183,45 +170,44 @@ public class ModelForm extends Form implements PoseForm
         return this.model.get();
     }
 
-    @Override
-    protected Set<String> preservedUnknownKeys()
-    {
-        return PRESERVED_UNKNOWN_KEYS;
-    }
-
     /**
-     * An empty {@code bones} group is not written. The group is a container, not a value: a model
-     * form that was never given bone properties keeps exactly the fields it had, so opening and
-     * saving a project that predates the group does not rewrite every form in it.
+     * Empty dynamic groups are not written. A model form without bone or material properties
+     * keeps those containers absent when the project is saved.
      */
     @Override
     protected boolean canPersist(BaseValue value)
     {
-        return !(value == this.bones && this.bones.toData().asMap().isEmpty()) && super.canPersist(value);
+        return value != this.ik && value != this.physics
+            && !(value == this.wind && this.wind.getOriginalValue().isDefault())
+            && !(value == this.bones && this.bones.toData().asMap().isEmpty())
+            && !(value == this.materials && this.materials.getAll().isEmpty()) && super.canPersist(value);
     }
 
-    /**
-     * The one-way migration at the read end.
-     *
-     * <p>Forms saved before the {@code bones} group kept the constraints as an opaque blob in the
-     * exchange format; unpack it into the per-bone properties. The reset flag is {@code false}
-     * because the blob and the group can name the same bones, and the blob is the older of the two
-     * writers: merging it over the group — which is what {@code false} does — reproduces upstream's
-     * order exactly, so the blob wins for the bones it names and the group keeps the rest, instead
-     * of a bone the blob omits losing what the group gave it.</p>
-     *
-     * <p>{@code constraints} is no longer a child of this form, so the key is not claimed by
-     * anything on the way back out and the blob disappears from the saved file. That is the point:
-     * this is a migration, not a second storage location.</p>
-     */
+    /** Merge legacy exchange maps over canonical fields, then persist only bones and wind. */
     @Override
     public void fromData(BaseType data)
     {
-        super.fromData(data);
-
-        if (data instanceof MapType map && map.has("constraints", BaseType.TYPE_MAP))
+        if (!(data instanceof MapType map))
         {
-            BoneConstraintsIO.read(map.getMap("constraints"), this.bones, false);
+            super.fromData(data);
+            return;
         }
+
+        /* Read canonical fields first, then merge legacy blobs in upstream order. Keeping
+         * compatibility values out of this walk makes the result independent of key order. */
+        MapType canonical = (MapType) map.copy();
+        canonical.remove("ik");
+        canonical.remove("physics");
+        super.fromData(canonical);
+
+        if (map.has("constraints", BaseType.TYPE_MAP)) BoneConstraintsIO.read(map.getMap("constraints"), this.bones, false);
+        if (map.has("ik", BaseType.TYPE_MAP)) BoneIKIO.read(map.getMap("ik"), this.bones, false);
+        if (map.has("physics", BaseType.TYPE_MAP)) BonePhysicsIO.read(map.getMap("physics"), this.bones, this.wind, false);
+    }
+
+    @Override
+    public Icon getIcon()
+    {
+        return ICON;
     }
 }

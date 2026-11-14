@@ -27,6 +27,9 @@ public class UIBodyPartEditor extends UIScrollView
 {
     public UIButton pick;
     public UIToggle useTarget;
+    public UIToggle inheritPosition;
+    public UIToggle inheritRotation;
+    public UIToggle inheritScale;
     public UIBonePicker bone;
     public UIPropTransform transform;
 
@@ -70,6 +73,10 @@ public class UIBodyPartEditor extends UIScrollView
         {
             this.part.useTarget.set(b.getValue());
         });
+
+        this.inheritPosition = new UIToggle(UIKeys.INHERIT_POSITION, (b) -> this.part.inheritPosition.set(b.getValue()));
+        this.inheritRotation = new UIToggle(UIKeys.INHERIT_ROTATION, (b) -> this.part.inheritRotation.set(b.getValue()));
+        this.inheritScale = new UIToggle(UIKeys.INHERIT_SCALE, (b) -> this.part.inheritScale.set(b.getValue()));
 
         this.bone = new UIBonePicker((b) ->
         {
@@ -142,11 +149,14 @@ public class UIBodyPartEditor extends UIScrollView
         this.removeAll();
 
         this.useTarget.setValue(part.useTarget.get());
+        this.inheritPosition.setValue(part.inheritPosition.get());
+        this.inheritRotation.setValue(part.inheritRotation.get());
+        this.inheritScale.setValue(part.inheritScale.get());
         this.bone.setLabel(this.boneLabel(part.bone.get()));
 
         if (!FormUtilsClient.getBones(form).isEmpty())
         {
-            this.add(this.pick, this.bone, this.useTarget, this.transform);
+            this.add(this.pick, this.bone, this.useTarget, this.inheritPosition, this.inheritRotation, this.inheritScale, this.transform);
         }
         else
         {

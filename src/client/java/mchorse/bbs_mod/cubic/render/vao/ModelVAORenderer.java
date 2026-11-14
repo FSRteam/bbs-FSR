@@ -15,6 +15,12 @@ import java.util.List;
 
 public class ModelVAORenderer
 {
+    private static final String[] SAMPLERS =
+    {
+        "Sampler0", "Sampler1", "Sampler2", "Sampler3", "Sampler4", "Sampler5",
+        "Sampler6", "Sampler7", "Sampler8", "Sampler9", "Sampler10", "Sampler11"
+    };
+
     /** Per-VAO state used by a texture batch. The texture is owned by the caller. */
     public static record BatchDraw(IModelVAO vao, Matrix4f modelView, Matrix3f normalMat,
         float r, float g, float b, float a, int light, int overlay)
@@ -117,9 +123,9 @@ public class ModelVAORenderer
 
     public static void setupUniforms(ShaderInstance shader, Matrix4f modelView, Matrix3f normalMat)
     {
-        for (int i = 0; i < 12; i++)
+        for (int i = 0; i < SAMPLERS.length; i++)
         {
-            shader.setSampler("Sampler" + i, RenderSystem.getShaderTexture(i));
+            shader.setSampler(SAMPLERS[i], RenderSystem.getShaderTexture(i));
         }
 
         shader.setDefaultUniforms(VertexFormat.Mode.TRIANGLES, modelView, RenderSystem.getProjectionMatrix(), Minecraft.getInstance().getWindow());

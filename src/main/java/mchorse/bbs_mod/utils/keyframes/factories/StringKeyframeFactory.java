@@ -7,6 +7,11 @@ import mchorse.bbs_mod.utils.interps.IInterp;
 public class StringKeyframeFactory implements IKeyframeFactory<String>
 {
     @Override
+    public int contentHash(String value)
+    {
+        return value.hashCode();
+    }
+    @Override
     public boolean isStepped()
     {
         return true;

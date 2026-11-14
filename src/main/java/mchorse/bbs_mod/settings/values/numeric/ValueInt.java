@@ -1,8 +1,10 @@
 package mchorse.bbs_mod.settings.values.numeric;
 
+import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.base.BaseValueNumber;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 
 import java.util.ArrayList;
@@ -11,6 +13,12 @@ import java.util.List;
 
 public class ValueInt extends BaseValueNumber<Integer>
 {
+    @Override
+    public void setNumber(double value)
+    {
+        this.set((int) Math.round(value));
+    }
+
     private Subtype subtype = Subtype.INTEGER;
     private List<IKey> labels;
 
@@ -28,6 +36,17 @@ public class ValueInt extends BaseValueNumber<Integer>
     protected Integer clamp(Integer value)
     {
         return MathUtils.clamp(value, this.min, this.max);
+    }
+
+    @Override
+    public void fromData(BaseType data)
+    {
+        super.fromData(data);
+
+        if (this.subtype == Subtype.COLOR)
+        {
+            this.value = this.value & Colors.RGB;
+        }
     }
 
     public Subtype getSubtype()

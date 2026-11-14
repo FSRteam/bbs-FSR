@@ -5,10 +5,8 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.actions.types.item.ReleaseUseItemActionClip;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -34,7 +32,9 @@ public class LivingEntityMixin
         }
     }
 
-    @Inject(method = "stopUsingItem", at = @At("HEAD"))
+    /* NeoForge may cancel a release before the item callback is reached. */
+    @Inject(method = "releaseUsingItem", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/world/item/ItemStack;releaseUsing(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/LivingEntity;I)V"))
     private void bbsRecordRelease(CallbackInfo info)
     {
         if (!((Object) this instanceof ServerPlayer player) || ((Object) this).getClass() != ServerPlayer.class)
@@ -52,14 +52,13 @@ public class LivingEntityMixin
         InteractionHand hand = player.getUsedItemHand();
         int charge = active.getUseDuration(player) - player.getUseItemRemainingTicks();
         ItemStack stack = active.copy();
-        ItemStack projectile = ItemStack.EMPTY;
-
-        if (projectile.isEmpty() && (stack.is(Items.BOW) || stack.is(Items.CROSSBOW) || stack.is(Items.TRIDENT)) && player.getAbilities().instabuild)
-        {
-            projectile = new ItemStack(Items.ARROW);
-        }
+        ItemStack projectile = player.getProjectile(active).copy();
 
         ItemStack recordedProjectile = projectile;
+        boolean riptide = charge >= 10
+            && EnchantmentHelper.getTridentSpinAttackStrength(active, player) > 0F
+            && player.isInWaterOrRain();
+
         BBSMod.getActions().addAction(player, () ->
         {
             ReleaseUseItemActionClip clip = new ReleaseUseItemActionClip();
@@ -67,7 +66,7 @@ public class LivingEntityMixin
             clip.hand.set(hand == InteractionHand.MAIN_HAND);
             clip.charge.set(charge);
             clip.projectile.set(recordedProjectile);
-            clip.riptide.set(false);
+            clip.riptide.set(riptide);
             return clip;
         });
     }

@@ -14,6 +14,7 @@ public class BOBJBone implements RigBone
     public String name;
     public String parent;
     public BOBJBone parentBone;
+    public boolean visible = true;
 
     /* Transformations */
     public final Transform transform = new Transform();
@@ -61,6 +62,44 @@ public class BOBJBone implements RigBone
      * one. Null when the bone has no shift this frame.
      */
     public Vector3f offset;
+
+    private Quaternionf channelOrient;
+    private Vector3f channelOffset;
+    private boolean channelOrientSet;
+    private boolean channelOffsetSet;
+
+    public void snapshotChannels()
+    {
+        this.channelOrientSet = this.orient != null;
+
+        if (this.channelOrientSet)
+        {
+            if (this.channelOrient == null)
+            {
+                this.channelOrient = new Quaternionf();
+            }
+
+            this.channelOrient.set(this.orient);
+        }
+
+        this.channelOffsetSet = this.offset != null;
+
+        if (this.channelOffsetSet)
+        {
+            if (this.channelOffset == null)
+            {
+                this.channelOffset = new Vector3f();
+            }
+
+            this.channelOffset.set(this.offset);
+        }
+    }
+
+    public void restoreChannels()
+    {
+        this.orient = this.channelOrientSet ? new Quaternionf(this.channelOrient) : null;
+        this.offset = this.channelOffsetSet ? new Vector3f(this.channelOffset) : null;
+    }
 
     public BOBJBone(int index, String name, String parent, Matrix4f boneMat)
     {
@@ -177,6 +216,7 @@ public class BOBJBone implements RigBone
 
     public void reset()
     {
+        this.visible = true;
         this.transform.identity();
         this.orient = null;
         this.offset = null;
@@ -201,6 +241,12 @@ public class BOBJBone implements RigBone
     public Transform getBoneTransform()
     {
         return this.transform;
+    }
+
+    @Override
+    public Vector3f getRestTranslation()
+    {
+        return this.boneMat.getTranslation(new Vector3f());
     }
 
     @Override

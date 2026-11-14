@@ -14,10 +14,17 @@ public class UIParticleSettingsKeyframeFactory extends UIKeyframeFactory<Particl
     {
         super(keyframe, editor);
 
-        this.settings = new UIParticleSettings();
-        this.settings.setSettings(keyframe.getValue());
+        this.settings = new UIParticleSettingsEditor(this);
+        this.settings.setSettings(this.getDisplayValue());
 
         this.scroll.add(this.settings);
+    }
+
+    @Override
+    public void update()
+    {
+        super.update();
+        this.settings.setSettings(this.getDisplayValue());
     }
 
     public static class UIParticleSettingsEditor extends UIParticleSettings
@@ -34,17 +41,17 @@ public class UIParticleSettingsKeyframeFactory extends UIKeyframeFactory<Particl
         @Override
         protected void setParticle(ResourceLocation id)
         {
-            this.editor.keyframe.preNotify();
-            super.setParticle(id);
-            this.editor.keyframe.postNotify();
+            ParticleSettings value = this.editor.keyframe.getFactory().copy(this.editor.getDisplayValue());
+            value.particle = id;
+            this.editor.setValue(value);
         }
 
         @Override
         protected void setArguments(String args)
         {
-            this.editor.keyframe.preNotify();
-            super.setArguments(args);
-            this.editor.keyframe.postNotify();
+            ParticleSettings value = this.editor.keyframe.getFactory().copy(this.editor.getDisplayValue());
+            value.arguments = args;
+            this.editor.setValue(value);
         }
     }
 }

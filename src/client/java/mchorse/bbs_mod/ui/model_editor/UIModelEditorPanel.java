@@ -4,28 +4,18 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
-import mchorse.bbs_mod.cubic.model.ArmorType;
+import mchorse.bbs_mod.l10n.L10n;
+import mchorse.bbs_mod.cubic.data.animation.Animation;
+import mchorse.bbs_mod.cubic.data.animation.AnimationPart;
 import mchorse.bbs_mod.cubic.model.ModelManager;
-import mchorse.bbs_mod.cubic.model.config.ArmorSlotValue;
 import mchorse.bbs_mod.cubic.model.config.ModelConfig;
 import mchorse.bbs_mod.cubic.data.model.Model;
-import mchorse.bbs_mod.cubic.model.config.WeldValue;
-import mchorse.bbs_mod.cubic.weld.CubeFace;
-import mchorse.bbs_mod.cubic.weld.WeldBinding;
-import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
-import mchorse.bbs_mod.settings.values.base.BaseValue;
-import mchorse.bbs_mod.settings.values.core.ValueLink;
-import mchorse.bbs_mod.settings.values.core.ValueString;
-import mchorse.bbs_mod.settings.values.misc.ValueVector3f;
-import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
-import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
-import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
-import mchorse.bbs_mod.settings.values.ui.ValueStringMap;
 import mchorse.bbs_mod.ui.ContentType;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -33,158 +23,91 @@ import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDataDashboardPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.overlay.UICRUDOverlayPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.DataTab;
-import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
 import mchorse.bbs_mod.ui.film.utils.undo.UIUndoHistoryOverlay;
 import mchorse.bbs_mod.ui.forms.editors.UIFormUndoHandler;
-import mchorse.bbs_mod.ui.forms.editors.utils.UIFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
-import mchorse.bbs_mod.ui.framework.elements.UISection;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
-import mchorse.bbs_mod.ui.framework.elements.input.UISimpleTransform;
-import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
-import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
-import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
-import mchorse.bbs_mod.ui.framework.elements.utils.UIText;
-import mchorse.bbs_mod.ui.utils.UI;
-import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.framework.elements.utils.UISplitter;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIUndoKeys;
 import mchorse.bbs_mod.ui.utils.UIUtils;
-import mchorse.bbs_mod.ui.utils.bones.UIBonePicker;
-import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
-import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.pose.Pose;
-import mchorse.bbs_mod.utils.pose.PoseManager;
-import mchorse.bbs_mod.utils.presets.PresetManager;
-import org.joml.Vector3f;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Model Editor — a proper data panel (tabs, right icon bar, save) over models. Each tab is an open model;
- * the picker in the icon bar chooses one. The editor area is split into a resizable settings pane on the
- * left (binding straight to the live model's {@link ModelConfig}, so edits show in the preview at once)
- * and the orbit preview on the right. Models are assets, so create/rename/delete are intentionally off.
- *
- * <p>The sections themselves are built exactly once, in the constructor; opening a model only refills
- * their bodies. That's what keeps the fold state, the scroll position and the focused control alive
- * across an edit — a list add/remove refills just that list's container, never the whole pane.</p>
+ * Owns open model tabs, the shared preview and undo; configuration and geometry live in their editors.
+ * FSR keeps unsaved model drafts when a write fails, and reuses the preview's solved pose for thumbnails.
  */
 public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 {
+    /** Kept for callers that need the general settings page. */
     public UIScrollView general;
-    public UIFormRenderer renderer;
+    public UIModelEditorRenderer renderer;
     public UIDraggable splitter;
-
+    private UIModelConfigEditor configEditor;
+    private UIModelGeometryEditor geometryEditor;
+    private UIElement uvPane;
+    private boolean geometryMode;
+    private boolean modelDirty;
+    private final List<String[]> renames = new ArrayList<>();
+    private record ModelDraft(ModelInstance instance, List<String[]> renames)
+    {}
+    private final Map<String, ModelDraft> drafts = new HashMap<>();
+    private UIDraggable uvSplitter;
+    private UISplitter settingsSize;
+    private UISplitter uvSize;
+    private int uvSplitWidth = 200;
+    private UIIcon modelMode;
     private final ModelForm form = new ModelForm();
-
-    /** The model id whose instance we're waiting on; models load asynchronously, so the fill is deferred. */
     private String pendingId;
     private int splitWidth = 200;
-
-    /** Cube faces in enum order; the face picker adds its icons in this order so the index maps straight back. */
-    private static final CubeFace[] FACES = CubeFace.values();
-
-    /** The live instance backing the current tab, kept so weld edits can re-resolve its bindings. */
     private ModelInstance bound;
-
-    /** Working rows for the bone maps ({@code [from, to]} pairs); a pair with a blank key can't live in the
-     *  map itself, so the rows are edited here and committed back to the value on every change. */
-    private final List<String[]> flippedEntries = new ArrayList<>();
-    private final List<String[]> pickingEntries = new ArrayList<>();
-
-    /** Armor types grouped by body region, one row per region icon (helmet / chest+arms / legs / boots). */
-    private static final ArmorType[][] ARMOR_REGIONS =
-    {
-        {ArmorType.HELMET},
-        {ArmorType.CHEST, ArmorType.LEFT_ARM, ArmorType.RIGHT_ARM},
-        {ArmorType.LEGGINGS, ArmorType.LEFT_LEG, ArmorType.RIGHT_LEG},
-        {ArmorType.LEFT_BOOT, ArmorType.RIGHT_BOOT},
-    };
-
-    /** The armor region the icon row currently shows; its slots fill {@link #armorBody}. */
-    private int armorRegion;
-
-    /* The sections, built once and refilled — see the class docs. */
-    private UISection warningsSection;
-    private UISection generalSection;
-    private UISection itemsSection;
-    private UISection armorSection;
-    private UISection firstPersonSection;
-    private UISection lookAtSection;
-    private UISection sneakingSection;
-    private UISection mapsSection;
-    private UISection weldsSection;
-    private UISection bonesSection;
-
-    /* The refillable bodies inside those sections. */
-    private UIElement warningsBody;
-    private UIElement generalBody;
-    private UIElement itemsMainBody;
-    private UIElement itemsOffBody;
-    private UIElement armorBody;
-    private UIElement firstPersonBody;
-    private UIElement lookAtBody;
-    private UIElement sneakingBody;
-    private UIElement flippedBody;
-    private UIElement pickingBody;
-    private UIElement weldsBody;
-    private UIScrollView bonesBody;
-    private UITextbox bonesSearch;
-
-    /** The bone list's current filter, mirrored here because {@link UITextbox} only pushes it through the callback. */
-    private String bonesQuery = "";
-
-    /** Every section in {@link #general}, in display order — the collapse/expand keybinds walk this. */
-    private UISection[] sections;
-
-    /** True while {@link #fillSections} refills everything, collapsing the nine re-layouts into one. */
-    private boolean bulkFill;
-
-    /** Landing screen shown when the current tab has no model open. */
-    private UIModelSelectionScreen selectionPanel;
-
-    /** A small morph-style model thumbnail pinned to the top-right of the orbit viewport. */
     private UIElement miniPreview;
-
-    /** Opens the current model's asset folder; enabled only while a model is open. */
     private UIIcon folderIcon;
-
-    /** Opens the undo/redo history overlay; enabled only while a model is open. */
     private UIIcon historyIcon;
-
-    /** Undo/redo over the model's {@link ModelConfig} value tree — reuses the form editor's diff handler. */
+    private UIIcon animationIcon;
     private UIFormUndoHandler undoHandler;
-
-    /** Configs we've already wired the undo pre-callback into (by identity), so a re-open doesn't stack it. */
     private final Set<ModelConfig> hookedConfigs = Collections.newSetFromMap(new IdentityHashMap<>());
-
-    /** Set for one {@link #fill} when re-binding to a reloaded instance, so the reload keeps the undo stack. */
     private boolean preserveUndo;
 
-    /* Clipboards for the sub-list entries — copy/paste/presets, like every other editor's lists. */
-    private final EntryClipboard welds = new EntryClipboard(PresetManager.MODEL_WELDS, "_CopyModelWeld");
+    /** Compatibility names for callers of the panel before the configuration owner was extracted. */
+    public enum ConfigPage
+    {
+        GENERAL(Icons.GEAR, UIKeys.FORMS_EDITORS_GENERAL),
+        BONES(Icons.LIMB, UIKeys.MODEL_EDITOR_BONES),
+        WELDS(Icons.LINK, UIKeys.MODEL_EDITOR_WELDS),
+        ARMOR(Icons.ARMOR_CHESTPLATE, UIKeys.MODEL_EDITOR_ARMOR),
+        ITEMS(Icons.HOTBAR, UIKeys.MODEL_EDITOR_ITEMS),
+        FIRST_PERSON(Icons.LOOKING, UIKeys.MODEL_EDITOR_FIRST_PERSON),
+        PROCEDURAL(Icons.PLAY, L10n.lang("bbs.ui.model_editor.procedural_tab")),
+        POSES(Icons.POSE, UIKeys.MODEL_EDITOR_POSES);
+
+        public final Icon icon;
+        public final IKey label;
+
+        ConfigPage(Icon icon, IKey label)
+        {
+            this.icon = icon;
+            this.label = label;
+        }
+    }
 
     public UIModelEditorPanel(UIDashboard dashboard)
     {
@@ -192,17 +115,38 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
         this.enableTabs();
 
-        this.general = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
-
-        this.renderer = new UIFormRenderer();
+        this.renderer = new UIModelEditorRenderer()
+            .target(() -> this.geometryMode ? this.geometryEditor.shownTarget() : this.configEditor.shownTarget())
+            .onPick((bone, cube) -> this.geometryMode ? this.geometryEditor.selectPick(bone, cube) : this.configEditor.selectBone(bone))
+            .outlines(() -> this.geometryMode ? this.geometryEditor.outlines() : List.of());
         this.renderer.form = this.form;
+        this.configEditor = new UIModelConfigEditor(this);
+        this.general = this.configEditor.generalPage();
+        this.geometryEditor = new UIModelGeometryEditor(this);
+        this.geometryEditor.setVisible(false);
+        this.uvPane = new UIElement();
+        this.uvPane.add(this.geometryEditor.uvPanel().full(this.uvPane));
+        this.uvPane.setVisible(false);
 
-        this.splitter = new UIDraggable((context) ->
+        this.settingsSize = new UISplitter("model_editor.split", false, 220).fromEnd();
+        this.settingsSize.measure(this.editor).range(160, () -> (float) (this.editor.area.w - 160)).onChange(() ->
         {
-            this.splitWidth = MathUtils.clamp(context.mouseX - this.editor.area.x, 160, this.editor.area.w - 160);
+            this.splitWidth = this.settingsSize.getPixels();
             this.layoutPanes();
             this.resize();
-        }).cursors(GLFW.GLFW_HRESIZE_CURSOR, GLFW.GLFW_HRESIZE_CURSOR);
+        });
+        this.splitter = this.settingsSize;
+        this.splitWidth = this.settingsSize.getPixels();
+        this.uvSize = new UISplitter("model_editor.uv_split", false, 200);
+        this.uvSize.measure(this.editor).range(160, () -> (float) (this.editor.area.w - this.splitWidth - 160)).onChange(() ->
+        {
+            this.uvSplitWidth = this.uvSize.getPixels();
+            this.layoutPanes();
+            this.resize();
+        });
+        this.uvSplitter = this.uvSize;
+        this.uvSplitWidth = this.uvSize.getPixels();
+        this.uvSplitter.setVisible(false);
 
         this.layoutPanes();
 
@@ -248,25 +192,28 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         this.miniPreview.relative(this.renderer).x(1F, -6).y(6).wh(64, 64).anchor(1F, 0F);
         this.renderer.add(this.miniPreview);
 
-        this.editor.add(this.general, this.renderer, this.splitter);
+        this.editor.add(this.configEditor, this.geometryEditor, this.uvPane, this.renderer, this.splitter, this.uvSplitter);
+        UIIcon configMode = new UIIcon(Icons.GEAR, (button) -> this.showGeometry(false));
+        configMode.tooltip(UIKeys.MODEL_EDITOR_OPEN_CONFIG_EDITOR);
+        this.modelMode = new UIIcon(Icons.POSE, (button) -> this.showGeometry(true));
+        this.modelMode.tooltip(UIKeys.MODEL_EDITOR_OPEN_MODEL_EDITOR);
+        this.actions().editor(configMode, () -> !this.geometryMode).editor(this.modelMode, () -> this.geometryMode);
 
-        this.createSections();
-
-        this.openOverlay.tooltip(UIKeys.FORMS_EDITOR_MODEL_PICK_MODEL, Direction.LEFT);
+        this.openOverlay.tooltip(UIKeys.FORMS_EDITOR_MODEL_PICK_MODEL, Direction.BOTTOM);
 
         this.folderIcon = new UIIcon(Icons.FOLDER, (b) -> this.openModelFolder());
-        this.folderIcon.tooltip(UIKeys.FORMS_CATEGORIES_CONTEXT_OPEN_MODEL_FOLDER, Direction.LEFT);
-        this.iconBar.add(this.folderIcon);
+        this.folderIcon.tooltip(UIKeys.FORMS_CATEGORIES_CONTEXT_OPEN_MODEL_FOLDER, Direction.BOTTOM);
+        this.actions().action(this.folderIcon);
 
         this.historyIcon = new UIIcon(Icons.UNDO, (b) -> this.openHistory());
-        this.historyIcon.tooltip(UIKeys.MODEL_EDITOR_OPEN_HISTORY, Direction.LEFT);
-        this.iconBar.add(this.historyIcon);
+        this.historyIcon.tooltip(UIKeys.MODEL_EDITOR_OPEN_HISTORY, Direction.BOTTOM);
+        this.actions().action(this.historyIcon);
+        this.animationIcon = new UIIcon(Icons.PLAY, (button) -> this.openAnimations());
+        this.animationIcon.tooltip(UIKeys.MODEL_EDITOR_ANIMATION_PLAY, Direction.BOTTOM);
+        this.actions().action(this.animationIcon);
 
-        this.selectionPanel = new UIModelSelectionScreen(this);
-        this.selectionPanel.relative(this).y(UIDataTabs.TABS_HEIGHT_PX).wTo(this.iconBar.area).h(1F, -UIDataTabs.TABS_HEIGHT_PX);
-        this.add(this.selectionPanel);
-
-        this.add(new UIModelEditorUndoKeys(this).full(this));
+        this.mountLanding();
+        this.add(new UIUndoKeys(this::undo, this::redo).full(this));
 
         this.registerKeybinds();
 
@@ -275,9 +222,50 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
     private void layoutPanes()
     {
-        this.general.relative(this.editor).x(0).y(0).w(this.splitWidth).h(1F);
-        this.renderer.relative(this.editor).x(this.splitWidth).y(0).w(1F, -this.splitWidth).h(1F);
-        this.splitter.relative(this.editor).x(this.splitWidth).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
+        int available = this.editor.area.w;
+        if (available > 0)
+        {
+            int minimum = Math.min(160, Math.max(1, available / (this.geometryMode ? 3 : 2)));
+            this.splitWidth = MathUtils.clamp(this.splitWidth, minimum, available - minimum * (this.geometryMode ? 2 : 1));
+            this.uvSplitWidth = MathUtils.clamp(this.uvSplitWidth, minimum, Math.max(minimum, available - this.splitWidth - minimum));
+        }
+        int uvWidth = this.geometryMode ? this.uvSplitWidth : 0;
+        this.configEditor.relative(this.editor).x(1F, -this.splitWidth).y(0).w(this.splitWidth).h(1F);
+        this.geometryEditor.relative(this.editor).x(1F, -this.splitWidth).y(0).w(this.splitWidth).h(1F);
+        this.uvPane.relative(this.editor).x(0).y(0).w(uvWidth).h(1F);
+        this.renderer.relative(this.editor).x(uvWidth).y(0).w(1F, -this.splitWidth - uvWidth).h(1F);
+        this.splitter.relative(this.editor).x(1F, -this.splitWidth).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
+        this.uvSplitter.relative(this.editor).x(uvWidth).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
+
+        if (this.renderer.isFirstPerson())
+        {
+            Minecraft minecraft = Minecraft.getInstance();
+            float aspect = minecraft.getWindow().getWidth() / (float) Math.max(1, minecraft.getWindow().getHeight());
+            int roomW = Math.max(1, this.editor.area.w - this.splitWidth - uvWidth);
+            int roomH = Math.max(1, this.editor.area.h);
+            int width = roomW;
+            int height = Math.round(width / aspect);
+
+            if (height > roomH)
+            {
+                height = roomH;
+                width = Math.round(height * aspect);
+            }
+
+            this.renderer.relative(this.editor).x(uvWidth + (roomW - width) / 2)
+                .y((roomH - height) / 2).wh(width, height);
+        }
+    }
+
+    @Override
+    public void resize()
+    {
+        super.resize();
+        if (this.uvSplitter != null)
+        {
+            this.layoutPanes();
+            this.editor.resize();
+        }
     }
 
     private void registerKeybinds()
@@ -285,33 +273,21 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         IKey category = UIKeys.MODEL_EDITOR_TITLE;
         Supplier<Boolean> open = () -> this.data != null;
 
-        this.keys().register(Keys.MODEL_EDITOR_EXPAND_ALL, () -> this.setAllExpanded(true)).active(open).category(category);
-        this.keys().register(Keys.MODEL_EDITOR_COLLAPSE_ALL, () -> this.setAllExpanded(false)).active(open).category(category);
+        this.keys().register(Keys.FILM_CONTROLLER_CYCLE_EDITORS, () -> this.showGeometry(!this.geometryMode)).active(open).category(category);
         this.keys().register(Keys.MODEL_EDITOR_FIND_BONE, this::findBone).active(open).category(category);
         this.keys().register(Keys.MODEL_EDITOR_OPEN_HISTORY, this::openHistory).active(open).category(category);
     }
 
-    private void setAllExpanded(boolean expanded)
-    {
-        for (UISection section : this.sections)
-        {
-            section.setExpanded(expanded);
-        }
-
-        this.resizeGeneral();
-        UIUtils.playClick();
-    }
-
-    /** Ctrl+F: open the bone list and drop the caret straight into its search box. */
     private void findBone()
     {
-        this.bonesSection.setExpanded(true);
-        this.general.resize();
+        this.showGeometry(false);
+        this.configEditor.findBone();
+    }
 
-        /* The bone list is the last section, so scrolling to the end puts it in view. */
-        this.general.scroll.scrollToEnd();
-        this.getContext().focus(this.bonesSearch);
-        UIUtils.playClick();
+    public void selectConfigPage(ConfigPage page)
+    {
+        this.showGeometry(false);
+        this.configEditor.selectPage(UIModelConfigEditor.Tab.valueOf(page.name()));
     }
 
     @Override
@@ -337,9 +313,21 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     }
 
     @Override
-    protected IKey getTitle()
+    public IKey getTitle()
     {
         return UIKeys.MODEL_EDITOR_TITLE;
+    }
+
+    @Override
+    public IKey getCreateLabel()
+    {
+        return UIKeys.MODEL_EDITOR_LANDING_NEW;
+    }
+
+    @Override
+    public IKey getListLabel()
+    {
+        return UIKeys.MODEL_EDITOR_LANDING_LIST;
     }
 
     @Override
@@ -351,6 +339,19 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     @Override
     public void requestData(String id)
     {
+        ModelDraft draft = this.drafts.remove(id);
+        if (draft != null)
+        {
+            this.bound = draft.instance();
+            BBSModClient.getModels().models.put(id, this.bound);
+            this.form.model.set(id);
+            this.pendingId = null;
+            this.fill(this.bound.config);
+            this.modelDirty = true;
+            this.renames.addAll(draft.renames());
+            this.refresh();
+            return;
+        }
         this.pendingId = id;
         this.tryLoadPending();
     }
@@ -395,6 +396,14 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
 
         ModelInstance instance = BBSModClient.getModels().getModel(id);
 
+        if (instance != this.bound && this.modelDirty)
+        {
+            if (instance != null) instance.delete();
+            BBSModClient.getModels().models.put(id, this.bound);
+            this.refresh();
+            return;
+        }
+
         if (instance != null && instance != this.bound)
         {
             /* A reload (our own 60s periodic save writes config.json too, tripping the watchdog) — keep the
@@ -425,7 +434,7 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         }
     }
 
-    /** Models are assets, so the data manager is a pure picker — no create/duplicate/rename/remove. */
+    /** Models are assets, so the data manager creates models, while asset folder management stays in the file browser. */
     @Override
     protected UICRUDOverlayPanel createOverlayPanel()
     {
@@ -443,16 +452,15 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         }
 
         this.setupUndo(data);
+        this.geometryEditor.fill(this.bound);
+        this.modelDirty = false;
+        this.renames.clear();
+        if (this.bound == null || !this.bound.isEditable()) this.showGeometry(false);
+        this.modelMode.setEnabled(this.bound != null && this.bound.isEditable());
+        this.modelMode.tooltip(this.modelMode.isEnabled() ? UIKeys.MODEL_EDITOR_OPEN_MODEL_EDITOR : UIKeys.MODEL_EDITOR_OPEN_MODEL_EDITOR_UNAVAILABLE);
 
-        this.seedMap(this.flippedEntries, data == null ? null : data.flippedParts);
-        this.seedMap(this.pickingEntries, data == null ? null : data.pickingOverrides);
-
-        this.fillSections(data);
-
-        if (this.selectionPanel != null)
-        {
-            this.selectionPanel.setVisible(data == null);
-        }
+        this.configEditor.fill(data);
+        this.syncPreview();
 
         if (this.folderIcon != null)
         {
@@ -462,6 +470,11 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         if (this.historyIcon != null)
         {
             this.historyIcon.setEnabled(data != null);
+        }
+
+        if (this.animationIcon != null)
+        {
+            this.animationIcon.setEnabled(data != null);
         }
     }
 
@@ -532,45 +545,8 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     {
         this.data.rebuild();
         this.refresh();
-        this.seedMap(this.flippedEntries, this.data.flippedParts);
-        this.seedMap(this.pickingEntries, this.data.pickingOverrides);
-        this.fillSections(this.data);
-    }
-
-    @Override
-    public void fillNames(Collection<String> names)
-    {
-        super.fillNames(names);
-
-        if (this.selectionPanel != null)
-        {
-            this.selectionPanel.fillNames(names);
-        }
-    }
-
-    private void seedMap(List<String[]> entries, ValueStringMap value)
-    {
-        entries.clear();
-
-        if (value != null)
-        {
-            for (Map.Entry<String, String> entry : value.get().entrySet())
-            {
-                entries.add(new String[] {entry.getKey(), entry.getValue()});
-            }
-        }
-    }
-
-    @Override
-    public void appear()
-    {
-        super.appear();
-
-        /* No model open → the selection screen is up; refresh its list each time the panel is shown. */
-        if (this.selectionPanel != null && this.selectionPanel.isVisible())
-        {
-            this.requestNames();
-        }
+        this.configEditor.fill(this.data);
+        this.geometryEditor.fill(this.bound);
     }
 
     private void openModelFolder()
@@ -583,1094 +559,13 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         }
     }
 
-    /* Section scaffolding. Built once here; only the bodies below get refilled. */
-
-    private void createSections()
-    {
-        /* What the loader had to work around, first in the page and only visible while there is any —
-         * see fillWarnings(). A .jem the pack drew differently should say so before anything else. */
-        this.warningsSection = this.section(UIKeys.MODEL_EDITOR_WARNINGS, true);
-        this.warningsSection.title.tooltip(UIKeys.MODEL_EDITOR_WARNINGS_TOOLTIP);
-        this.warningsBody = this.body();
-        this.warningsSection.fields.add(this.warningsBody);
-
-        this.generalSection = this.section(UIKeys.FORMS_EDITORS_GENERAL, true);
-        this.generalBody = this.body();
-        this.generalSection.fields.add(this.generalBody);
-
-        this.itemsSection = this.section(UIKeys.MODEL_EDITOR_ITEMS, false);
-        this.itemsMainBody = this.body();
-        this.itemsOffBody = this.body();
-        this.itemsSection.fields.add(
-            this.listHeader(UIKeys.MODEL_EDITOR_ITEMS_MAIN, UIKeys.MODEL_EDITOR_ITEM_ADD,
-                () -> this.addItem(this.itemsMainList()), null),
-            this.itemsMainBody,
-            this.listHeader(UIKeys.MODEL_EDITOR_ITEMS_OFF, UIKeys.MODEL_EDITOR_ITEM_ADD,
-                () -> this.addItem(this.itemsOffList()), null),
-            this.itemsOffBody
-        );
-
-        this.armorSection = this.section(UIKeys.MODEL_EDITOR_ARMOR, false);
-        this.armorBody = this.body();
-
-        UIIcons regions = new UIIcons((b) ->
-        {
-            this.armorRegion = b.getValue();
-            this.fillArmor();
-        });
-
-        regions.add(Icons.ARMOR_HELMET, UIKeys.MODEL_EDITOR_ARMOR_HELMET);
-        regions.add(Icons.ARMOR_CHESTPLATE, UIKeys.MODEL_EDITOR_ARMOR_CHEST);
-        regions.add(Icons.ARMOR_LEGGINGS, UIKeys.MODEL_EDITOR_ARMOR_LEGGINGS);
-        regions.add(Icons.ARMOR_BOOTS, UIKeys.MODEL_EDITOR_ARMOR_BOOTS);
-        regions.setValue(this.armorRegion);
-
-        this.armorSection.fields.add(regions, this.armorBody);
-
-        this.firstPersonSection = this.section(UIKeys.MODEL_EDITOR_FIRST_PERSON, false);
-        this.firstPersonBody = this.body();
-        this.firstPersonSection.fields.add(this.firstPersonBody);
-
-        this.lookAtSection = this.section(UIKeys.MODEL_EDITOR_LOOK_AT, false);
-        this.lookAtBody = this.body();
-        this.lookAtSection.fields.add(this.lookAtBody);
-
-        this.sneakingSection = this.section(UIKeys.MODEL_EDITOR_SNEAKING, false);
-        this.sneakingBody = this.body();
-        this.sneakingSection.fields.add(this.sneakingBody);
-
-        this.mapsSection = this.section(UIKeys.MODEL_EDITOR_MAPS, false);
-        this.flippedBody = this.body();
-        this.pickingBody = this.body();
-        this.mapsSection.fields.add(
-            this.listHeader(UIKeys.MODEL_EDITOR_FLIPPED_PARTS, UIKeys.MODEL_EDITOR_MAP_ADD, () -> this.addMap(this.flippedEntries), null),
-            this.flippedBody,
-            this.listHeader(UIKeys.MODEL_EDITOR_PICKING_OVERRIDES, UIKeys.MODEL_EDITOR_MAP_ADD, () -> this.addMap(this.pickingEntries), null),
-            this.pickingBody
-        );
-
-        this.weldsSection = this.section(UIKeys.MODEL_EDITOR_WELDS, false);
-        this.weldsBody = this.body();
-        this.weldsSection.fields.add(
-            this.listHeader(IKey.EMPTY, UIKeys.MODEL_EDITOR_WELD_ADD, this::addWeld,
-                (menu) -> this.fillWeldMenu(menu, null, this::pasteNewWeld, null, null)),
-            this.weldsBody
-        );
-
-        this.bonesSection = this.section(UIKeys.MODEL_EDITOR_BONES, false);
-        this.bonesBody = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
-        this.bonesBody.h(160);
-        this.bonesSearch = new UITextbox(100, (query) ->
-        {
-            this.bonesQuery = query;
-            this.fillBones();
-        });
-        this.bonesSearch.placeholder(UIKeys.GENERAL_SEARCH);
-        this.bonesSection.fields.add(this.bonesSearch, this.bonesBody);
-
-        this.sections = new UISection[]
-        {
-            this.warningsSection,
-            this.generalSection,
-            this.itemsSection,
-            this.armorSection,
-            this.firstPersonSection,
-            this.lookAtSection,
-            this.sneakingSection,
-            this.mapsSection,
-            this.weldsSection,
-            this.bonesSection
-        };
-
-        this.general.add(this.sections);
-    }
-
-    private UISection section(IKey title, boolean defaultExpanded)
-    {
-        UISection section = new UISection(title);
-
-        section.setExpanded(defaultExpanded);
-
-        return section;
-    }
-
-    /** A vertical container inside a section that gets emptied and refilled on its own. */
-    private UIElement body()
-    {
-        UIElement body = new UIElement();
-
-        body.column(UIConstants.MARGIN).vertical().stretch();
-
-        return body;
-    }
-
-    /**
-     * A sub-list header: a label on the left and a compact "+" add button pinned to the right. When the
-     * list has a clipboard, the button also carries its menu on right click, so a copied entry can be
-     * pasted straight in as a new one.
-     */
-    private UIElement listHeader(IKey label, IKey tooltip, Runnable add, Consumer<ContextMenuManager> menu)
-    {
-        UIIcon plus = new UIIcon(Icons.ADD, (b) -> add.run());
-
-        plus.tooltip(tooltip, Direction.LEFT);
-        plus.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT);
-
-        if (menu != null)
-        {
-            plus.context(menu);
-        }
-
-        return UI.row(UIConstants.MARGIN, 0, UIConstants.CONTROL_HEIGHT,
-            UI.label(label, UIConstants.CONTROL_HEIGHT).labelAnchor(0, 0.5F),
-            plus
-        );
-    }
-
-    /* Filling. fillSections() is the "a different model is open" path; the individual fillX() methods are
-     * what a list mutation calls, so an add or a remove only touches its own container. */
-
-    private void fillSections(ModelConfig config)
-    {
-        if (config == null)
-        {
-            /* The base class hides the whole editor pane when no model is open; empty the bodies too so
-             * the sections don't keep the closed model's config (and its widgets) alive. */
-            this.clearBodies();
-
-            return;
-        }
-
-        /* A different model has different bones, so the old filter shouldn't carry over. */
-        this.bonesQuery = "";
-        this.bonesSearch.setText("");
-
-        this.bulkFill = true;
-
-        try
-        {
-            this.fillGeneral();
-            this.fillItems();
-            this.fillArmor();
-            this.fillFirstPerson();
-            this.fillLookAt();
-            this.fillSneaking();
-            this.fillMaps();
-            this.fillWelds();
-            this.fillBones();
-        }
-        finally
-        {
-            this.bulkFill = false;
-        }
-
-        this.resizeGeneral();
-    }
-
-    private void clearBodies()
-    {
-        this.generalBody.removeAll();
-        this.itemsMainBody.removeAll();
-        this.itemsOffBody.removeAll();
-        this.armorBody.removeAll();
-        this.firstPersonBody.removeAll();
-        this.lookAtBody.removeAll();
-        this.sneakingBody.removeAll();
-        this.flippedBody.removeAll();
-        this.pickingBody.removeAll();
-        this.weldsBody.removeAll();
-        this.bonesBody.removeAll();
-
-        /* No model open — nothing to warn about. */
-        this.warningsSection.setVisible(false);
-
-        this.general.resize();
-    }
-
-    /**
-     * Re-layout the settings pane after a body changed height, keeping the scroll inside its new bounds.
-     * Suppressed while every section is being refilled at once, so that costs one layout pass, not nine.
-     */
-    private void resizeGeneral()
-    {
-        if (this.bulkFill)
-        {
-            return;
-        }
-
-        this.general.resize();
-        this.general.scroll.clamp();
-    }
-
-    /** {@code base} with a "(n)" suffix when non-zero, so a folded section still shows how much it holds. */
-    private void countTitle(UISection section, IKey base, int count)
-    {
-        section.title(count > 0 ? IKey.constant(base.get() + " (" + count + ")") : base);
-    }
-
-    private void fillGeneral()
-    {
-        ModelConfig config = this.data;
-
-        this.generalBody.removeAll();
-        this.generalBody.add(
-            this.toggleRefresh(UIKeys.MODEL_EDITOR_PROCEDURAL, config.procedural),
-            this.toggle(UIKeys.MODEL_EDITOR_CULLING, config.culling),
-            this.toggleRefresh(UIKeys.MODEL_EDITOR_ON_CPU, config.onCpu)
-        );
-
-        /* Only a .jem carries a CEM program to switch; for any other model the toggle would switch nothing. */
-        if (this.bound != null && this.bound.cemAnimation != null)
-        {
-            this.generalBody.add(this.toggleRefresh(UIKeys.MODEL_EDITOR_CEM_ANIMATION, config.cemAnimation));
-        }
-
-        this.fillWarnings(this.bound == null ? Collections.emptyList() : this.bound.warnings);
-
-        this.generalBody.add(
-            this.labeledRow(UIKeys.MODEL_EDITOR_UI_SCALE, this.floatField(config.uiScale)),
-            UI.label(UIKeys.MODEL_EDITOR_SCALE), UI.row(this.component(config.scale, 0), this.component(config.scale, 1), this.component(config.scale, 2)),
-            this.labeledRow(UIKeys.MODEL_EDITOR_POSE_GROUP, this.stringField(config.poseGroup)),
-            this.labeledRow(UIKeys.MODEL_EDITOR_ANCHOR, this.bonePicker(config.anchor::get, config.anchor::set, () -> {})),
-            this.labeledRow(UIKeys.MODEL_EDITOR_TEXTURE, this.textureField(config.texture))
-        );
-
-        this.resizeGeneral();
-    }
-
-    /**
-     * The loader's notes on this model (see {@link ModelInstance#warnings}), a line each, in a section
-     * that is there only while there is something to say — the layout skips what is not visible.
-     */
-    private void fillWarnings(List<String> warnings)
-    {
-        this.warningsSection.title(UIKeys.MODEL_EDITOR_WARNINGS.format(warnings.size()));
-        this.warningsSection.setVisible(!warnings.isEmpty());
-        this.warningsBody.removeAll();
-
-        for (String warning : warnings)
-        {
-            this.warningsBody.add(new UIText(warning));
-        }
-    }
-
-    private void fillLookAt()
-    {
-        ModelConfig config = this.data;
-
-        this.lookAtBody.removeAll();
-        this.lookAtBody.add(
-            this.labeledRow(UIKeys.MODEL_EDITOR_LOOK_AT_HEAD, this.bonePicker(config.lookAt.head::get, config.lookAt.head::set, config::rebuild)),
-            this.lookAtPitch(config),
-            this.labeledRow(UIKeys.MODEL_EDITOR_LOOK_AT_LIMIT, this.lookAtLimit(config))
-        );
-
-        this.countTitle(this.lookAtSection, UIKeys.MODEL_EDITOR_LOOK_AT, config.lookAt.isActive() ? 1 : 0);
-        this.resizeGeneral();
-    }
-
-    private UIToggle lookAtPitch(ModelConfig config)
-    {
-        return new UIToggle(UIKeys.MODEL_EDITOR_LOOK_AT_PITCH, config.lookAt.pitch.get(), (t) ->
-        {
-            config.lookAt.pitch.set(t.getValue());
-            config.rebuild();
-        });
-    }
-
-    private UITrackpad lookAtLimit(ModelConfig config)
-    {
-        UITrackpad trackpad = new UITrackpad((v) ->
-        {
-            config.lookAt.headLimit.set(v.floatValue());
-            config.rebuild();
-        });
-
-        trackpad.setValue(config.lookAt.headLimit.get());
-        trackpad.delayedInput();
-
-        return trackpad;
-    }
-
-    /* Attachment slots (items in hand, armor, first-person) — a bone plus a transform. */
-
-    private UISimpleTransform slotTransform(ModelConfig config, ArmorSlotValue slot)
-    {
-        UISimpleTransform transform = new UISimpleTransform(config::rebuild);
-
-        transform.setValue(slot.transform);
-        transform.w(1F);
-
-        return transform;
-    }
-
-    private ModelConfig.ItemSlotList itemsMainList()
-    {
-        return this.data == null ? null : this.data.itemsMain;
-    }
-
-    private ModelConfig.ItemSlotList itemsOffList()
-    {
-        return this.data == null ? null : this.data.itemsOff;
-    }
-
-    private void fillItems()
-    {
-        ModelConfig config = this.data;
-
-        this.fillItemList(this.itemsMainBody, config.itemsMain);
-        this.fillItemList(this.itemsOffBody, config.itemsOff);
-
-        this.countTitle(this.itemsSection, UIKeys.MODEL_EDITOR_ITEMS, this.activeCount(config.itemsMain) + this.activeCount(config.itemsOff));
-        this.resizeGeneral();
-    }
-
-    private void fillItemList(UIElement body, ModelConfig.ItemSlotList list)
-    {
-        body.removeAll();
-
-        for (ArmorSlotValue slot : list.getAllTyped())
-        {
-            body.add(this.itemEntry(list, slot));
-        }
-    }
-
-    private UIElement itemEntry(ModelConfig.ItemSlotList list, ArmorSlotValue slot)
-    {
-        UIIcon remove = new UIIcon(Icons.REMOVE, (b) -> this.removeItem(list, slot));
-
-        remove.tooltip(UIKeys.MODEL_EDITOR_ITEM_REMOVE, Direction.LEFT);
-        remove.wh(20, UIConstants.CONTROL_HEIGHT);
-
-        UIElement head = new UIElement();
-
-        head.row(UIConstants.MARGIN).preferred(0);
-        head.add(this.bonePicker(slot.group::get, slot.group::set, this.data::rebuild), remove);
-
-        UIElement entry = UI.column(head, this.slotTransform(this.data, slot));
-
-        entry.marginBottom(6);
-        entry.context((menu) ->
-        {
-            menu.action(Icons.DUPE, UIKeys.MODEL_EDITOR_ITEM_DUPLICATE, () -> this.duplicateItem(list, slot));
-            menu.action(Icons.REMOVE, UIKeys.MODEL_EDITOR_ITEM_REMOVE, () -> this.removeItem(list, slot));
-        });
-
-        return entry;
-    }
-
-    private void addItem(ModelConfig.ItemSlotList list)
-    {
-        BaseValue.edit(list, (v) ->
-        {
-            list.add(new ArmorSlotValue(String.valueOf(list.getList().size())));
-            list.sync();
-        });
-
-        this.data.rebuild();
-        this.fillItems();
-    }
-
-    private void removeItem(ModelConfig.ItemSlotList list, ArmorSlotValue slot)
-    {
-        BaseValue.edit(list, (v) ->
-        {
-            list.getAllTyped().remove(slot);
-            list.sync();
-        });
-
-        this.data.rebuild();
-        this.fillItems();
-    }
-
-    private void duplicateItem(ModelConfig.ItemSlotList list, ArmorSlotValue slot)
-    {
-        MapType data = this.presetData(slot);
-
-        BaseValue.edit(list, (v) ->
-        {
-            ArmorSlotValue copy = new ArmorSlotValue("");
-
-            copy.fromData(data);
-            list.add(list.getAllTyped().indexOf(slot) + 1, copy);
-            list.sync();
-        });
-
-        this.data.rebuild();
-        this.fillItems();
-    }
-
-    /** A value group as copyable data, or null if it doesn't serialise to a map (nothing to copy then). */
-    private MapType presetData(BaseValue value)
-    {
-        BaseType data = value.toData();
-
-        return data.isMap() ? data.asMap() : null;
-    }
-
-    private int activeCount(ModelConfig.ItemSlotList list)
-    {
-        int count = 0;
-
-        for (ArmorSlotValue slot : list.getAllTyped())
-        {
-            if (slot.isActive())
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
-    private int armorCount(ModelConfig config)
-    {
-        int count = 0;
-
-        for (ArmorType type : ArmorType.values())
-        {
-            ArmorSlotValue slot = config.armorSlots.slot(type);
-
-            if (slot != null && slot.isActive())
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
-    private void fillArmor()
-    {
-        ModelConfig config = this.data;
-
-        if (config == null)
-        {
-            return;
-        }
-
-        this.armorBody.removeAll();
-
-        for (ArmorType type : ARMOR_REGIONS[this.armorRegion])
-        {
-            this.armorBody.add(this.armorRow(config, type));
-        }
-
-        this.countTitle(this.armorSection, UIKeys.MODEL_EDITOR_ARMOR, this.armorCount(config));
-        this.resizeGeneral();
-    }
-
-    private UIElement armorRow(ModelConfig config, ArmorType type)
-    {
-        ArmorSlotValue slot = config.armorSlots.slot(type);
-
-        UIElement column = UI.column(
-            this.labeledRow(this.armorTypeLabel(type), this.bonePicker(slot.group::get, slot.group::set, () ->
-            {
-                config.rebuild();
-                this.fillArmor();
-            }))
-        );
-
-        if (slot.isActive())
-        {
-            column.add(this.slotTransform(config, slot));
-        }
-
-        column.marginBottom(6);
-
-        return column;
-    }
-
-    private IKey armorTypeLabel(ArmorType type)
-    {
-        return switch (type)
-        {
-            case HELMET -> UIKeys.MODEL_EDITOR_ARMOR_HELMET;
-            case CHEST -> UIKeys.MODEL_EDITOR_ARMOR_CHEST;
-            case LEGGINGS -> UIKeys.MODEL_EDITOR_ARMOR_LEGGINGS;
-            case LEFT_ARM -> UIKeys.MODEL_EDITOR_ARMOR_LEFT_ARM;
-            case RIGHT_ARM -> UIKeys.MODEL_EDITOR_ARMOR_RIGHT_ARM;
-            case LEFT_LEG -> UIKeys.MODEL_EDITOR_ARMOR_LEFT_LEG;
-            case RIGHT_LEG -> UIKeys.MODEL_EDITOR_ARMOR_RIGHT_LEG;
-            case LEFT_BOOT -> UIKeys.MODEL_EDITOR_ARMOR_LEFT_BOOT;
-            case RIGHT_BOOT -> UIKeys.MODEL_EDITOR_ARMOR_RIGHT_BOOT;
-        };
-    }
-
-    private void fillFirstPerson()
-    {
-        ModelConfig config = this.data;
-
-        this.firstPersonBody.removeAll();
-        this.firstPersonBody.add(
-            this.fpRow(config, UIKeys.MODEL_EDITOR_ITEMS_MAIN, config.fpMain),
-            this.fpRow(config, UIKeys.MODEL_EDITOR_ITEMS_OFF, config.fpOffhand)
-        );
-
-        this.countTitle(this.firstPersonSection, UIKeys.MODEL_EDITOR_FIRST_PERSON,
-            (config.fpMain.isActive() ? 1 : 0) + (config.fpOffhand.isActive() ? 1 : 0));
-        this.resizeGeneral();
-    }
-
-    private UIElement fpRow(ModelConfig config, IKey label, ArmorSlotValue slot)
-    {
-        UIElement column = UI.column(
-            this.labeledRow(label, this.bonePicker(slot.group::get, slot.group::set, () ->
-            {
-                config.rebuild();
-                this.fillFirstPerson();
-            }))
-        );
-
-        if (slot.isActive())
-        {
-            column.add(this.slotTransform(config, slot));
-        }
-
-        column.marginBottom(6);
-
-        return column;
-    }
-
-    /* Bone maps (flip mirror pairs, picking overrides) — rows of "from -> to" bones. */
-
-    private void fillMaps()
-    {
-        ModelConfig config = this.data;
-
-        this.fillMap(this.flippedBody, config.flippedParts, this.flippedEntries);
-        this.fillMap(this.pickingBody, config.pickingOverrides, this.pickingEntries);
-
-        this.countTitle(this.mapsSection, UIKeys.MODEL_EDITOR_MAPS, config.flippedParts.get().size() + config.pickingOverrides.get().size());
-        this.resizeGeneral();
-    }
-
-    private void fillMap(UIElement body, ValueStringMap value, List<String[]> entries)
-    {
-        body.removeAll();
-
-        for (String[] pair : entries)
-        {
-            body.add(this.mapEntry(value, entries, pair));
-        }
-    }
-
-    private UIElement mapEntry(ValueStringMap value, List<String[]> entries, String[] pair)
-    {
-        Runnable commit = () ->
-        {
-            this.commitMap(value, entries);
-            this.fillMaps();
-        };
-
-        UIIcon remove = new UIIcon(Icons.REMOVE, (b) -> this.removeMap(value, entries, pair));
-
-        remove.tooltip(UIKeys.MODEL_EDITOR_MAP_REMOVE, Direction.LEFT);
-        remove.wh(20, UIConstants.CONTROL_HEIGHT);
-
-        UIElement row = new UIElement();
-
-        row.row(UIConstants.MARGIN).preferred(0);
-        row.add(
-            this.bonePicker(() -> pair[0], (v) -> pair[0] = v, commit),
-            this.arrowSeparator(),
-            this.bonePicker(() -> pair[1], (v) -> pair[1] = v, commit),
-            remove
-        );
-
-        row.context((menu) ->
-        {
-            menu.action(Icons.DUPE, UIKeys.MODEL_EDITOR_MAP_DUPLICATE, () -> this.duplicateMap(value, entries, pair));
-            menu.action(Icons.REMOVE, UIKeys.MODEL_EDITOR_MAP_REMOVE, () -> this.removeMap(value, entries, pair));
-        });
-
-        return row;
-    }
-
-    private void addMap(List<String[]> entries)
-    {
-        entries.add(new String[] {"", ""});
-        this.fillMaps();
-    }
-
-    private void removeMap(ValueStringMap value, List<String[]> entries, String[] pair)
-    {
-        entries.remove(pair);
-        this.commitMap(value, entries);
-        this.fillMaps();
-    }
-
-    private void duplicateMap(ValueStringMap value, List<String[]> entries, String[] pair)
-    {
-        entries.add(entries.indexOf(pair) + 1, new String[] {pair[0], pair[1]});
-        this.commitMap(value, entries);
-        this.fillMaps();
-    }
-
-    /** A non-interactive right-arrow drawn between the two bones of a map pair. */
-    private UIIcon arrowSeparator()
-    {
-        UIIcon arrow = new UIIcon(Icons.ARROW_RIGHT, null);
-
-        arrow.setEnabled(false);
-        arrow.disabledColor = Colors.setA(Colors.WHITE, 0.5F);
-        arrow.wh(12, UIConstants.CONTROL_HEIGHT);
-
-        return arrow;
-    }
-
-    private void commitMap(ValueStringMap value, List<String[]> entries)
-    {
-        /* The map is mutated in place, so bracket it in a notify (via edit) for the undo handler to catch. */
-        BaseValue.edit(value, (v) ->
-        {
-            Map<String, String> map = value.get();
-
-            map.clear();
-
-            for (String[] pair : entries)
-            {
-                if (!pair[0].trim().isEmpty())
-                {
-                    map.put(pair[0], pair[1]);
-                }
-            }
-        });
-    }
-
-    /* The sneaking pose is picked from the model's pose presets rather than edited here. */
-
-    private void fillSneaking()
-    {
-        ModelConfig config = this.data;
-        boolean has = !config.sneakingPose.get().isEmpty();
-
-        this.sneakingBody.removeAll();
-        this.sneakingBody.add(new UIButton(has ? UIKeys.MODEL_EDITOR_SNEAKING_SET : UIKeys.MODEL_EDITOR_SNEAKING_PICK, (b) -> this.openPosePicker(config)));
-
-        if (has)
-        {
-            this.sneakingBody.add(new UIButton(UIKeys.MODEL_EDITOR_SNEAKING_CLEAR, (b) ->
-            {
-                config.sneakingPose.set(new Pose());
-                this.fillSneaking();
-            }));
-        }
-
-        this.countTitle(this.sneakingSection, UIKeys.MODEL_EDITOR_SNEAKING, has ? 1 : 0);
-        this.resizeGeneral();
-    }
-
-    private void openPosePicker(ModelConfig config)
-    {
-        if (this.bound == null)
-        {
-            return;
-        }
-
-        String group = config.poseGroup.get();
-
-        if (group.isEmpty())
-        {
-            group = this.form.model.get();
-        }
-
-        MapType poses = PoseManager.INSTANCE.getData(group);
-
-        this.getContext().replaceContextMenu((menu) ->
-        {
-            for (String name : poses.keys())
-            {
-                menu.action(Icons.POSE, IKey.constant(name), () ->
-                {
-                    Pose pose = new Pose();
-
-                    pose.fromData(poses.getMap(name));
-                    config.sneakingPose.set(pose);
-                    this.fillSneaking();
-                });
-            }
-        });
-    }
-
-    private void fillBones()
-    {
-        ModelConfig config = this.data;
-
-        if (config == null)
-        {
-            return;
-        }
-
-        this.bonesBody.removeAll();
-
-        if (this.bound != null)
-        {
-            ValueStringKeys hidden = config.disabledBones;
-            String filter = this.bonesQuery.trim().toLowerCase();
-
-            for (String bone : this.bound.getModel().getGroupKeysInHierarchyOrder())
-            {
-                if (filter.isEmpty() || bone.toLowerCase().contains(filter))
-                {
-                    this.bonesBody.add(this.boneToggle(bone, hidden));
-                }
-            }
-        }
-
-        this.bonesBody.resize();
-        this.countTitle(this.bonesSection, UIKeys.MODEL_EDITOR_BONES, config.disabledBones.get().size());
-    }
-
-    private UIToggle boneToggle(String bone, ValueStringKeys hidden)
-    {
-        return new UIToggle(IKey.raw(bone), !hidden.get().contains(bone), (t) ->
-        {
-            /* The set is mutated in place, so bracket it in a notify (via edit) for the undo handler to catch. */
-            BaseValue.edit(hidden, (v) ->
-            {
-                if (t.getValue())
-                {
-                    hidden.get().remove(bone);
-                }
-                else
-                {
-                    hidden.get().add(bone);
-                }
-            });
-
-            this.countTitle(this.bonesSection, UIKeys.MODEL_EDITOR_BONES, hidden.get().size());
-        });
-    }
-
-    private void fillWelds()
-    {
-        ModelConfig config = this.data;
-
-        this.weldsBody.removeAll();
-
-        for (WeldValue weld : config.welds.getAllTyped())
-        {
-            this.weldsBody.add(this.weldEntry(config, weld));
-        }
-
-        this.countTitle(this.weldsSection, UIKeys.MODEL_EDITOR_WELDS, config.welds.getList().size());
-        this.resizeGeneral();
-    }
-
-    private UIElement weldEntry(ModelConfig config, WeldValue weld)
-    {
-        UIIcon remove = new UIIcon(Icons.REMOVE, (b) -> this.removeWeld(weld));
-
-        remove.tooltip(UIKeys.MODEL_EDITOR_WELD_REMOVE, Direction.LEFT);
-        remove.wh(20, UIConstants.CONTROL_HEIGHT);
-
-        UIElement twist = new UIElement();
-
-        twist.row(UIConstants.MARGIN).preferred(0);
-        twist.add(this.weldTwist(weld), remove);
-
-        /* Bone/face changes can make the weld resolvable or not, so they refill the section to update the
-         * issue label; the trackpads can't, so they only re-resolve (a refill mid-drag would orphan them). */
-        UIElement entry = UI.column(
-            UI.row(this.bonePicker(weld.sourceBone::get, weld.sourceBone::set, this::refreshWelds), this.facePicker(weld.sourceFace, this::refreshWelds)),
-            UI.row(this.bonePicker(weld.targetBone::get, weld.targetBone::set, this::refreshWelds), this.facePicker(weld.targetFace, this::refreshWelds)),
-            UI.labelRow(UIKeys.MODEL_EDITOR_WELD_MAX_ANGLE, this.weldAngle(weld)),
-            UI.labelRow(UIKeys.MODEL_EDITOR_WELD_SEAM_FALLOFF, this.weldFalloff(weld)),
-            UI.labelRow(UIKeys.MODEL_EDITOR_WELD_PARENT_SHARE, this.weldShare(weld)),
-            twist
-        );
-
-        WeldBinding.Issue issue = this.diagnoseWeld(weld);
-
-        if (issue != null)
-        {
-            entry.prepend(UI.label(this.weldIssueText(issue)).color(Colors.NEGATIVE, true));
-        }
-
-        entry.marginBottom(6);
-        entry.context((menu) -> this.fillWeldMenu(menu,
-            () -> this.presetData(weld),
-            (data) -> this.applyWeld(weld, data),
-            () -> this.duplicateWeld(weld),
-            () -> this.removeWeld(weld)
-        ));
-
-        return entry;
-    }
-
-    private UIBonePicker bonePicker(Supplier<String> get, Consumer<String> set, Runnable onChange)
-    {
-        UIBonePicker[] ref = new UIBonePicker[1];
-        UIBonePicker picker = new UIBonePicker((bone) -> this.pickBone(ref[0], set, onChange, bone));
-
-        picker.setLabel(this.boneLabel(get.get()));
-        picker.menu((menu) ->
-        {
-            if (this.bound == null)
-            {
-                return;
-            }
-
-            /* Welds are model config, so hidden bones stay pickable — same as the old menu.
-             * No viewport hook: the model editor's preview has no stencil picking. */
-            menu.bones(this.bound.getModel(), null).none().set(get.get());
-        });
-
-        ref[0] = picker;
-
-        return picker;
-    }
-
-    private void pickBone(UIBonePicker picker, Consumer<String> set, Runnable onChange, String bone)
-    {
-        set.accept(bone);
-        picker.setLabel(this.boneLabel(bone));
-        onChange.run();
-    }
-
-    private IKey boneLabel(String bone)
-    {
-        return bone == null || bone.isEmpty() ? UIKeys.MODEL_EDITOR_PICK_BONE : IKey.raw(bone);
-    }
-
-    private UIIcons facePicker(ValueString value, Runnable onChange)
-    {
-        UIIcons icons = new UIIcons((b) ->
-        {
-            value.set(FACES[b.getValue()].name().toLowerCase());
-            onChange.run();
-        });
-
-        icons.add(Icons.FORWARD, UIKeys.MODEL_EDITOR_FACE_FRONT);
-        icons.add(Icons.BACKWARD, UIKeys.MODEL_EDITOR_FACE_BACK);
-        icons.add(Icons.ARROW_RIGHT, UIKeys.MODEL_EDITOR_FACE_RIGHT);
-        icons.add(Icons.ARROW_LEFT, UIKeys.MODEL_EDITOR_FACE_LEFT);
-        icons.add(Icons.ARROW_UP, UIKeys.MODEL_EDITOR_FACE_TOP);
-        icons.add(Icons.ARROW_DOWN, UIKeys.MODEL_EDITOR_FACE_BOTTOM);
-
-        CubeFace current = CubeFace.fromName(value.get());
-
-        icons.setValue(current == null ? 0 : current.ordinal());
-
-        return icons;
-    }
-
-    private UITrackpad weldAngle(WeldValue weld)
-    {
-        UITrackpad trackpad = new UITrackpad((v) ->
-        {
-            weld.maxAngle.set(v.floatValue());
-            this.invalidateWelds();
-        });
-
-        trackpad.setValue(weld.maxAngle.get());
-        trackpad.delayedInput();
-
-        return trackpad;
-    }
-
-    private UISliderTrackpad weldFalloff(WeldValue weld)
-    {
-        UISliderTrackpad trackpad = new UISliderTrackpad((v) ->
-        {
-            weld.seamFalloff.set(v.floatValue());
-            this.invalidateWelds();
-        });
-
-        trackpad.limit(0F, 1F).increment(0.05F);
-        trackpad.setValue(weld.seamFalloff.get());
-        trackpad.delayedInput();
-
-        return trackpad;
-    }
-
-    private UISliderTrackpad weldShare(WeldValue weld)
-    {
-        UISliderTrackpad trackpad = new UISliderTrackpad((v) ->
-        {
-            weld.parentShare.set(v.floatValue());
-            this.invalidateWelds();
-        });
-
-        trackpad.limit(0F, 1F).increment(0.05F);
-        trackpad.setValue(weld.parentShare.get());
-        trackpad.delayedInput();
-
-        return trackpad;
-    }
-
-    private UIToggle weldTwist(WeldValue weld)
-    {
-        return new UIToggle(UIKeys.MODEL_EDITOR_WELD_TWIST, weld.twist.get(), (t) ->
-        {
-            weld.twist.set(t.getValue());
-            this.invalidateWelds();
-        });
-    }
-
-    private void addWeld()
-    {
-        ModelConfig config = this.data;
-
-        BaseValue.edit(config.welds, (v) ->
-        {
-            config.welds.add(new WeldValue(String.valueOf(config.welds.getList().size())));
-            config.welds.sync();
-        });
-
-        this.refresh();
-        this.fillWelds();
-    }
-
-    private void removeWeld(WeldValue weld)
-    {
-        ModelConfig config = this.data;
-
-        BaseValue.edit(config.welds, (v) ->
-        {
-            config.welds.getAllTyped().remove(weld);
-            config.welds.sync();
-        });
-
-        this.refresh();
-        this.fillWelds();
-    }
-
-    private void duplicateWeld(WeldValue weld)
-    {
-        ModelConfig config = this.data;
-
-        BaseValue.edit(config.welds, (v) ->
-        {
-            WeldValue copy = new WeldValue("");
-
-            copy.fromData(weld.toData());
-            config.welds.add(config.welds.getAllTyped().indexOf(weld) + 1, copy);
-            config.welds.sync();
-        });
-
-        this.refresh();
-        this.fillWelds();
-    }
-
-    private void pasteNewWeld(MapType data)
-    {
-        ModelConfig config = this.data;
-
-        BaseValue.edit(config.welds, (v) ->
-        {
-            WeldValue weld = new WeldValue("");
-
-            weld.fromData(data);
-            config.welds.add(weld);
-            config.welds.sync();
-        });
-
-        this.refresh();
-        this.fillWelds();
-    }
-
-    private void applyWeld(WeldValue weld, MapType data)
-    {
-        BaseValue.edit(weld, (v) -> weld.fromData(data));
-
-        this.refresh();
-        this.fillWelds();
-    }
-
-    private void invalidateWelds()
-    {
-        if (this.bound != null)
-        {
-            this.bound.invalidateWelds();
-        }
-    }
-
-    /** Re-resolve AND refill the section — for edits that can change a weld's resolvability (bone/face picks). */
-    private void refreshWelds()
-    {
-        this.invalidateWelds();
-        this.fillWelds();
-    }
-
-    private WeldBinding.Issue diagnoseWeld(WeldValue weld)
-    {
-        if (this.bound == null || !(this.bound.getModel() instanceof Model model))
-        {
-            return null;
-        }
-
-        return WeldBinding.diagnose(model, weld.toWeld());
-    }
-
-    private IKey weldIssueText(WeldBinding.Issue issue)
-    {
-        switch (issue)
-        {
-            case SOURCE_BONE: return UIKeys.MODEL_EDITOR_WELD_ISSUE_SOURCE_BONE;
-            case TARGET_BONE: return UIKeys.MODEL_EDITOR_WELD_ISSUE_TARGET_BONE;
-            case SOURCE_FACE: return UIKeys.MODEL_EDITOR_WELD_ISSUE_SOURCE_FACE;
-            case TARGET_FACE: return UIKeys.MODEL_EDITOR_WELD_ISSUE_TARGET_FACE;
-            case SOURCE_CUBES: return UIKeys.MODEL_EDITOR_WELD_ISSUE_SOURCE_CUBES;
-            default: return UIKeys.MODEL_EDITOR_WELD_ISSUE_TARGET_CUBES;
-        }
-    }
-
-    /**
-     * A weld's context menu: the copy/paste/presets icon row on top, then the text actions — the same
-     * shape the replay and clip lists use. {@code source} being null means the menu hangs off the "add"
-     * button (nothing to copy from, so the row's copy icon disables itself), and {@code duplicate} /
-     * {@code remove} are null there for the same reason.
-     */
-    private void fillWeldMenu(ContextMenuManager menu, Supplier<MapType> source, Consumer<MapType> target, Runnable duplicate, Runnable remove)
-    {
-        this.welds.aim(source, target);
-
-        UIContext context = this.getContext();
-
-        menu.custom(new UIPresetContextMenu(this.welds.controller, context.mouseX, context.mouseY)
-            .labels(UIKeys.GENERAL_COPY, UIKeys.GENERAL_PASTE));
-
-        if (duplicate != null)
-        {
-            menu.action(Icons.DUPE, UIKeys.MODEL_EDITOR_WELD_DUPLICATE, duplicate);
-        }
-
-        if (remove != null)
-        {
-            menu.action(Icons.REMOVE, UIKeys.MODEL_EDITOR_WELD_REMOVE, remove);
-        }
-    }
-
-    private UIElement labeledRow(IKey label, UIElement widget)
-    {
-        return UI.labelRow(label, widget);
-    }
-
-    private UIToggle toggle(IKey label, ValueBoolean value)
-    {
-        return new UIToggle(label, value.get(), (t) -> value.set(t.getValue()));
-    }
-
-    /** A toggle for a setting that changes the render path/baked geometry (procedural, on_cpu) — refreshes. */
-    private UIToggle toggleRefresh(IKey label, ValueBoolean value)
-    {
-        return new UIToggle(label, value.get(), (t) ->
-        {
-            value.set(t.getValue());
-            this.refresh();
-        });
-    }
-
     /**
      * Rebuild the live instance's baked state so a config edit that changed the render path shows in the
      * preview without saving: re-resolve welds + derived caches, re-bake VAOs, and reset the renderer's
      * cached animator (the procedural/non-procedural choice). The plain scalar reads (scale, texture,
      * culling...) already update every frame, so they don't go through here.
      */
-    private void refresh()
+    public void refresh()
     {
         if (this.bound == null)
         {
@@ -1691,84 +586,209 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
         }
     }
 
-    private UITrackpad floatField(ValueFloat value)
+    @Override
+    public void forceSave()
     {
-        UITrackpad trackpad = new UITrackpad((v) -> value.set(v.floatValue()));
-
-        trackpad.limit(value.getMin(), value.getMax()).delayedInput();
-        trackpad.setValue(value.get());
-
-        return trackpad;
-    }
-
-    private UITextbox stringField(ValueString value)
-    {
-        UITextbox textbox = new UITextbox(10000, value::set);
-
-        textbox.setText(value.get());
-
-        return textbox;
-    }
-
-    private UIButton textureField(ValueLink value)
-    {
-        return new UIButton(UIKeys.TEXTURE_PICK_TEXTURE, (b) -> UITexturePicker.open(this.getContext(), value.get(), value::set));
-    }
-
-    private UITrackpad component(ValueVector3f value, int axis)
-    {
-        UITrackpad trackpad = new UITrackpad((v) ->
+        if (this.undoHandler != null) this.undoHandler.submitUndo();
+        if (this.modelDirty && this.bound != null)
         {
-            /* Edit a copy so the stored vector stays at its old value until set() notifies — otherwise the
-             * undo handler would cache the already-mutated value and the change wouldn't be undoable. */
-            Vector3f vector = new Vector3f(value.get());
+            if (!BBSModClient.getModels().saveModel(this.bound, this.renames))
+            {
+                this.drafts.put(this.bound.id, new ModelDraft(this.bound, new ArrayList<>(this.renames)));
+                UIContext context = this.getContext();
+                if (context != null) context.notifyError(UIKeys.MODEL_EDITOR_SAVE_FAILED);
+                return;
+            }
+            this.modelDirty = false;
+            this.renames.clear();
+            this.drafts.remove(this.bound.id);
+        }
+        super.forceSave();
+    }
 
-            if (axis == 0) vector.x = v.floatValue();
-            else if (axis == 1) vector.y = v.floatValue();
-            else vector.z = v.floatValue();
+    /** The model's structure changed — a group came, went, moved or was renamed: settle it, re-bake, refill. */
+    public void modelStructureChanged()
+    {
+        if (this.bound != null && this.bound.getModel() instanceof Model model)
+        {
+            model.initialize();
+        }
 
-            value.set(vector);
-        });
+        this.refresh();
+        this.geometryEditor.fill(this.bound);
+        this.configEditor.fill(this.data);
+    }
 
-        Vector3f vector = value.get();
+    /** Rename a group everywhere the model's folder knows it: the group itself, the config, the animations. */
+    public void renameBone(String from, String to)
+    {
+        if (this.bound == null || !(this.bound.getModel() instanceof Model model))
+        {
+            return;
+        }
 
-        trackpad.setValue(axis == 0 ? vector.x : axis == 1 ? vector.y : vector.z);
-        trackpad.delayedInput();
+        ModelGroup group = model.getGroup(from);
 
-        return trackpad;
+        if (group == null)
+        {
+            return;
+        }
+
+        group.id = to;
+        model.initialize();
+        this.data.renameBone(from, to);
+        this.renameAnimations(from, to);
+    }
+
+    /** The model editor changed the model: the next save writes the model's file too. */
+    public void markModelEdited()
+    {
+        this.modelDirty = true;
+    }
+
+    /** An edit of the model itself goes on the same stack as the config's edits, in order. */
+    public void pushModelEdit(ModelEditUndo undo)
+    {
+        if (this.undoHandler != null)
+        {
+            this.undoHandler.submitUndo();
+            this.undoHandler.getUndoManager().pushUndo(undo);
+        }
+
+        this.markModelEdited();
+    }
+
+    /** A gesture on the model ended: the next edit is a step of its own. */
+    public void closeModelEdit()
+    {
+        if (this.undoHandler != null)
+        {
+            this.undoHandler.getUndoManager().markLastUndoNoMerging();
+        }
     }
 
     /**
-     * A copy/paste controller whose copy source and paste target get re-pointed at whichever entry's
-     * context menu is being opened — the same "current selection" role the clip and replay lists give
-     * their controllers, except here the selection only lives as long as the menu.
+     * Put the model back to a snapshot, and the config too when one comes along — an undo or a
+     * redo of a model edit; the panel re-bakes and refills right after, as after any undo.
      */
-    private class EntryClipboard
+    public void restoreModel(MapType model, MapType config)
     {
-        public final UICopyPasteController controller;
-
-        private Supplier<MapType> source;
-        private Consumer<MapType> target;
-
-        public EntryClipboard(PresetManager manager, String copyPrefix)
+        if (this.bound != null && this.bound.getModel() instanceof Model live)
         {
-            this.controller = new UICopyPasteController(manager, copyPrefix)
-                .supplier(() -> this.source == null ? null : this.source.get())
-                .consumer((data, mouseX, mouseY) ->
+            live.reload(model);
+        }
+
+        if (config != null && this.data != null)
+        {
+            this.data.fromData(config);
+            this.data.rebuild();
+        }
+
+        this.markModelEdited();
+    }
+
+    /** Move a bone's keys in the animations — in memory now, in the file at the next save. */
+    public void renameAnimations(String from, String to)
+    {
+        if (this.bound == null)
+        {
+            return;
+        }
+
+        for (Animation animation : this.bound.animations.getAll())
+        {
+            AnimationPart part = animation.parts.remove(from);
+
+            if (part != null)
+            {
+                animation.parts.put(to, part);
+            }
+        }
+
+        this.renames.add(new String[] {from, to});
+        this.markModelEdited();
+    }
+
+
+    public ModelInstance getInstance()
+    {
+        return this.bound;
+    }
+
+    public void syncPreview()
+    {
+        if (!this.geometryMode)
+        {
+            this.configEditor.applyPreview();
+            return;
+        }
+
+        this.renderer.setProceduralPreview(-1);
+        this.renderer.setFirstPerson(false);
+        this.renderer.setEquipment(false, false);
+        this.renderer.getEntity().setSneaking(false);
+    }
+
+    public void refreshPreview()
+    {
+        this.syncPreview();
+        this.layoutPanes();
+        this.resize();
+    }
+
+    private void openAnimations()
+    {
+        if (this.bound == null)
+        {
+            return;
+        }
+
+        List<String> names = new ArrayList<>();
+
+        if (this.bound.animations != null)
+        {
+            for (Animation animation : this.bound.animations.getAll())
+            {
+                names.add(animation.id);
+            }
+        }
+
+        names.sort(String::compareToIgnoreCase);
+        this.getContext().replaceContextMenu((menu) ->
+        {
+            if (names.isEmpty())
+            {
+                menu.action(Icons.NONE, UIKeys.MODEL_EDITOR_ANIMATION_NONE, () -> {});
+            }
+
+            for (String name : names)
+            {
+                menu.action(Icons.PLAY, IKey.raw(name), () ->
                 {
-                    if (this.target != null)
+                    if (FormUtilsClient.getRenderer(this.form) instanceof ModelFormRenderer renderer && renderer.getAnimator() != null)
                     {
-                        this.target.accept(data);
+                        renderer.getAnimator().playAnimation(name);
                     }
-                })
-                .canCopy(() -> this.source != null)
-                .canPaste(() -> UIModelEditorPanel.this.data != null && this.target != null);
-        }
+                });
+            }
 
-        public void aim(Supplier<MapType> source, Consumer<MapType> target)
-        {
-            this.source = source;
-            this.target = target;
-        }
+            menu.action(Icons.REFRESH, UIKeys.MODEL_EDITOR_ANIMATION_RESET, this::resetAnimator);
+        });
+    }
+
+    public void showGeometry(boolean show)
+    {
+        if (show && (this.bound == null || !this.bound.isEditable())) return;
+        this.geometryMode = show;
+        this.configEditor.setVisible(!show);
+        this.syncPreview();
+        this.geometryEditor.setVisible(show);
+        this.uvPane.setVisible(show);
+        this.uvSplitter.setVisible(show);
+        this.renderer.setCubePicking(show);
+        ModelFormRenderer preview = (ModelFormRenderer) FormUtilsClient.getRenderer(this.form);
+        preview.setRest(show);
+        this.layoutPanes();
+        this.resize();
     }
 }

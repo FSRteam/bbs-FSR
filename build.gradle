@@ -238,7 +238,7 @@ sourceSets {
     }
     replayKeyframeTest {
         java.srcDirs = ['src/replayKeyframeTest/java']
-        resources.srcDirs = []
+        resources.srcDirs = ['src/replayKeyframeTest/resources']
         compileClasspath += sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += output + compileClasspath + sourceSets.main.output + sourceSets.client.output
     }
@@ -499,12 +499,6 @@ tasks.register('testFSRUpdates', JavaExec) {
     mainClass = 'mchorse.bbs_mod.update.FSRUpdatesSourceTest'
 }
 
-tasks.register('testMatrixUtils', JavaExec) {
-    dependsOn tasks.named('compileJava')
-    classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'mchorse.bbs_mod.utils.MatrixUtilsTest'
-}
-
 tasks.register('testPlatformResourceConsistency', JavaExec) {
     dependsOn tasks.named('compileJava'), tasks.named('platformResourceTestClasses')
     classpath = sourceSets.platformResourceTest.runtimeClasspath
@@ -721,7 +715,6 @@ tasks.register('buildSmokeFixturePlugins') {
 }
 
 def bbsVerificationTaskNames = [
-    'testMatrixUtils',
     'testSoundAcoustics',
     'testPluginHotReload',
     'testAudioFormat',

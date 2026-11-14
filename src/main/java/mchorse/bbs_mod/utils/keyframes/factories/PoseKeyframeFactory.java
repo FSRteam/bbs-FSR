@@ -2,16 +2,42 @@ package mchorse.bbs_mod.utils.keyframes.factories;
 
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.utils.interps.IInterp;
+import mchorse.bbs_mod.utils.interps.Interpolations;
+import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
-import mchorse.bbs_mod.utils.pose.Transform;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class PoseKeyframeFactory implements IKeyframeFactory<Pose>
 {
+    @Override
+    public int contentHash(Pose value)
+    {
+        int hash = 1;
+
+        for (Map.Entry<String, PoseTransform> entry : value.transforms.entrySet())
+        {
+            hash += entry.getKey().hashCode() ^ entry.getValue().contentHash();
+        }
+
+        return hash;
+    }
+
     private static Set<String> keys = new HashSet<>();
+
+    /**
+     * Stands in for a bone one of the four keyframes says nothing about. The keys are the
+     * UNION of all four poses, so most of them are missing from most of the poses, and
+     * interpolating against the rest transform is what "silent about this bone" means.
+     *
+     * <p>Read-only by contract: it is only ever passed in as a source. Reading a pose used
+     * to insert, so interpolation silently grew every keyframe it played through — a pose
+     * ended up holding every bone any of its neighbours mentioned.
+     */
+    private static final PoseTransform REST = new PoseTransform();
 
     private Pose i = new Pose();
 
@@ -47,7 +73,56 @@ public class PoseKeyframeFactory implements IKeyframeFactory<Pose>
     }
 
     @Override
+    public Pose interpolate(Keyframe<Pose> preA, Keyframe<Pose> a, Keyframe<Pose> b, Keyframe<Pose> postB, IInterp interpolation, float x)
+    {
+        if (interpolation.has(Interpolations.AUTO) || interpolation.has(Interpolations.AUTO_CLAMPED))
+        {
+            Pose preAp = preA.getValue();
+            Pose ap = a.getValue();
+            Pose bp = b.getValue();
+            Pose postBp = postB.getValue();
+
+            this.collect(preAp, ap, bp, postBp);
+
+            boolean clamped = interpolation.has(Interpolations.AUTO_CLAMPED);
+            float pt = preA.getTick();
+            float at = a.getTick();
+            float bt = b.getTick();
+            float qt = postB.getTick();
+
+            for (String key : keys)
+            {
+                this.i.getOrCreate(key).autoLerp(at(preAp, key), at(ap, key), at(bp, key), at(postBp, key), pt, at, bt, qt, clamped, x);
+            }
+
+            return this.i;
+        }
+
+        return IKeyframeFactory.super.interpolate(preA, a, b, postB, interpolation, x);
+    }
+
+    @Override
     public Pose interpolate(Pose preA, Pose a, Pose b, Pose postB, IInterp interpolation, float x)
+    {
+        this.collect(preA, a, b, postB);
+
+        for (String key : keys)
+        {
+            this.i.getOrCreate(key).lerp(at(preA, key), at(a, key), at(b, key), at(postB, key), interpolation, x);
+        }
+
+        return this.i;
+    }
+
+    /** The bone's transform in that pose, or the rest one when the pose is silent about it. */
+    private static PoseTransform at(Pose pose, String key)
+    {
+        PoseTransform transform = pose == null ? null : pose.get(key);
+
+        return transform == null ? REST : transform;
+    }
+
+    private void collect(Pose preA, Pose a, Pose b, Pose postB)
     {
         keys.clear();
 
@@ -60,18 +135,5 @@ public class PoseKeyframeFactory implements IKeyframeFactory<Pose>
         {
             value.identity();
         }
-
-        for (String key : keys)
-        {
-            Transform transform = this.i.get(key);
-            Transform preATransform = preA.get(key);
-            Transform aTransform = a.get(key);
-            Transform bTransform = b.get(key);
-            Transform postBTransform = postB.get(key);
-
-            transform.lerp(preATransform, aTransform, bTransform, postBTransform, interpolation, x);
-        }
-
-        return this.i;
     }
 }

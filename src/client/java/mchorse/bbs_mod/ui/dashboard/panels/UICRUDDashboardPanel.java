@@ -25,12 +25,12 @@ public abstract class UICRUDDashboardPanel extends UISidebarDashboardPanel
             UIOverlay.addOverlay(this.getContext(), this.overlay, 200, 0.9F);
         });
 
-        this.iconBar.prepend(this.openOverlay);
+        this.actions().common(this.openOverlay);
 
         this.keys().register(Keys.OPEN_DATA_MANAGER, this::openDataManager);
     }
 
-    protected void openDataManager()
+    public void openDataManager()
     {
         UIContext context = this.getContext();
 
@@ -42,7 +42,7 @@ public abstract class UICRUDDashboardPanel extends UISidebarDashboardPanel
 
     protected abstract UICRUDOverlayPanel createOverlayPanel();
 
-    protected abstract IKey getTitle();
+    public abstract IKey getTitle();
 
     public abstract void pickData(String id);
 }

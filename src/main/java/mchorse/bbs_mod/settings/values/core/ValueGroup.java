@@ -72,6 +72,11 @@ public class ValueGroup extends BaseValueGroup
         return new ArrayList<>(this.children.values());
     }
 
+    public BaseValueBasic<?> getBasic(String id)
+    {
+        return this.children.get(id) instanceof BaseValueBasic<?> basic ? basic : null;
+    }
+
     public Map<String, BaseValueBasic> getAllMap()
     {
         Map<String, BaseValueBasic> map = new HashMap<>();
@@ -210,6 +215,12 @@ public class ValueGroup extends BaseValueGroup
         return copy;
     }
 
+    /** Allows a form to migrate a renamed property without changing ordinary value groups. */
+    protected String resolveReadKey(String key)
+    {
+        return key;
+    }
+
     @Override
     public void fromData(BaseType data)
     {
@@ -222,21 +233,29 @@ public class ValueGroup extends BaseValueGroup
 
         for (Map.Entry<String, BaseType> entry : data.asMap())
         {
-            BaseValue value = this.children.get(entry.getKey());
+            String key = this.resolveReadKey(entry.getKey());
+
+            /* Canonical spelling wins independent of input order. */
+            if (!key.equals(entry.getKey()) && data.asMap().has(key))
+            {
+                continue;
+            }
+
+            BaseValue value = this.children.get(key);
 
             if (value != null)
             {
                 value.setParent(this);
                 value.fromData(entry.getValue());
             }
-            else if (entry.getKey().indexOf(':') >= 0 || this.preservedUnknownKeys().contains(entry.getKey()))
+            else if (key.indexOf(':') >= 0 || this.preservedUnknownKeys().contains(key))
             {
                 if (this.foreign == null)
                 {
                     this.foreign = new LinkedHashMap<>();
                 }
 
-                this.foreign.put(entry.getKey(), entry.getValue().copy());
+                this.foreign.put(key, entry.getValue().copy());
             }
         }
     }

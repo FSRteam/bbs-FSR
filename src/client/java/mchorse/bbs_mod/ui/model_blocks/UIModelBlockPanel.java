@@ -163,6 +163,11 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
     {
         super(dashboard);
 
+        this.onOpen(this::onPanelOpened);
+        this.onClose(this::onPanelClosed);
+        this.onAppear(this::onPanelAppeared);
+        this.onDisappear(this::onPanelDisappeared);
+
         this.keyDude = new UIElement().noCulling();
         this.keyDude.keys().register(Keys.MODEL_BLOCKS_MOVE_TO, () ->
         {
@@ -413,11 +418,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
         }
     }
 
-    @Override
-    public void appear()
+    private void onPanelAppeared()
     {
-        super.appear();
-
         this.getContext().menu.main.add(this.keyDude);
 
         this.orbit.enabled = true;
@@ -429,11 +431,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
         }
     }
 
-    @Override
-    public void disappear()
+    private void onPanelDisappeared()
     {
-        super.disappear();
-
         this.keyDude.removeFromParent();
         this.gizmo.cancel();
 
@@ -620,6 +619,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
 
         this.gizmoStencil.setup(Link.bbs("stencil_model_block"));
 
+        int[] previousViewport = UIUtils.currentViewport();
         int w = mc.getWindow().getWidth();
         int h = mc.getWindow().getHeight();
         Texture texture = this.gizmoStencil.getFramebuffer().getMainTexture();
@@ -655,7 +655,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
                 this.gizmoStencil.unbind(this.gizmoStencilMap);
             }
 
-            Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+            Minecraft.getInstance().getMainRenderTarget().bindWrite(false);
+            UIUtils.restoreViewport(previousViewport);
         }
     }
 
@@ -696,11 +697,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
         return false;
     }
 
-    @Override
-    public void open()
+    private void onPanelOpened()
     {
-        super.open();
-
         this.updateList();
 
         if (this.modelBlock != null && this.modelBlock.isRemoved())
@@ -709,11 +707,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
         }
     }
 
-    @Override
-    public void close()
+    private void onPanelClosed()
     {
-        super.close();
-
         this.gizmo.cancel();
         this.closeFormPalettes();
         this.removeCameraController();

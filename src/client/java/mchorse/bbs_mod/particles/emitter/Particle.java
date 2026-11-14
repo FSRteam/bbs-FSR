@@ -53,6 +53,9 @@ public class Particle
     public float drag = 0;
     public float dragFactor = 0;
 
+    /** Last direction retained while a direction-facing particle is nearly stationary. */
+    public Vector3f facingDirection = new Vector3f();
+
     /* Color */
     public float r = 1;
     public float g = 1;

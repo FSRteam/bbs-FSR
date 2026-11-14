@@ -6,6 +6,7 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.colors.Color;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.StringJoiner;
 
@@ -36,6 +37,23 @@ public class ValueColors extends BaseValue
     public List<Color> getCurrentColors()
     {
         return this.colors;
+    }
+
+    /** Replace the palette without sharing mutable color objects with the caller. */
+    public void setColors(List<Color> colors)
+    {
+        List<Color> copy = new ArrayList<>();
+
+        for (Color color : colors)
+        {
+            copy.add(color.copy());
+        }
+
+        this.preNotify();
+        this.colors.clear();
+        this.colors.addAll(copy);
+        this.trim();
+        this.postNotify();
     }
 
     /**
@@ -73,6 +91,25 @@ public class ValueColors extends BaseValue
 
         this.preNotify();
         this.colors.remove(index);
+        this.postNotify();
+    }
+
+    public void removeAll(Collection<Color> removed)
+    {
+        this.preNotify();
+        this.colors.removeAll(removed);
+        this.postNotify();
+    }
+
+    /** Move the selected colors before the original insertion slot. */
+    public void reorder(List<Color> moved, int insertion)
+    {
+        List<Color> tail = new ArrayList<>(this.colors.subList(insertion, this.colors.size()));
+
+        this.preNotify();
+        this.colors.removeAll(moved);
+        tail.removeAll(moved);
+        this.colors.addAll(this.colors.size() - tail.size(), moved);
         this.postNotify();
     }
 

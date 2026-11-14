@@ -9,6 +9,7 @@ import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -35,7 +36,7 @@ import org.joml.Vector4f;
 
 import java.util.function.Supplier;
 
-public class BillboardFormRenderer extends FormRenderer<BillboardForm>
+public class BillboardFormRenderer<T extends BillboardForm> extends FormRenderer<T>
 {
     private static final Quad quad = new Quad();
     private static final Quad uvQuad = new Quad();
@@ -45,7 +46,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
     private final Color renderColor = new Color();
     private final PoseStack glintStack = new PoseStack();
 
-    public BillboardFormRenderer(BillboardForm form)
+    public BillboardFormRenderer(T form)
     {
         super(form);
     }
@@ -86,9 +87,9 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             shading = true;
         }
 
-        VertexFormat format = shading ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR;
+        VertexFormat format = shading ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.POSITION_TEX_COLOR;
         Supplier<ShaderInstance> shader = this.getShader(context,
-            shading ? GameRenderer::getRendertypeEntityTranslucentShader : GameRenderer::getPositionColorTexLightmapShader,
+            shading ? GameRenderer::getRendertypeEntityTranslucentShader : GameRenderer::getPositionTexColorShader,
             shading ? BBSShaders::getPickerBillboardProgram : BBSShaders::getPickerBillboardNoShadingProgram
         );
 
@@ -96,17 +97,22 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             context.getTransition(), !context.isPicking(), !context.isPicking());
     }
 
+    protected Texture getTexture()
+    {
+        Link link = this.form.texture.get();
+
+        return link == null ? null : BBSModClient.getTextures().getTexture(link);
+    }
+
     private void renderModel(VertexFormat format, Supplier<ShaderInstance> shader, PoseStack matrices, int overlay,
         int light, int overlayColor, float transition, boolean defer, boolean renderGlint)
     {
-        Link t = this.form.texture.get();
+        Texture texture = this.getTexture();
 
-        if (t == null)
+        if (texture == null)
         {
             return;
         }
-
-        Texture texture = BBSModClient.getTextures().getTexture(t);
 
         float w = texture.width;
         float h = texture.height;
@@ -192,53 +198,68 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         gameRenderer.lightTexture().turnOnLightLayer();
         gameRenderer.overlayTexture().setupOverlayColor();
-
-        BBSModClient.getTextures().bindTexture(texture);
-        RenderSystem.setShader(shader);
-
-        texture.bind();
-        texture.setFilterMipmap(this.form.linear.get(), this.form.mipmap.get());
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
-
-        this.fillQuad(format, builder, matrix, color, overlay, light, normal);
-
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.enableBlend();
-        boolean linear = this.form.linear.get();
-        boolean mipmap = this.form.mipmap.get();
-        boolean translucent = texture.hasTranslucency() || color.a < 1F || linear || mipmap;
-
-        if (defer && translucent && FormTranslucentQueue.isActive())
+        Color formOverlay = format == DefaultVertexFormat.NEW_ENTITY && overlay == OverlayTexture.NO_OVERLAY
+            ? this.form.overlayColor.get() : null;
+        if (formOverlay != null && formOverlay.a <= 0F) formOverlay = null;
+        Color previousActiveOverlay = FormOverlay.setActive(formOverlay);
+        int previousOverlayTexture = formOverlay == null ? -1 : FormOverlay.bind(formOverlay);
+        if (formOverlay != null) overlay = 0;
+        try
         {
-            VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
-            buffer.bind();
-            buffer.upload(builder.buildOrThrow());
-            VertexBuffer.unbind();
 
-            ShaderInstance capturedShader = RenderSystem.getShader();
-            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
-            Vector3f origin = modelView.transformPosition(matrix.getTranslation(new Vector3f()));
-            Vector3f planeNormal = FormTranslucentQueue.quadPlaneNormal(modelView, matrix);
 
-            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer,
-                () -> capturedShader, texture, modelView, null, origin, planeNormal, true,
-                () -> texture.setFilterMipmap(linear, mipmap),
-                () -> texture.setFilterMipmap(false, false)));
+            BBSModClient.getTextures().bindTexture(texture);
+            RenderSystem.setShader(shader);
+
+            texture.bind();
+            texture.setFilterMipmap(this.form.linear.get(), this.form.mipmap.get());
+            builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
+
+            this.fillQuad(format, builder, matrix, color, overlay, light, normal);
+
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.enableBlend();
+            boolean linear = this.form.linear.get();
+            boolean mipmap = this.form.mipmap.get();
+            boolean translucent = texture.hasTranslucency() || color.a < 1F || linear || mipmap;
+
+            if (defer && translucent && FormTranslucentQueue.isActive())
+            {
+                VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+                buffer.bind();
+                buffer.upload(builder.buildOrThrow());
+                VertexBuffer.unbind();
+
+                ShaderInstance capturedShader = RenderSystem.getShader();
+                Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+                Vector3f origin = modelView.transformPosition(matrix.getTranslation(new Vector3f()));
+                Vector3f planeNormal = FormTranslucentQueue.quadPlaneNormal(modelView, matrix);
+
+                FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer,
+                    () -> capturedShader, texture, modelView, null, origin, planeNormal, true,
+                    () -> texture.setFilterMipmap(linear, mipmap),
+                    () -> texture.setFilterMipmap(false, false)));
+            }
+            else
+            {
+                BufferUploader.drawWithShader(builder.buildOrThrow());
+            }
+
+            if (renderGlint)
+            {
+                this.renderGlint(format, matrix, overlay, light, normal);
+            }
+
+            texture.setFilterMipmap(false, false);
+
         }
-        else
+        finally
         {
-            BufferUploader.drawWithShader(builder.buildOrThrow());
+            FormOverlay.restoreActive(previousActiveOverlay);
+            if (previousOverlayTexture != -1) FormOverlay.unbind(previousOverlayTexture);
+            gameRenderer.lightTexture().turnOffLightLayer();
+            gameRenderer.overlayTexture().teardownOverlayColor();
         }
-
-        if (renderGlint)
-        {
-            this.renderGlint(format, matrix, overlay, light, normal);
-        }
-
-        texture.setFilterMipmap(false, false);
-
-        gameRenderer.lightTexture().turnOffLightLayer();
-        gameRenderer.overlayTexture().teardownOverlayColor();
     }
 
     /**
@@ -300,9 +321,9 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
     private void fill(VertexFormat format, VertexConsumer consumer, Matrix4f matrix, float x, float y, Color color, float u, float v, int overlay, int light, PoseStack.Pose normal, float nz)
     {
-        if (format == DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR)
+        if (format == DefaultVertexFormat.POSITION_TEX_COLOR)
         {
-            consumer.addVertex(matrix, x, y, 0F).setUv(u, v).setLight(light).setColor(color.r, color.g, color.b, color.a);
+            consumer.addVertex(matrix, x, y, 0F).setUv(u, v).setColor(color.r, color.g, color.b, color.a);
             return;
         }
 

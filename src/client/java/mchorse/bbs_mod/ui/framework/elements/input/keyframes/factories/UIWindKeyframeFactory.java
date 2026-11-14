@@ -68,9 +68,16 @@ public class UIWindKeyframeFactory extends UIKeyframeFactory<WindControl>
         this.display();
     }
 
+    @Override
+    public void update()
+    {
+        super.update();
+        this.display();
+    }
+
     private void display()
     {
-        WindControl control = this.keyframe.getValue();
+        WindControl control = this.getDisplayValue();
 
         if (control == null)
         {

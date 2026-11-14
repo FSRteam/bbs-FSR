@@ -8,6 +8,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import java.util.Collection;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class UIListOverlayPanel extends UIOverlayPanel
 {
@@ -17,6 +18,11 @@ public class UIListOverlayPanel extends UIOverlayPanel
 
     public UIListOverlayPanel(IKey title, Consumer<String> callback)
     {
+        this(title, callback, UIStringList::new);
+    }
+
+    public UIListOverlayPanel(IKey title, Consumer<String> callback, Function<Consumer<List<String>>, UIStringList> listFactory)
+    {
         super(title);
 
         this.callback((l) ->
@@ -24,7 +30,7 @@ public class UIListOverlayPanel extends UIOverlayPanel
             if (callback != null) callback.accept(l.get(0));
         });
 
-        this.list = new UISearchList<>(new UIStringList((l) ->
+        this.list = new UISearchList<>(listFactory.apply((l) ->
         {
             if (this.callback != null)
             {

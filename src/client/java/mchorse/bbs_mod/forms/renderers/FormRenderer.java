@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms.renderers;
 
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.api.client.events.FormPoseEvents;
@@ -11,6 +12,7 @@ import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -20,6 +22,8 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.colors.Color;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.pose.Transform;
 import com.mojang.blaze3d.shaders.Uniform;
@@ -32,6 +36,8 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.util.List;
+import java.util.Map;
+import java.util.IdentityHashMap;
 import java.util.function.Supplier;
 
 public abstract class FormRenderer <T extends Form>
@@ -54,6 +60,7 @@ public abstract class FormRenderer <T extends Form>
     private long externalTickCount;
     private long lastExternalTickCount;
     private boolean drivingUIAnimation;
+    private final Map<Object, Object> attachments = new IdentityHashMap<>();
 
     public FormRenderer(T form)
     {
@@ -63,6 +70,20 @@ public abstract class FormRenderer <T extends Form>
     public T getForm()
     {
         return this.form;
+    }
+
+    /** Client-thread transient state keyed by a typed {@code RenderAttachment}. */
+    @SuppressWarnings("unchecked")
+    public <V> V getAttachment(Object key)
+    {
+        return (V) this.attachments.get(key);
+    }
+
+    public void setAttachment(Object key, Object value)
+    {
+        if (key == null) return;
+        if (value == null) this.attachments.remove(key);
+        else this.attachments.put(key, value);
     }
 
     /** Release renderer-owned runtime resources before this form is discarded. */
@@ -91,6 +112,27 @@ public abstract class FormRenderer <T extends Form>
      */
     public final void renderUI(UIContext context, int x1, int y1, int x2, int y2, boolean selected)
     {
+        this.renderUI(context, x1, y1, x2, y2, selected, true);
+    }
+
+    public final void renderPreview(UIContext context, int x1, int y1, int x2, int y2)
+    {
+        BBSProfiler.begin(BBSProfiler.Timer.UI_PREVIEWS);
+
+        try
+        {
+            BBSProfiler.count(BBSProfiler.Section.UI_PREVIEW_RENDERS);
+
+            this.renderUI(context, x1, y1, x2, y2, false, false);
+        }
+        finally
+        {
+            BBSProfiler.end(BBSProfiler.Timer.UI_PREVIEWS);
+        }
+    }
+
+    private void renderUI(UIContext context, int x1, int y1, int x2, int y2, boolean selected, boolean captions)
+    {
         long tick = context.getTick();
 
         if (selected && this.lastSelectedTick != tick)
@@ -106,8 +148,25 @@ public abstract class FormRenderer <T extends Form>
         try
         {
             this.beginRenderUI();
-            this.renderInUI(context, x1, y1, x2, y2);
-            this.finishRenderUI(context, x1, y1, x2, y2);
+            Color previousOverlay = FormOverlay.setActive(this.form.overlayColor.get());
+            int previousOverlayTexture = RenderSystem.getShaderTexture(1);
+            try
+            {
+                this.renderInUI(context, x1, y1, x2, y2);
+            }
+            finally
+            {
+                FormOverlay.restoreActive(previousOverlay);
+                FormOverlay.unbind(previousOverlayTexture);
+            }
+            if (captions)
+            {
+                this.finishRenderUI(context, x1, y1, x2, y2);
+            }
+            else
+            {
+                BBSFormPreviewCapture.include(context, x1, y1, x2, y2);
+            }
         }
         finally
         {
@@ -338,9 +397,11 @@ public abstract class FormRenderer <T extends Form>
 
     public final void render(FormRenderingContext context)
     {
-        /* The queue is replayed at the world's translucent boundary. Editor and
-         * Film UI previews render after that boundary and must stay immediate. */
-        if (context.canDeferWorldTranslucency())
+        BBSProfiler.count(BBSProfiler.Section.FORM_RENDER);
+
+        /* World draws may start the frame queue lazily. An isolated form-editor
+         * preview opens and flushes its own queue while its camera is active. */
+        if (context.canDeferWorldTranslucency() && !FormTranslucentQueue.isPreviewActive())
         {
             FormTranslucentQueue.ensureStarted();
         }
@@ -360,9 +421,8 @@ public abstract class FormRenderer <T extends Form>
 
         try
         {
-            /* A live world queue must never capture preview buffers. Keep this
-             * scope around the whole form so nested body parts obey the same
-             * immediate-render contract. */
+            /* Unscoped previews and picking never capture a pending queue.
+             * Explicit form-editor previews use only their isolated queue. */
             if (!context.canDeferWorldTranslucency())
             {
                 queueWasActive = FormTranslucentQueue.suspend();
@@ -372,7 +432,7 @@ public abstract class FormRenderer <T extends Form>
             statesApplied = true;
             this.form.applyStates(context.transition);
 
-            if (!this.form.visible.get())
+            if (!this.form.visible.get() || (context.isPicking() && !this.form.pickable.get()))
             {
                 return;
             }
@@ -402,7 +462,18 @@ public abstract class FormRenderer <T extends Form>
             u = (int) Lerps.lerp(u, LightTexture.FULL_BRIGHT, lf);
             context.light = u | v << 16;
 
-            this.render3D(context);
+            Color previousOverlay = FormOverlay.setActive(!isPicking && context.overlay == OverlayTexture.NO_OVERLAY
+                ? this.form.overlayColor.get() : null);
+            int previousOverlayTexture = RenderSystem.getShaderTexture(1);
+            try
+            {
+                this.render3D(context);
+            }
+            finally
+            {
+                FormOverlay.restoreActive(previousOverlay);
+                FormOverlay.unbind(previousOverlayTexture);
+            }
 
             if (isPicking)
             {
@@ -465,7 +536,7 @@ public abstract class FormRenderer <T extends Form>
         matrix.mul(this.createEvaluatedTransform(this.combinedTransform, transition).setupMatrix(this.transformMatrix.identity()));
     }
 
-    protected Transform createTransform()
+    public Transform createTransform()
     {
         return this.setupTransform(new Transform());
     }
@@ -479,6 +550,11 @@ public abstract class FormRenderer <T extends Form>
      * <p>Deliberately not folded into {@link #createTransform()}: callers that only need the saved
      * animation (the particle form's quad placement) must not pick up external contributions.</p>
      */
+    public Transform createEvaluatedTransform(float transition)
+    {
+        return this.createEvaluatedTransform(new Transform(), transition);
+    }
+
     protected Transform createEvaluatedTransform(Transform transform, float transition)
     {
         this.setupTransform(transform);
@@ -489,6 +565,7 @@ public abstract class FormRenderer <T extends Form>
 
     protected Transform setupTransform(Transform transform)
     {
+        this.form.syncOverlayTracks();
         transform.copy(this.form.transform.get());
         this.applyTransform(transform, this.form.transformOverlay.get());
 
@@ -641,6 +718,7 @@ public abstract class FormRenderer <T extends Form>
 
     public MatrixCache collectMatrices(IEntity entity, float transition)
     {
+        BBSProfiler.count(BBSProfiler.Section.COLLECT_MATRICES);
         MatrixCache map = new MatrixCache();
         PoseStack stack = new PoseStack();
 
@@ -656,6 +734,8 @@ public abstract class FormRenderer <T extends Form>
      */
     public MatrixCache collectMatrices(IEntity entity, Object simulationOwner, Matrix4f semanticBase, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, float transition)
     {
+        BBSProfiler.count(BBSProfiler.Section.COLLECT_MATRICES);
+
         MatrixCache map = new MatrixCache();
         PoseStack stack = new PoseStack();
 
@@ -725,8 +805,6 @@ public abstract class FormRenderer <T extends Form>
                 this.applyTransforms(formSemanticBase, transition);
             }
 
-            int i = 0;
-
             for (BodyPart part : this.form.parts.getAllTyped())
             {
                 Form form = part.getForm();
@@ -751,7 +829,7 @@ public abstract class FormRenderer <T extends Form>
                             allowWorldCollisions,
                             stack,
                             matrices,
-                            StringUtils.combinePaths(prefix, String.valueOf(i)),
+                            StringUtils.combinePaths(prefix, part.getId()),
                             transition
                         );
                     }
@@ -760,8 +838,6 @@ public abstract class FormRenderer <T extends Form>
                         stack.popPose();
                     }
                 }
-
-                i += 1;
             }
         }
         finally

@@ -16,12 +16,8 @@ import java.util.function.Supplier;
  * actor (the first actor for a multiple selection), or null. Resolve it when acting;
  * do not capture its initial value while constructing the control.
  *
- * <p><b>Deviation from upstream.</b> Upstream's {@code register(...)} delegates straight into the
- * properties panel ({@code UIReplayPropertiesPanel.registerAction}); FSR keeps the factories in a
- * table on this class and the panel reads them back with {@link #getActions()}. Same call shape for
- * an addon, a different owner for the list — the panel that consumes it is edited separately from
- * this batch. Until that one line exists, a registered factory is collected and readable but no
- * control is built from it. {@link #unregister} is the way back out.</p>
+ * <p>Each properties panel consumes {@link #getActions()} when it is built. Its replay supplier
+ * follows the displayed selection. {@link #unregister} affects future panel instances.</p>
  */
 public class RegisterReplayActionsEvent
 {

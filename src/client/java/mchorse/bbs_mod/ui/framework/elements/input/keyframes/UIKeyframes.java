@@ -23,6 +23,8 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITimelineCanvas;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.KeyframeType;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
@@ -46,6 +48,8 @@ import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
+import mchorse.bbs_mod.utils.keyframes.KeyframeStyle;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.overlays.UIKeyframeStyleOverlayPanel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
@@ -53,12 +57,11 @@ import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.utils.keyframes.factories.Vector3fKeyframeFactory;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 
-public class UIKeyframes extends UIElement
+public class UIKeyframes extends UITimelineCanvas
 {
     /* Editing states */
 
     private boolean selecting;
-    private boolean navigating;
     private int dragging = -1;
     private boolean controlFirst;
     private Pair<Keyframe, KeyframeType> draggingData;
@@ -72,10 +75,6 @@ public class UIKeyframes extends UIElement
     private boolean stacking;
     private float stackOffset;
 
-    private int lastX;
-    private int lastY;
-    private int originalX;
-    private int originalY;
     private float originalT;
     private Object originalV;
 
@@ -88,7 +87,6 @@ public class UIKeyframes extends UIElement
     private final UIKeyframeDopeSheet dopeSheet = new UIKeyframeDopeSheet(this);
     private IUIKeyframeGraph currentGraph = this.dopeSheet;
 
-    private final Scale xAxis = new Scale(this.graphArea, ScrollDirection.HORIZONTAL);
 
     private final Consumer<Keyframe> callback;
     private Consumer<UIContext> backgroundRender;
@@ -103,6 +101,8 @@ public class UIKeyframes extends UIElement
     private Keyframe deferredPick;
 
     private UICopyPasteController copyPasteController;
+    private final UIKeyframeLoops loops = new UIKeyframeLoops(this);
+    private final UIKeyframeMotionShift motionShift = new UIKeyframeMotionShift(this);
 
     private UIDraggable labelResizer;
 
@@ -111,6 +111,7 @@ public class UIKeyframes extends UIElement
 
     public UIKeyframes(Consumer<Keyframe> callback)
     {
+        this.xAxis.area = this.graphArea;
         this.callback = callback;
         this.tooltip = new UIKeyframePreviewTooltip(this);
 
@@ -146,6 +147,12 @@ public class UIKeyframes extends UIElement
             int mouseY = context.mouseY;
             boolean hasSelected = this.currentGraph.getSelected() != null;
             UIKeyframeSheet hovered = this.currentGraph.getSheet(mouseY);
+
+            this.loops.menu(menu, context);
+            if (this.currentGraph.getSelected() != null)
+            {
+                menu.action(Icons.SHAPES, UIKeys.KEYFRAMES_CONTEXT_KEYFRAME_STYLE, this::openStyleEditor);
+            }
 
             menu.custom(new UIPresetContextMenu(this.copyPasteController, mouseX, mouseY)
                 .labels(UIKeys.KEYFRAMES_CONTEXT_COPY, UIKeys.KEYFRAMES_CONTEXT_PASTE));
@@ -556,8 +563,8 @@ public class UIKeyframes extends UIElement
         this.scaling = true;
         this.scaleTicks.clear();
         this.scalingAnchor = Integer.MAX_VALUE;
-        this.originalX = context.mouseX;
-        this.originalY = context.mouseY;
+        this.initialX = context.mouseX;
+        this.initialY = context.mouseY;
 
         for (UIKeyframeSheet sheet : this.currentGraph.getSheets())
         {
@@ -614,7 +621,7 @@ public class UIKeyframes extends UIElement
                             float tick = mMax + this.getStackOffset() + (keyframe.getTick() - mMin) + x;
                             int index = current.channel.insert(tick, keyframe.getFactory().copy(keyframe.getValue()));
                             Keyframe kf = current.channel.get(index);
-                            
+
                             kf.copy(keyframe);
                             kf.setTick(tick);
                             current.selection.add(index);
@@ -768,6 +775,34 @@ public class UIKeyframes extends UIElement
     }
 
     /* Caching keyframes */
+
+    public void openStyleEditor()
+    {
+        Keyframe selected = this.currentGraph.getSelected();
+        if (selected == null) return;
+        Map<UIKeyframeSheet, List<Float>> targets = new java.util.IdentityHashMap<>();
+        for (UIKeyframeSheet sheet : this.currentGraph.getSheets())
+        {
+            List<Float> ticks = new ArrayList<>();
+            for (Keyframe frame : sheet.selection.getSelected()) ticks.add(frame.getTick());
+            if (!ticks.isEmpty()) targets.put(sheet, ticks);
+        }
+        UIOverlay.addOverlay(this.getContext(), new UIKeyframeStyleOverlayPanel(selected.getStyle(), (style) ->
+        {
+            boolean valid = targets.keySet().stream().allMatch(sheet -> this.currentGraph.getSheets().stream().anyMatch(current -> current == sheet));
+            if (!valid || targets.isEmpty()) return;
+            this.cacheKeyframes();
+            targets.forEach((sheet, ticks) ->
+            {
+                for (Object entry : sheet.channel.getList())
+                {
+                    Keyframe frame = (Keyframe) entry;
+                    if (ticks.contains(frame.getTick())) frame.getStyle().copy(style);
+                }
+            });
+            this.submitKeyframes();
+        }));
+    }
 
     public void cacheKeyframes()
     {
@@ -991,7 +1026,12 @@ public class UIKeyframes extends UIElement
 
             if (current == null)
             {
-                current =  sheets.get(0);
+                current = this.currentGraph.getFirstTrackSheet();
+            }
+
+            if (current == null)
+            {
+                return;
             }
 
             this.pasteKeyframesTo(current, keyframes.get(keyframes.keySet().iterator().next()), offset);
@@ -1088,10 +1128,7 @@ public class UIKeyframes extends UIElement
         return this.currentGraph;
     }
 
-    public Scale getXAxis()
-    {
-        return this.xAxis;
-    }
+
 
     public int getDuration()
     {
@@ -1115,28 +1152,20 @@ public class UIKeyframes extends UIElement
         return false;
     }
 
-    public boolean isSnappingToTicks()
-    {
-        return BBSSettings.editorSnapToTicks.get() && !Window.isShiftPressed();
-    }
+
 
     /** Mouse authoring uses the shared tick grid, with Shift temporarily bypassing it. */
-    public float fromGraphCursor(int mouseX)
-    {
-        double tick = this.fromGraphX(mouseX);
 
-        return (float) (this.isSnappingToTicks() ? Math.round(tick) : tick);
-    }
 
     /** Zoom the time axis one step in the wheel's direction, anchored under the cursor. */
-    public void zoomTimeAt(UIContext context, double wheel)
-    {
-        this.xAxis.animateZoom(Scale.getAnchorX(context, this.xAxis.area), wheel, this.getZoomSpeed());
-    }
 
-    public double getZoomSpeed()
+
+
+
+    /** Timelines without a playhead retain ordinary selection editing. */
+    public Float getAutoKeyframeTick()
     {
-        return Window.isShiftPressed() && Window.isCtrlPressed() ? 3D : 1D;
+        return null;
     }
 
     public boolean isSelecting()
@@ -1144,21 +1173,20 @@ public class UIKeyframes extends UIElement
         return this.selecting;
     }
 
-    public boolean isNavigating()
-    {
-        return this.navigating;
-    }
+
 
     /** Whether the user is in the middle of any mouse interaction (dragging, selecting, navigating, scaling or stacking). */
     public boolean isInteracting()
     {
-        return this.dragging >= 0 || this.selecting || this.navigating || this.scaling || this.stacking;
+        return this.dragging >= 0 || this.selecting || this.navigating || this.scaling || this.stacking
+            || this.loops.isDragging() || this.motionShift.isDragging();
     }
 
     /* Sheet management */
 
     public void removeAllSheets()
     {
+        this.motionShift.release(true);
         this.dopeSheet.removeAllSheets();
     }
 
@@ -1175,6 +1203,7 @@ public class UIKeyframes extends UIElement
         }
     }
 
+    /** Legacy tree entry point; the dope sheet normalizes it into section and track rows. */
     public void addElement(UIKeyframeElement element)
     {
         this.dopeSheet.addElement(element);
@@ -1225,15 +1254,9 @@ public class UIKeyframes extends UIElement
 
     /* Graphing */
 
-    public int toGraphX(double tick)
-    {
-        return (int) this.xAxis.to(tick);
-    }
 
-    public double fromGraphX(int mouseX)
-    {
-        return this.xAxis.from(mouseX);
-    }
+
+
 
     public void resetView()
     {
@@ -1282,7 +1305,7 @@ public class UIKeyframes extends UIElement
     {
         Area area = new Area();
 
-        area.setPoints(this.originalX, this.originalY, context.mouseX, context.mouseY, 3);
+        area.setPoints(this.initialX, this.initialY, context.mouseX, context.mouseY, 3);
 
         return area;
     }
@@ -1329,6 +1352,9 @@ public class UIKeyframes extends UIElement
     protected boolean subMouseClicked(UIContext context)
     {
         this.updateModifierOrder();
+
+        if (this.loops.mouseClicked(context)) return true;
+        if (!this.scaling && !this.stacking && this.motionShift.mouseClicked(context)) return true;
 
         if (this.area.isInside(context))
         {
@@ -1377,8 +1403,8 @@ public class UIKeyframes extends UIElement
                 this.cancelEditingGesture(context);
             }
 
-            this.lastX = this.originalX = context.mouseX;
-            this.lastY = this.originalY = context.mouseY;
+            this.lastX = this.initialX = context.mouseX;
+            this.lastY = this.initialY = context.mouseY;
 
             if (Window.isCtrlPressed() && context.mouseButton == 0)
             {
@@ -1605,6 +1631,13 @@ public class UIKeyframes extends UIElement
     @Override
     protected boolean subMouseReleased(UIContext context)
     {
+        if (this.loops.mouseReleased(context)) return true;
+        if (context.mouseButton == 0 && this.motionShift.isDragging())
+        {
+            this.motionShift.handleMouse(context);
+            return this.motionShift.release(false);
+        }
+
         long generation = this.editingGeneration;
 
         if (!this.editingOwnership.release(context.mouseButton, generation))
@@ -1663,6 +1696,8 @@ public class UIKeyframes extends UIElement
     @Override
     protected void subMouseCanceled(UIContext context)
     {
+        this.loops.cancel(context);
+        if (context.mouseButton == 0) this.motionShift.release(true);
         if (this.editingOwnership.isOwnedBy(context.mouseButton, this.editingGeneration))
         {
             this.cancelEditingGesture(context);
@@ -1807,6 +1842,8 @@ public class UIKeyframes extends UIElement
     protected boolean subKeyPressed(UIContext context)
     {
         this.updateModifierOrder();
+        if (this.motionShift.keyPressed(context)) return true;
+        if (this.loops.keyPressed(context)) return true;
 
         if (Window.isCtrlPressed() && (context.isPressed(GLFW.GLFW_KEY_LEFT_ALT) || context.isPressed(GLFW.GLFW_KEY_RIGHT_ALT)))
         {
@@ -1868,28 +1905,40 @@ public class UIKeyframes extends UIElement
 
         super.render(context);
 
-        this.handleMouse(context);
-
-        context.batcher.clip(this.area, context);
-
-        this.renderBackground(context);
-        this.currentGraph.render(context);
-
-        if (this.selecting)
+        BBSProfiler.begin(BBSProfiler.Timer.UI_TIMELINE);
+        try
         {
-            UISelectionRenderer.renderMarquee(context, this.originalX, this.originalY, context.mouseX, context.mouseY);
+            this.loops.update(context);
+            if (!this.loops.isDragging()) this.handleMouse(context);
+
+            context.batcher.clip(this.area, context);
+
+            this.renderBackground(context);
+            this.currentGraph.render(context);
+            this.loops.render(context);
+            this.motionShift.render(context);
+
+            if (this.selecting)
+            {
+                this.renderMarquee(context, this.initialX, this.initialY);
+            }
+
+            this.currentGraph.postRender(context);
+            this.renderOverlay(context);
+            this.loops.renderStatus(context);
+
+            context.batcher.unclip(context);
+
+            /* Draw label resizer on top so it is not covered by the semi-transparent background */
+            if (this.labelResizer.isVisible() && (this.labelResizer.area.isInside(context) || this.labelResizer.isDragging()))
+            {
+                Area a = this.labelResizer.area;
+                Scroll.bar(context.batcher, a.x, a.y, a.ex(), a.ey());
+            }
         }
-
-        this.currentGraph.postRender(context);
-        this.renderOverlay(context);
-
-        context.batcher.unclip(context);
-
-        /* Draw label resizer on top so it is not covered by the semi-transparent background */
-        if (this.labelResizer.isVisible() && (this.labelResizer.area.isInside(context) || this.labelResizer.isDragging()))
+        finally
         {
-            Area a = this.labelResizer.area;
-            Scroll.bar(context.batcher, a.x, a.y, a.ex(), a.ey());
+            BBSProfiler.end(BBSProfiler.Timer.UI_TIMELINE);
         }
     }
 
@@ -1911,16 +1960,22 @@ public class UIKeyframes extends UIElement
      */
     protected void handleMouse(UIContext context)
     {
+        if (this.motionShift.isDragging())
+        {
+            this.motionShift.handleMouse(context);
+            return;
+        }
+
         this.currentGraph.handleMouse(context, this.lastX, this.lastY);
 
         int mouseX = context.mouseX;
         int mouseY = context.mouseY;
-        boolean mouseHasMoved = Math.abs(mouseX - this.originalX) > 2 || Math.abs(mouseY - this.originalY) > 2;
+        boolean mouseHasMoved = Math.abs(mouseX - this.initialX) > 2 || Math.abs(mouseY - this.initialY) > 2;
 
         if (this.scaling)
         {
             float tick = (float) this.fromGraphX(context.mouseX);
-            float originalTick = (float) this.fromGraphX(this.originalX);
+            float originalTick = (float) this.fromGraphX(this.initialX);
             float ratio = (tick - this.scalingAnchor) / (originalTick - this.scalingAnchor);
 
             for (Map.Entry<Keyframe, Float> entry : this.scaleTicks.entrySet())
@@ -1946,7 +2001,7 @@ public class UIKeyframes extends UIElement
         {
             if (this.currentGraph.getSelected() != null)
             {
-                this.currentGraph.dragKeyframes(context, this.draggingData, this.originalX, this.originalY, this.originalT, this.originalV);
+                this.currentGraph.dragKeyframes(context, this.draggingData, this.initialX, this.initialY, this.originalT, this.originalV);
             }
             else
             {

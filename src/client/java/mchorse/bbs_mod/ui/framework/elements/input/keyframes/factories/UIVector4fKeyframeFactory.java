@@ -31,6 +31,17 @@ public class UIVector4fKeyframeFactory extends UIKeyframeFactory<Vector4f>
         this.scroll.add(UI.row(this.x, this.y), UI.row(this.z, this.w));
     }
 
+    @Override
+    public void update()
+    {
+        super.update();
+        Vector4f value = this.getDisplayValue();
+        this.x.setValue(value.x);
+        this.y.setValue(value.y);
+        this.z.setValue(value.z);
+        this.w.setValue(value.w);
+    }
+
     private Vector4f getValue()
     {
         return new Vector4f(

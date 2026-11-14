@@ -15,13 +15,14 @@ import mchorse.bbs_mod.forms.forms.TrailForm;
 import mchorse.bbs_mod.forms.forms.sound.SoundConeForm;
 import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
+import mchorse.bbs_mod.forms.forms.VideoForm;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-
 import java.util.Arrays;
 import java.util.List;
 
@@ -47,7 +48,7 @@ public class ExtraFormSection extends FormSection
     @Override
     public void initiate()
     {
-        FormCategory extra = new FormCategory(UIKeys.FORMS_CATEGORIES_EXTRA, this.parent.visibility.get("extra"));
+        FormCategory extra = new FormCategory(UIKeys.FORMS_CATEGORIES_EXTRA, this.parent.preferences.visible("extra")).icon(Icons.SHAPES);
         AnchorForm anchor = new AnchorForm();
         BillboardForm billboard = new BillboardForm();
         LabelForm label = new LabelForm();
@@ -57,6 +58,7 @@ public class ExtraFormSection extends FormSection
         StructureForm structure = new StructureForm();
         VanillaParticleForm vanillaParticle = new VanillaParticleForm();
         TrailForm trail = new TrailForm();
+        VideoForm video = new VideoForm();
         SoundSphereForm soundSphere = new SoundSphereForm();
         SoundConeForm soundCone = new SoundConeForm();
         FramebufferForm framebuffer = new FramebufferForm();
@@ -75,6 +77,7 @@ public class ExtraFormSection extends FormSection
         extra.addForm(structure);
         extra.addForm(vanillaParticle);
         extra.addForm(trail);
+        extra.addForm(video);
         extra.addForm(soundSphere);
         extra.addForm(soundCone);
         /* Renders its body parts into a texture of its own and shows that texture in the world.
@@ -83,10 +86,10 @@ public class ExtraFormSection extends FormSection
          * by hand - had no cell for it. Re-exposed upstream the same way (449f0058f). */
         extra.addForm(framebuffer);
 
-        this.mobsAnimals = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_ANIMALS, this.parent.visibility.get("mobs_animals"));
-        this.mobsNeutral = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_NEUTRAL, this.parent.visibility.get("mobs_neutral"));
-        this.mobsHostile = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_HOSTILE, this.parent.visibility.get("mobs_hostile"));
-        this.mobsMisc = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_MISC, this.parent.visibility.get("mobs_misc"));
+        this.mobsAnimals = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_ANIMALS, this.parent.preferences.visible("mobs_animals")).icon(Icons.CHICKEN);
+        this.mobsNeutral = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_NEUTRAL, this.parent.preferences.visible("mobs_neutral")).icon(Icons.PLAYER);
+        this.mobsHostile = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_HOSTILE, this.parent.preferences.visible("mobs_hostile")).icon(Icons.SKULL);
+        this.mobsMisc = new FormCategory(UIKeys.FORMS_CATEGORIES_MOBS_MISC, this.parent.preferences.visible("mobs_misc")).icon(Icons.MORE);
         this.extra = extra;
 
         this.fillMobs(this.mobsAnimals, mobAnimalsIds);

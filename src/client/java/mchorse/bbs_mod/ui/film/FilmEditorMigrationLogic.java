@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.ui.film;
 
-import java.util.HashMap;
-import java.util.Map;
+import mchorse.bbs_mod.ui.framework.elements.utils.ScrollMemory;
 
 /** Dependency-light state and geometry rules shared by the migrated film editor behaviors. */
 final class FilmEditorMigrationLogic
@@ -18,19 +17,23 @@ final class FilmEditorMigrationLogic
 
     static final class TimelineScrollMemory
     {
-        private final Map<String, TimelineScroll> values = new HashMap<>();
+        private final ScrollMemory<String> camera = new ScrollMemory<>();
+        private final ScrollMemory<String> action = new ScrollMemory<>();
+        private final ScrollMemory<String> replay = new ScrollMemory<>();
 
         void capture(String filmId, double camera, double action, double replay)
         {
             if (filmId != null)
             {
-                this.values.put(filmId, new TimelineScroll(camera, action, replay));
+                this.camera.save(filmId, camera);
+                this.action.save(filmId, action);
+                this.replay.save(filmId, replay);
             }
         }
 
         TimelineScroll get(String filmId)
         {
-            return filmId == null ? null : this.values.get(filmId);
+            return !this.camera.has(filmId) ? null : new TimelineScroll(this.camera.get(filmId), this.action.get(filmId), this.replay.get(filmId));
         }
     }
 

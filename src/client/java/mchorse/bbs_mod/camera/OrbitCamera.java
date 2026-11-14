@@ -45,9 +45,13 @@ public class OrbitCamera
     protected int lastX;
     protected int lastY;
 
-    protected float low = 0.05F;
-    protected float normal = 0.25F;
-    protected float high = 1F;
+    public static final float SPEED_LOW = 0.05F;
+    public static final float SPEED_NORMAL = 0.25F;
+    public static final float SPEED_HIGH = 1F;
+
+    protected float low = SPEED_LOW;
+    protected float normal = SPEED_NORMAL;
+    protected float high = SPEED_HIGH;
 
     protected Vector3d finalPosition = new Vector3d();
 
@@ -55,6 +59,17 @@ public class OrbitCamera
     protected Vector4i velocityAngle = new Vector4i();
 
     protected boolean fovRoll = true;
+    protected boolean freeLook;
+
+    public void setFreeLook(boolean freeLook)
+    {
+        this.freeLook = freeLook;
+    }
+
+    public boolean isFreeLook()
+    {
+        return this.freeLook;
+    }
 
     public void setFovRoll(boolean fovRoll)
     {
@@ -186,6 +201,14 @@ public class OrbitCamera
         return Matrices.rotation(this.rotation.x, MathUtils.PI - this.rotation.y);
     }
 
+    /** Shared mouse-drag speed for viewport orbits and model previews. */
+    public static float dragAngleSpeed()
+    {
+        float factor = Window.isCtrlPressed() ? SPEED_HIGH : (Window.isAltPressed() ? SPEED_LOW : SPEED_NORMAL);
+
+        return 1 / 80F * BBSSettings.editorCameraAngleSpeed.get() * factor;
+    }
+
     public float getAngleSpeed()
     {
         float factor = Window.isCtrlPressed() ? this.high : (Window.isAltPressed() ? this.low : this.normal);
@@ -223,8 +246,9 @@ public class OrbitCamera
     public boolean drag(int mouseX, int mouseY)
     {
         float angleFactor = this.getAngleSpeed();
+        int dragging = this.freeLook && this.dragging < 0 ? 0 : this.dragging;
 
-        if (this.dragging == 0)
+        if (dragging == 0)
         {
             int x = mouseX - this.lastX;
             int y = mouseY - this.lastY;
@@ -242,7 +266,7 @@ public class OrbitCamera
         }
         else if (this.fovRoll)
         {
-            if (this.dragging == 1)
+            if (dragging == 1)
             {
                 int x = mouseX - this.lastX;
 
@@ -256,7 +280,7 @@ public class OrbitCamera
 
                 return true;
             }
-            else if (this.dragging == 2)
+            else if (dragging == 2)
             {
                 int y = mouseY - this.lastY;
 

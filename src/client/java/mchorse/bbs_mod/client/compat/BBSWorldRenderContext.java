@@ -41,6 +41,12 @@ public interface BBSWorldRenderContext extends IBbsWorldRenderContext
             }
 
             @Override
+            public net.minecraft.client.renderer.culling.Frustum frustum()
+            {
+                return context.frustum();
+            }
+
+            @Override
             public org.joml.Matrix4f modelViewMatrix()
             {
                 return context.modelViewMatrix();

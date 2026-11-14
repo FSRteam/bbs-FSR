@@ -35,6 +35,7 @@ import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.resources.GifFrames;
 import mchorse.bbs_mod.utils.resources.LinkUtils;
+import mchorse.bbs_mod.utils.resources.PlayerSkins;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
@@ -825,12 +826,21 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     /** The subjects that live on disk — the ones a rename, a move or a deletion can touch. */
     private List<Link> modifiableSubjects()
     {
-        List<Link> subjects = this.subjects();
+        return this.keepSubjects(this.subjects(), false);
+    }
+
+    private List<Link> deletableSubjects()
+    {
+        return this.keepSubjects(this.subjects(), true);
+    }
+
+    private List<Link> keepSubjects(List<Link> subjects, boolean deleting)
+    {
         List<Link> modifiable = new ArrayList<>();
 
         for (Link link : subjects)
         {
-            if (TextureFiles.canModify(link))
+            if (deleting ? TextureFiles.canDelete(link) : TextureFiles.canModify(link))
             {
                 modifiable.add(link);
             }
@@ -1347,6 +1357,13 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         {
             menu.action(Icons.COPY, UIKeys.TEXTURES_COPY, () -> Window.setClipboard(link.toString()));
 
+            String nickname = PlayerSkins.nickname(link);
+
+            if (nickname != null)
+            {
+                menu.action(Icons.REFRESH, UIKeys.TEXTURES_PLAYER_SKIN_REFRESH, () -> this.fetchPlayerSkin(nickname, true));
+            }
+
             File file = TextureFiles.file(link);
 
             /* A texture on disk that isn't animated yet: into the editor with the animation on */
@@ -1391,6 +1408,46 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         {
             menu.action(Icons.DOWNLOAD, UIKeys.TEXTURES_DOWNLOAD, () -> this.picker.download(""));
         }
+
+        if (PlayerSkins.SOURCE.equals(this.path.source))
+        {
+            menu.action(Icons.DOWNLOAD, UIKeys.TEXTURES_PLAYER_SKIN, this::promptPlayerSkin);
+        }
+    }
+
+    private void promptPlayerSkin()
+    {
+        UIPromptOverlayPanel panel = new UIPromptOverlayPanel(UIKeys.TEXTURES_PLAYER_SKIN_TITLE, UIKeys.TEXTURES_PLAYER_SKIN_DESCRIPTION,
+            (nickname) -> this.fetchPlayerSkin(nickname.trim(), false));
+
+        UIOverlay.addOverlay(this.getContext(), panel);
+    }
+
+    private void fetchPlayerSkin(String nickname, boolean refetch)
+    {
+        if (!PlayerSkins.isNickname(nickname))
+        {
+            return;
+        }
+
+        Link link = new Link(PlayerSkins.SOURCE, nickname + ".png");
+
+        if (refetch)
+        {
+            PlayerSkins.forget(nickname);
+        }
+
+        PlayerSkins.request(link, nickname, (loaded) ->
+        {
+            if (loaded)
+            {
+                this.picker.selectCurrent(link);
+            }
+            else if (this.getContext() != null)
+            {
+                this.getContext().notifyError(UIKeys.TEXTURES_PLAYER_SKIN_ERROR.format(nickname));
+            }
+        });
     }
 
     /* Keyboard */
@@ -1416,7 +1473,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         }
         else if (context.isPressed(Keys.DELETE))
         {
-            this.confirmDelete(this.modifiableSubjects());
+            this.confirmDelete(this.deletableSubjects());
 
             return true;
         }

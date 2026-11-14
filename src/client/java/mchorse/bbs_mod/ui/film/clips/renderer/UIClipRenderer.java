@@ -17,6 +17,7 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -67,21 +68,23 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
         }
 
         FontRenderer font = context.batcher.getFont();
-        String label = font.limitToWidth(clips.getClipDisplayName(clip), right - 6 - left);
+        boolean showIcon = right - left >= 20;
+        int labelX = left + (showIcon ? 22 : 5);
+        String label = font.limitToWidth(clips.getClipDisplayName(clip), Math.max(0, right - 3 - labelX));
 
         boolean alignTop = h >= 28;
         int labelY = alignTop ? y + 3 : y + (h - font.getHeight()) / 2;
         float iconAnchorY = alignTop ? 0F : 0.5F;
         int iconY = alignTop ? y + 3 : y + h / 2;
 
-        if (right - left >= 20)
+        if (showIcon)
         {
-            context.batcher.icon(data.icon, Colors.mulA(Colors.mulRGB(Colors.WHITE, 0.75F), 0.5F), right - 2, iconY, 1F, iconAnchorY);
+            context.batcher.icon(data.icon, Colors.WHITE, left + 3, iconY, 0F, iconAnchorY);
         }
 
         if (!label.isEmpty())
         {
-            context.batcher.textShadow(label, left + 5, labelY);
+            context.batcher.textShadow(label, labelX, labelY);
         }
     }
 
@@ -110,7 +113,12 @@ public class UIClipRenderer <T extends Clip> implements IUIClipRenderer<T>
             this.renderSimpleEnvelope(builder, matrix, envelope, duration, x1, y1, x2, y2);
         }
 
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+        MeshData mesh = builder.build();
+
+        if (mesh != null)
+        {
+            BufferUploader.drawWithShader(mesh);
+        }
     }
 
     /**

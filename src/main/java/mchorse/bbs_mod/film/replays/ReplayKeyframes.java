@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.film.replays;
 
 import mchorse.bbs_mod.data.types.ListType;
+import mchorse.bbs_mod.forms.entities.EntityState;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
@@ -17,6 +18,8 @@ import org.joml.Vector2d;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.List;
 
 public class ReplayKeyframes extends ValueGroup
@@ -41,7 +44,21 @@ public class ReplayKeyframes extends ValueGroup
         return "item_slot_" + slot;
     }
 
-    public static final List<String> CURATED_CHANNELS = Arrays.asList("x", "y", "z", "pitch", "yaw", "headYaw", "bodyYaw", "sneaking", "sprinting", "item_slot_0", "item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4", "item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "selected_slot", "stick_lx", "stick_ly", "stick_rx", "stick_ry", "trigger_l", "trigger_r", "extra1_x", "extra1_y", "extra2_x", "extra2_y", "grounded", "damage", "death", "vX", "vY", "vZ");
+    public static final List<String> CURATED_CHANNELS = buildCuratedChannels();
+
+    private static List<String> buildCuratedChannels()
+    {
+        List<String> channels = new ArrayList<>(Arrays.asList("x", "y", "z", "pitch", "yaw", "headYaw", "bodyYaw"));
+
+        for (EntityState state : EntityState.values())
+        {
+            channels.add(state.id);
+        }
+
+        channels.addAll(Arrays.asList("item_slot_0", "item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4", "item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "selected_slot", "stick_lx", "stick_ly", "stick_rx", "stick_ry", "trigger_l", "trigger_r", "extra1_x", "extra1_y", "extra2_x", "extra2_y", "damage", "death", "vX", "vY", "vZ"));
+
+        return channels;
+    }
 
     public final KeyframeChannel<Double> x = new KeyframeChannel<>("x", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> y = new KeyframeChannel<>("y", KeyframeFactories.DOUBLE);
@@ -56,12 +73,21 @@ public class ReplayKeyframes extends ValueGroup
     public final KeyframeChannel<Double> headYaw = new KeyframeChannel<>("headYaw", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> bodyYaw = new KeyframeChannel<>("bodyYaw", KeyframeFactories.DOUBLE);
 
-    public final KeyframeChannel<Double> sneaking = new KeyframeChannel<>("sneaking", KeyframeFactories.DOUBLE);
-    public final KeyframeChannel<Double> sprinting = new KeyframeChannel<>("sprinting", KeyframeFactories.DOUBLE);
-    public final KeyframeChannel<Double> grounded = new KeyframeChannel<>("grounded", KeyframeFactories.DOUBLE);
+    /** One channel per state keeps newly added entity states serializable automatically. */
+    public final Map<EntityState, KeyframeChannel<Double>> states = new EnumMap<>(EntityState.class);
+    public final KeyframeChannel<Double> sneaking = this.state(EntityState.SNEAKING);
+    public final KeyframeChannel<Double> sprinting = this.state(EntityState.SPRINTING);
+    public final KeyframeChannel<Double> grounded = this.state(EntityState.GROUNDED);
+    public final KeyframeChannel<Double> swimming = this.state(EntityState.SWIMMING);
+    public final KeyframeChannel<Double> riding = this.state(EntityState.RIDING);
+    public final KeyframeChannel<Double> flying = this.state(EntityState.FLYING);
+    public final KeyframeChannel<Double> gliding = this.state(EntityState.GLIDING);
     public final KeyframeChannel<Double> fall = new KeyframeChannel<>("fall", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> damage = new KeyframeChannel<>("damage", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> death = new KeyframeChannel<>("death", KeyframeFactories.DOUBLE);
+    /** Random-access counters for vanilla's swim blend and elytra dive. */
+    public final KeyframeChannel<Double> leaning = new KeyframeChannel<>("leaning", KeyframeFactories.DOUBLE);
+    public final KeyframeChannel<Double> roll = new KeyframeChannel<>("roll", KeyframeFactories.DOUBLE);
 
     public final KeyframeChannel<Double> stickLeftX = new KeyframeChannel<>("stick_lx", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> stickLeftY = new KeyframeChannel<>("stick_ly", KeyframeFactories.DOUBLE);
@@ -98,12 +124,15 @@ public class ReplayKeyframes extends ValueGroup
         this.add(this.pitch);
         this.add(this.headYaw);
         this.add(this.bodyYaw);
-        this.add(this.sneaking);
-        this.add(this.sprinting);
-        this.add(this.grounded);
+        for (EntityState state : EntityState.values())
+        {
+            this.add(this.state(state));
+        }
         this.add(this.fall);
         this.add(this.damage);
         this.add(this.death);
+        this.add(this.leaning);
+        this.add(this.roll);
         this.add(this.stickLeftX);
         this.add(this.stickLeftY);
         this.add(this.stickRightX);
@@ -129,6 +158,12 @@ public class ReplayKeyframes extends ValueGroup
         this.add(this.armorLegs);
         this.add(this.armorFeet);
         this.add(this.selectedSlot);
+    }
+
+    /** Return the channel for an entity state, creating it lazily for legacy data. */
+    public KeyframeChannel<Double> state(EntityState state)
+    {
+        return this.states.computeIfAbsent(state, (value) -> new KeyframeChannel<>(value.id, KeyframeFactories.DOUBLE));
     }
 
     /** Equipment channels besides the nine hotbar slots. */
@@ -320,11 +355,14 @@ public class ReplayKeyframes extends ValueGroup
             this.fall.insert(tick, (double) entity.getFallDistance());
         }
 
-        this.sneaking.insert(tick, entity.isSneaking() ? 1D : 0D);
-        this.sprinting.insert(tick, entity.isSprinting() ? 1D : 0D);
-        this.grounded.insert(tick, entity.isOnGround() ? 1D : 0D);
+        for (EntityState state : EntityState.values())
+        {
+            this.state(state).insert(tick, state.get(entity) ? 1D : 0D);
+        }
         this.damage.insert(tick, (double) entity.getHurtTimer());
         this.death.insert(tick, entity.isDead() ? 1D : 0D);
+        this.leaning.insert(tick, (double) entity.getLeaningPitch(1F));
+        this.roll.insert(tick, (double) entity.getRoll());
 
         if (rotation)
         {
@@ -387,10 +425,20 @@ public class ReplayKeyframes extends ValueGroup
         this.apply(tick, entity, null);
     }
 
+    public void apply(float tick, IEntity entity)
+    {
+        this.apply(tick, entity, null);
+    }
+
     /**
      * Apply a frame at given tick on the given entity.
      */
     public void apply(int tick, IEntity entity, List<String> groups)
+    {
+        this.apply((float) tick, entity, groups);
+    }
+
+    public void apply(float tick, IEntity entity, List<String> groups)
     {
         boolean empty = groups == null || groups.isEmpty();
         boolean position = empty || !groups.contains(GROUP_POSITION);
@@ -442,10 +490,13 @@ public class ReplayKeyframes extends ValueGroup
         }
 
         /* Motion and fall distance */
-        entity.setSneaking(this.sneaking.interpolate(tick) != 0D);
-        entity.setSprinting(this.sprinting.interpolate(tick) != 0D);
-        entity.setOnGround(this.grounded.interpolate(tick) != 0D);
+        for (EntityState state : EntityState.values())
+        {
+            state.set(entity, EntityState.isOn(this.state(state).interpolate(tick)));
+        }
         entity.setHurtTimer(this.damage.interpolate(tick).intValue());
+        entity.setLeaningPitch(this.leaning.interpolate(tick).floatValue());
+        entity.setRoll(this.roll.interpolate(tick).intValue());
 
         this.applyDeath(tick, entity);
 
@@ -493,6 +544,11 @@ public class ReplayKeyframes extends ValueGroup
      */
     public void applyDeath(int tick, IEntity entity)
     {
+        this.applyDeath((float) tick, entity);
+    }
+
+    public void applyDeath(float tick, IEntity entity)
+    {
         if (this.death.isEmpty())
         {
             return;
@@ -513,7 +569,7 @@ public class ReplayKeyframes extends ValueGroup
     /**
      * Force teleportation for the previous keyframe being constant
      */
-    private Vector2d getPrev(KeyframeSegment<Double> frame, double prev, int tick)
+    private Vector2d getPrev(KeyframeSegment<Double> frame, double prev, float tick)
     {
         if (frame == null)
         {
@@ -534,7 +590,7 @@ public class ReplayKeyframes extends ValueGroup
             return new Vector2d(prev, prev);
         }
 
-        if (frame.preA != frame.a && frame.a.getTick() == tick && (frame.preA.getInterpolation().getInterp() == Interpolations.CONST || frame.preA.getInterpolation().getInterp() == Interpolations.STEP))
+        if (frame.preA != frame.a && frame.a.getTick() == tick - frame.timeOffset && (frame.preA.getInterpolation().getInterp() == Interpolations.CONST || frame.preA.getInterpolation().getInterp() == Interpolations.STEP))
         {
             if (interpolated != null)
             {

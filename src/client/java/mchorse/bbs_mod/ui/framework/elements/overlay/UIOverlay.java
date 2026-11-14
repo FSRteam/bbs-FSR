@@ -22,6 +22,9 @@ import java.util.Map;
 public class UIOverlay extends UIElement
 {
     private static final Map<String, Vector2i> offsets = new HashMap<>();
+    private static final Map<String, Vector2i> sizes = new HashMap<>();
+    private static final int MAX_WIDTH = 420;
+    private static final int MAX_HEIGHT = 340;
 
     /** Null means the user-configured dimming; a set value overrides it. */
     private Integer background;
@@ -37,8 +40,21 @@ public class UIOverlay extends UIElement
     public static UIOverlay addOverlay(UIContext context, UIOverlayPanel panel)
     {
         UIOverlay overlay = new UIOverlay();
+        int width = panel.getPreferredWidth();
 
         panel.relative(overlay).xy(0.5F, 0.5F).wh(0.5F, 0.5F).anchor(0.5F).bounds(overlay, 0);
+
+        if (width > 0)
+        {
+            panel.w(width);
+        }
+        else
+        {
+            panel.getFlex().w.max = MAX_WIDTH;
+        }
+
+        panel.getFlex().h.max = MAX_HEIGHT;
+        panel.sizeless();
         setupPanel(context, overlay, panel);
 
         return overlay;
@@ -129,6 +145,15 @@ public class UIOverlay extends UIElement
                 flex.y.offset = offset.y;
             }
 
+            Vector2i size = sizes.get(panel.getClass().getSimpleName());
+
+            if (size != null && panel.isResizable())
+            {
+                flex.w.max = flex.h.max = 0;
+                flex.w.set(0F, size.x);
+                flex.h.set(0F, size.y);
+            }
+
             overlay.full(context.menu.overlay);
             context.menu.overlay.add(overlay);
             UIElement root = context.menu.getRoot();
@@ -138,6 +163,7 @@ public class UIOverlay extends UIElement
                 root.moveToFront(context.menu.overlay);
             }
 
+            panel.setupResize();
             overlay.add(panel);
             context.menu.overlay.resize();
         });
@@ -205,10 +231,7 @@ public class UIOverlay extends UIElement
         {
             element.onClose();
 
-            /* Save offset */
-            Vector2i offset = new Vector2i(element.getFlex().x.offset, element.getFlex().y.offset);
-
-            offsets.put(element.getClass().getSimpleName(), offset);
+            saveLayout(element);
         }
 
         if (context != null && context.activeElement instanceof UIElement && this.isDescendant((UIElement) context.activeElement))
@@ -230,10 +253,20 @@ public class UIOverlay extends UIElement
             element.removeFromParent();
             element.onClose();
 
-            /* Save offset */
-            Vector2i offset = new Vector2i(element.getFlex().x.offset, element.getFlex().y.offset);
+            saveLayout(element);
+        }
+    }
 
-            offsets.put(element.getClass().getSimpleName(), offset);
+    private static void saveLayout(UIOverlayPanel element)
+    {
+        Flex flex = element.getFlex();
+        String key = element.getClass().getSimpleName();
+
+        offsets.put(key, new Vector2i(flex.x.offset, flex.y.offset));
+
+        if (element.wasResized())
+        {
+            sizes.put(key, new Vector2i(flex.w.offset, flex.h.offset));
         }
     }
 

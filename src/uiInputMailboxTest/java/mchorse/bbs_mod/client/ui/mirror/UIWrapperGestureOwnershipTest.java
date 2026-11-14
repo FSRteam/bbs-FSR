@@ -1,9 +1,12 @@
 package mchorse.bbs_mod.client.ui.mirror;
 
 import mchorse.bbs_mod.api.client.ui.BBSUiRemoteInputState;
+import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.ui.forms.editors.utils.UIPickableFormRenderer;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeLoops;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeMotionShift;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIModelRenderer;
@@ -11,6 +14,9 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.GizmoInteraction;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
+import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import mchorse.bbs_mod.utils.keyframes.KeyframeLoop;
+import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import org.lwjgl.glfw.GLFW;
 import sun.misc.Unsafe;
 
@@ -20,6 +26,8 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 /** Real wrapper regressions for interleaved physical mouse buttons. */
@@ -52,6 +60,7 @@ public final class UIWrapperGestureOwnershipTest
             assertPickableRendererDoesNotStopLeftGizmoOnRightRelease();
             assertKeyframesKeepLeftDragUntilLeftRelease();
             assertKeyframesRollbackAfterCallbackFailures();
+            assertLoopGestureCancellationAndReleaseFailures();
             assertModelRendererKeepsLeftDragUntilLeftRelease();
             assertClipsKeepLeftScrubUntilLeftRelease();
             assertReplayListCommitsOnlyOnLeftRelease();
@@ -100,6 +109,8 @@ public final class UIWrapperGestureOwnershipTest
     private static void assertKeyframesKeepLeftDragUntilLeftRelease()
     {
         UIKeyframes keyframes = allocate(UIKeyframes.class);
+        setField(keyframes, "loops", new UIKeyframeLoops(keyframes));
+        setField(keyframes, "motionShift", new UIKeyframeMotionShift(keyframes));
         MouseGestureOwnership ownership = new MouseGestureOwnership();
         UIContext context = new UIContext(null);
 
@@ -128,6 +139,8 @@ public final class UIWrapperGestureOwnershipTest
     {
         UIContext context = new UIContext(null);
         UIKeyframes clickFailure = allocate(UIKeyframes.class);
+        setField(clickFailure, "loops", new UIKeyframeLoops(clickFailure));
+        setField(clickFailure, "motionShift", new UIKeyframeMotionShift(clickFailure));
         MouseGestureOwnership clickOwnership = new MouseGestureOwnership();
         Area graphArea = new Area();
 
@@ -154,6 +167,8 @@ public final class UIWrapperGestureOwnershipTest
         clickOwnership.cancel();
 
         UIKeyframes releaseFailure = allocate(UIKeyframes.class);
+        setField(releaseFailure, "loops", new UIKeyframeLoops(releaseFailure));
+        setField(releaseFailure, "motionShift", new UIKeyframeMotionShift(releaseFailure));
         MouseGestureOwnership releaseOwnership = new MouseGestureOwnership();
         long releaseGeneration = releaseOwnership.acquireToken(GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
 
@@ -176,6 +191,71 @@ public final class UIWrapperGestureOwnershipTest
         check(releaseOwnership.acquireToken(GLFW.GLFW_MOUSE_BUTTON_MIDDLE) != 0L,
             "UIKeyframes could not reacquire after a throwing release callback");
         releaseOwnership.cancel();
+    }
+
+    private static void assertLoopGestureCancellationAndReleaseFailures()
+    {
+        try
+        {
+            UIKeyframes view = allocate(UIKeyframes.class);
+            UIKeyframeLoops loops = new UIKeyframeLoops(view);
+            MouseGestureOwnership owner = (MouseGestureOwnership) field(loops, "ownership");
+            Map<KeyframeChannel<?>, BaseType> before = new LinkedHashMap<>();
+            KeyframeChannel<Float> channel = new KeyframeChannel<>("loop-gesture", KeyframeFactories.FLOAT);
+            channel.insert(0F, 0F);
+            channel.insert(5F, 5F);
+            channel.putLoop(new KeyframeLoop("loop-gesture-id", 0F, 5F, 10F));
+            setField(loops, "before", before);
+            before.put(channel, channel.toData());
+            owner.acquireToken(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            channel.putLoop(channel.getLoop("loop-gesture-id").withEnd(12F));
+            UIContext context = new UIContext(null);
+            context.setMouse(20, 20, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+            check(!loops.mouseReleased(context) && loops.isDragging(), "right release ended the left loop gesture");
+            loops.cancel(context);
+            check(loops.isDragging(), "right cancellation rolled back the left loop gesture");
+            context.setKeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, GLFW.GLFW_PRESS);
+            check(loops.keyPressed(context), "loop gesture did not consume Escape");
+            check(!loops.isDragging() && !owner.isActive(), "Escape retained loop gesture ownership");
+            check(channel.getLoop("loop-gesture-id").end() == 10F, "Escape did not restore loop bounds");
+
+            before.put(channel, channel.toData());
+            owner.acquireToken(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            channel.preCallback((value, flag) ->
+            {
+                throw new IllegalStateException("loop release failure");
+            });
+            context.setMouse(20, 20, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            try
+            {
+                loops.mouseReleased(context);
+                throw new AssertionError("loop release callback did not throw");
+            }
+            catch (IllegalStateException exception)
+            {
+                check("loop release failure".equals(exception.getMessage()), "loop release propagated the wrong exception");
+            }
+            check(!loops.isDragging() && !owner.isActive(), "throwing loop release retained drag state");
+            before.put(channel, channel.toData());
+            owner.acquireToken(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            channel.putLoop(channel.getLoop("loop-gesture-id").withEnd(12F));
+            try
+            {
+                loops.cancel(context);
+                throw new AssertionError("loop cancellation callback did not throw");
+            }
+            catch (IllegalStateException exception)
+            {
+                check("loop release failure".equals(exception.getMessage()), "loop cancellation propagated the wrong exception");
+            }
+            check(!loops.isDragging() && !owner.isActive(), "throwing loop cancellation retained drag state");
+            check(channel.getLoop("loop-gesture-id").end() == 10F,
+                "throwing loop cancellation callback prevented snapshot restoration");
+        }
+        catch (ReflectiveOperationException exception)
+        {
+            throw new AssertionError("Could not inspect loop gesture ownership", exception);
+        }
     }
 
     private static void assertModelRendererKeepsLeftDragUntilLeftRelease()
@@ -289,30 +369,32 @@ public final class UIWrapperGestureOwnershipTest
     private static void assertReplayListCommitsOnlyOnLeftRelease()
     {
         String source = readSource("src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplayList.java");
-        int release = source.indexOf("public boolean subMouseReleased(UIContext context)");
-        int retire = source.indexOf("this.replayDragOwnership.release(context.mouseButton, generation)", release);
-        int snapshot = source.indexOf("int draggedIndex = this.dragging;", retire);
-        int clear = source.indexOf("this.dragging = -1;", snapshot);
-        int swap = source.indexOf("this.handleSwap(draggedIndex, index);", clear);
+        String items = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/items/UIItems.java");
+        int release = items.indexOf("public boolean subMouseReleased(UIContext context)");
+        int retire = items.indexOf("this.dragOwnership.release(context.mouseButton, generation);", release);
+        int finish = items.indexOf("this.release();", retire);
+        int sharedRelease = items.indexOf("protected void release()");
+        int reset = items.indexOf("this.drag.reset();", sharedRelease);
+        int drop = items.indexOf("this.drop(items, target, insertion);", reset);
 
-        check(source.contains("this.replayDragOwnership.acquireToken(context.mouseButton)")
-                && release >= 0 && retire > release,
-            "UIReplayList does not scope sort release to its initiating button generation");
-        check(source.contains(
-                "context.menu.runWithPreservedMouseCapture(this, () -> this.callback.accept(this.getCurrent()))"),
-            "UIReplayList selection rebuild does not preserve its first-press drag owner");
-        check(snapshot > retire && clear > snapshot && swap > clear,
-            "UIReplayList does not retire the old drag before its drop/swap callback");
-        int cancelDrag = source.indexOf("private void cancelReplayDrag()");
-        int cancelEnd = source.indexOf("/** Drag a replay row", cancelDrag);
-        String cancelBody = cancelDrag >= 0 && cancelEnd > cancelDrag
-            ? source.substring(cancelDrag, cancelEnd)
-            : "";
-        check(cancelBody.contains("this.replayDragOwnership.cancel();")
-                && cancelBody.contains("this.dragging = -1;")
-                && !cancelBody.contains("handleSwap")
-                && !cancelBody.contains("dropReplaysOntoCategory"),
-            "UIReplayList cancellation does not retire its drag without dropping or swapping");
+        check(!source.contains("replayDragOwnership") && !source.contains("dragTime")
+                && source.contains("protected boolean pressItem(int index, UIContext context)")
+                && items.contains("this.dragOwnership.acquireToken(context.mouseButton)")
+                && retire > release && finish > retire,
+            "Replay list does not consume the shared button-generation owner");
+        check(source.contains("context.menu.runWithPreservedMouseCapture(this, this::fireCallback)"),
+            "Replay folder selection rebuild does not preserve the shared press owner");
+        check(reset > sharedRelease && drop > reset,
+            "Shared replay release does not retire the old payload before its drop callback");
+        int cancel = source.indexOf("protected void cancelGesture()");
+        int cancelEnd = source.indexOf("/** Replay groups", cancel);
+        String body = cancel >= 0 && cancelEnd > cancel ? source.substring(cancel, cancelEnd) : "";
+        check(body.contains("this.pressedFolder = null;") && body.contains("super.cancelGesture();")
+                && !body.contains("reorder(") && !body.contains("moveCategory("),
+            "Replay folder cancellation can commit or retain its pending fold");
+        check(source.contains("protected void onDrop(Object target, List<ReplayListEntry> items)")
+                && source.contains("protected void reorder(List<ReplayListEntry> items, int insertion)"),
+            "Replay folder consumers are not connected to shared item drops");
     }
 
     private static Object field(Object target, String name) throws ReflectiveOperationException

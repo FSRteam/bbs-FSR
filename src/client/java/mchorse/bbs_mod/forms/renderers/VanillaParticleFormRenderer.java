@@ -1,21 +1,20 @@
 package mchorse.bbs_mod.forms.renderers;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.brigadier.StringReader;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
 import mchorse.bbs_mod.forms.forms.utils.ParticleSettings;
-import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.particles.vanilla.VanillaParticleScene;
+import mchorse.bbs_mod.particles.vanilla.VanillaParticlePreview;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.commands.arguments.ParticleArgument;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.Camera;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ItemParticleOption;
 import net.minecraft.core.particles.ParticleOptions;
@@ -25,7 +24,6 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
@@ -58,19 +56,11 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     @Override
     protected void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
-        Texture texture = context.render.getTextures().getTexture(PARTICLE_PREVIEW);
+        int size = Math.min(x2 - x1, y2 - y1) - 4;
+        float x = (x1 + x2 - size) / 2F;
+        float y = (y1 + y2 - size) / 2F;
 
-        float min = Math.min(texture.width, texture.height);
-        int ow = (x2 - x1) - 4;
-        int oh = (y2 - y1) - 4;
-
-        int w = (int) ((texture.width / min) * ow);
-        int h = (int) ((texture.height / min) * ow);
-
-        int x = x1 + (ow - w) / 2 + 2;
-        int y = y1 + (oh - h) / 2 + 2;
-
-        context.batcher.fullTexturedBox(texture, x, y, w, h);
+        VanillaParticlePreview.render(context, this.form.settings.get().particle, x, y, size, Colors.WHITE);
     }
 
     @Override
@@ -78,27 +68,7 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
     {
         super.render3D(context);
 
-        Matrix4f matrix = this.renderMatrix.set(context.camera.view).invert();
-
-        matrix.mul(context.stack.last().pose());
-
-        Vector3f translation = matrix.getTranslation(Vectors.TEMP_3F);
-        this.renderTranslation.set(translation.x, translation.y, translation.z);
-        if (context.modelRenderer)
-        {
-            this.renderTranslation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
-        }
-        else
-        {
-            Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
-            Vec3 cameraPosition = camera.getPosition();
-            this.renderTranslation.add(cameraPosition.x, cameraPosition.y, cameraPosition.z);
-            this.worldRenderTicks = RENDER_GRACE_TICKS;
-        }
-
-        this.pos.set(this.renderTranslation);
-        this.vel.set(0F, 0F, 1F);
-        this.rot.set(matrix).transform(this.vel);
+        this.updatePlacement(context);
 
         if (context.modelRenderer && !context.isPicking())
         {
@@ -106,6 +76,44 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
             this.updatePreview(context.modelRendererTick);
             this.getScene().render(context.camera, context.getTransition());
         }
+    }
+
+    private void updatePlacement(FormRenderingContext context)
+    {
+        FormRenderSpace renderSpace = context.renderSpace == null
+            ? FormRenderSpace.forType(context.type)
+            : context.renderSpace;
+        Matrix4f matrix = this.renderMatrix;
+
+        if (renderSpace == FormRenderSpace.CAMERA_RELATIVE_WORLD)
+        {
+            matrix.set(context.stack.last().pose());
+        }
+        else if (renderSpace == FormRenderSpace.ENTITY_LOCAL && context.world != null)
+        {
+            matrix.set(context.world.last().pose());
+        }
+        else
+        {
+            matrix.set(context.camera.view).invert().mul(context.stack.last().pose());
+        }
+
+        Vector3f translation = matrix.getTranslation(Vectors.TEMP_3F);
+        this.renderTranslation.set(translation.x, translation.y, translation.z);
+
+        if (renderSpace != FormRenderSpace.ENTITY_LOCAL)
+        {
+            this.renderTranslation.add(context.camera.position.x, context.camera.position.y, context.camera.position.z);
+        }
+
+        if (renderSpace.isWorld())
+        {
+            this.worldRenderTicks = RENDER_GRACE_TICKS;
+        }
+
+        this.pos.set(this.renderTranslation);
+        this.vel.set(0F, 0F, 1F);
+        this.rot.set(matrix).transform(this.vel);
     }
 
     private VanillaParticleScene getScene()
@@ -242,43 +250,34 @@ public class VanillaParticleFormRenderer extends FormRenderer<VanillaParticleFor
 
     private ParticleOptions getEffect()
     {
-        ParticleSettings settings = this.form.settings.get();
-        ParticleOptions effect = ParticleTypes.FLAME;
-        Level world = Minecraft.getInstance().level;
+        return createEffect(this.form.settings.get(), Minecraft.getInstance().level);
+    }
+
+    private static ParticleOptions createEffect(ParticleSettings settings, Level world)
+    {
+        String args = settings.arguments == null ? "" : settings.arguments.trim();
 
         try
         {
-            if (world != null)
+            ParticleType<?> type = BuiltInRegistries.PARTICLE_TYPE.get(settings.particle);
+            boolean bareId = !args.isEmpty() && args.charAt(0) != '{';
+
+            if (bareId && type == ParticleTypes.BLOCK)
             {
-                String args = settings.arguments.trim();
-                ParticleType<?> type = BuiltInRegistries.PARTICLE_TYPE.get(settings.particle);
-                boolean bareId = !args.isEmpty() && args.charAt(0) != '{';
-
-                if (bareId && type == ParticleTypes.BLOCK)
-                {
-                    effect = new BlockParticleOption(ParticleTypes.BLOCK, BuiltInRegistries.BLOCK.get(ResourceLocation.parse(args)).defaultBlockState());
-                }
-                else if (bareId && type == ParticleTypes.ITEM)
-                {
-                    effect = new ItemParticleOption(ParticleTypes.ITEM, new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(args))));
-                }
-                else
-                {
-                    String particle = settings.particle.toString();
-
-                    if (!settings.arguments.isEmpty())
-                    {
-                        particle += " " + settings.arguments;
-                    }
-
-                    effect = ParticleArgument.readParticle(new StringReader(particle), world.registryAccess());
-                }
+                return new BlockParticleOption(ParticleTypes.BLOCK, BuiltInRegistries.BLOCK.get(ResourceLocation.parse(args)).defaultBlockState());
             }
+
+            if (bareId && type == ParticleTypes.ITEM)
+            {
+                return new ItemParticleOption(ParticleTypes.ITEM, new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(args))));
+            }
+
+            return ParticleArgument.readParticle(new StringReader(settings.particle + args), world.registryAccess());
         }
         catch (Exception ignored)
-        {}
-
-        return effect;
+        {
+            return ParticleTypes.FLAME;
+        }
     }
 
     private interface ParticleSink

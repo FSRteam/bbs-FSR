@@ -7,9 +7,9 @@ import mchorse.bbs_mod.mob.MobStandIn;
 import mchorse.bbs_mod.mob.VanillaPose;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
-import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 
 /**
  * The vanilla stage of a CEM model: the game's own model of the entity, posed for the frame by the
@@ -62,7 +62,7 @@ public class CemVanillaStage implements ICemVanillaStage
         {
             this.last = entity;
 
-            if (this.baby && entity instanceof AgeableMob mob)
+            if (this.baby && entity instanceof Mob mob)
             {
                 mob.setBaby(true);
             }

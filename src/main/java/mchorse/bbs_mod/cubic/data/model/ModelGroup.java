@@ -17,17 +17,19 @@ import java.util.List;
 
 public class ModelGroup implements IMapSerializable, RigBone
 {
-    public final String id;
+    public String id;
     public Model owner;
     public ModelGroup parent;
     public List<ModelGroup> children = new ArrayList<>();
     public List<ModelCube> cubes = new ArrayList<>();
     public List<ModelMesh> meshes = new ArrayList<>();
     public boolean visible = true;
+    public boolean poseVisible = true;
     public int index = -1;
 
     public float lighting = 0F;
     public Color color = new Color().set(1F, 1F, 1F);
+    public Color overlay = new Color(1F, 1F, 1F, 0F);
     public Transform initial = new Transform();
     public Transform current = new Transform();
 
@@ -53,6 +55,48 @@ public class ModelGroup implements IMapSerializable, RigBone
      * the un-stretched solved chain (the rotation solve), and orb/line sizing stays stable. */
     public Vector3f offset;
 
+    private Quaternionf channelOrient;
+    private Vector3f channelOffset;
+    private boolean channelOrientSet;
+    private boolean channelOffsetSet;
+
+    public void snapshotChannels()
+    {
+        this.channelOrientSet = this.orient != null;
+
+        if (this.channelOrientSet)
+        {
+            if (this.channelOrient == null)
+            {
+                this.channelOrient = new Quaternionf();
+            }
+
+            this.channelOrient.set(this.orient);
+        }
+
+        this.channelOffsetSet = this.offset != null;
+
+        if (this.channelOffsetSet)
+        {
+            if (this.channelOffset == null)
+            {
+                this.channelOffset = new Vector3f();
+            }
+
+            this.channelOffset.set(this.offset);
+        }
+    }
+
+    /**
+     * Rewind orient/offset to the channels-phase snapshot. Fresh instances are handed out where
+     * a value existed — constraint stages mutate what they find in place.
+     */
+    public void restoreChannels()
+    {
+        this.orient = this.channelOrientSet ? new Quaternionf(this.channelOrient) : null;
+        this.offset = this.channelOffsetSet ? new Vector3f(this.channelOffset) : null;
+    }
+
     public ModelGroup(String id)
     {
         this.id = id;
@@ -61,6 +105,8 @@ public class ModelGroup implements IMapSerializable, RigBone
     public void reset()
     {
         this.lighting = 0F;
+        this.poseVisible = true;
+        this.overlay.set(1F, 1F, 1F, 0F);
         this.color.set(1F, 1F, 1F);
         this.glintMode = 0;
         this.glintColor.set(1F, 1F, 1F, 1F);
@@ -69,6 +115,11 @@ public class ModelGroup implements IMapSerializable, RigBone
         this.current.copy(this.initial);
         this.orient = null;
         this.offset = null;
+    }
+
+    public boolean isVisible()
+    {
+        return this.visible && this.poseVisible;
     }
 
     /**
@@ -229,7 +280,10 @@ public class ModelGroup implements IMapSerializable, RigBone
 
             for (ModelCube cube : this.cubes)
             {
-                list.add(cube.toData());
+                MapType map = new MapType(false);
+
+                cube.toData(map);
+                list.add(map);
             }
 
             data.put("cubes", list);
@@ -246,5 +300,111 @@ public class ModelGroup implements IMapSerializable, RigBone
 
             data.put("meshes", list);
         }
+    }
+
+    public void generateQuads(int textureWidth, int textureHeight)
+    {
+        for (ModelCube cube : this.cubes)
+        {
+            cube.generateQuads(textureWidth, textureHeight);
+        }
+    }
+
+    public boolean getGeometryBounds(Vector3f min, Vector3f max)
+    {
+        Vector3f a = new Vector3f(Float.POSITIVE_INFINITY);
+        Vector3f b = new Vector3f(Float.NEGATIVE_INFINITY);
+        boolean any = this.collectOwnBounds(a, b);
+
+        if (!any)
+        {
+            for (ModelGroup child : this.children)
+            {
+                any |= child.collectBranchBounds(a, b);
+            }
+        }
+
+        if (any)
+        {
+            min.set(a);
+            max.set(b);
+        }
+
+        return any;
+    }
+
+    private boolean collectBranchBounds(Vector3f min, Vector3f max)
+    {
+        boolean any = this.collectOwnBounds(min, max);
+
+        for (ModelGroup child : this.children)
+        {
+            any |= child.collectBranchBounds(min, max);
+        }
+
+        return any;
+    }
+
+    private boolean collectOwnBounds(Vector3f min, Vector3f max)
+    {
+        Vector3f point = new Vector3f();
+        boolean any = false;
+
+        for (ModelCube cube : this.cubes)
+        {
+            Quaternionf rotation = boxRotation(cube.rotate);
+
+            for (int i = 0; i < 8; i++)
+            {
+                point.set(
+                    (i & 1) == 0 ? cube.origin.x - cube.inflate : cube.origin.x + cube.size.x + cube.inflate,
+                    (i & 2) == 0 ? cube.origin.y - cube.inflate : cube.origin.y + cube.size.y + cube.inflate,
+                    (i & 4) == 0 ? cube.origin.z - cube.inflate : cube.origin.z + cube.size.z + cube.inflate
+                );
+
+                extendBounds(min, max, point, rotation, cube.pivot);
+            }
+
+            any = true;
+        }
+
+        for (ModelMesh mesh : this.meshes)
+        {
+            Quaternionf rotation = boxRotation(mesh.rotate);
+
+            for (Vector3f vertex : mesh.baseData.vertices)
+            {
+                /* Mesh vertices are in blocks, and this box — like every pivot here — is in pixels. */
+                point.set(vertex).mul(16F);
+                extendBounds(min, max, point, rotation, mesh.origin);
+
+                any = true;
+            }
+        }
+
+        return any;
+    }
+
+    private static Quaternionf boxRotation(Vector3f rotate)
+    {
+        return rotate.x == 0F && rotate.y == 0F && rotate.z == 0F
+            ? null
+            : Matrices.toLocalRotationZYXDegrees(rotate);
+    }
+
+    private static void extendBounds(Vector3f min, Vector3f max, Vector3f point, Quaternionf rotation, Vector3f pivot)
+    {
+        if (rotation != null)
+        {
+            rotation.transform(point.sub(pivot)).add(pivot);
+        }
+
+        min.min(point);
+        max.max(point);
+    }
+
+    public Vector3f getRestTranslation()
+    {
+        return this.initial.translate;
     }
 }

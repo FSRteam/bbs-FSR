@@ -25,6 +25,44 @@ public class Matrices
     private static final Matrix3f rotation = new Matrix3f();
     private static final Vector3f forward = new Vector3f();
 
+    public static Matrix4f compose(Matrix4f position, Matrix4f rotation, Matrix4f scale)
+    {
+        Matrix3f basis = new Matrix3f();
+
+        if (rotation == scale)
+        {
+            rotation.get3x3(basis);
+        }
+        else
+        {
+            Matrix3f rotationBasis = rotation.get3x3(new Matrix3f());
+            Matrix3f scaleBasis = scale.get3x3(new Matrix3f());
+            Vector3f axis = new Vector3f();
+            Vector3f other = new Vector3f();
+
+            for (int i = 0; i < 3; i++)
+            {
+                rotationBasis.getColumn(i, axis);
+                scaleBasis.getColumn(i, other);
+
+                float length = axis.length();
+
+                if (length < 1E-6F)
+                {
+                    axis.set(i == 0 ? 1F : 0F, i == 1 ? 1F : 0F, i == 2 ? 1F : 0F);
+                }
+                else
+                {
+                    axis.mul(other.length() / length);
+                }
+
+                basis.setColumn(i, axis);
+            }
+        }
+
+        return new Matrix4f().set(basis).setTranslation(position.getTranslation(new Vector3f()));
+    }
+
     public static Vector3f rotate(Vector3f vector, float pitch, float yaw)
     {
         rotation.identity();

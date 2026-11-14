@@ -1,42 +1,60 @@
 package mchorse.bbs_mod.mob;
 
 import mchorse.bbs_mod.utils.pose.Pose;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.model.geom.ModelPart;
 import org.joml.Vector3f;
 
 import java.util.Map;
+import java.util.List;
 
 /**
  * Writes a pose onto a vanilla model's parts, and takes it back off again.
  *
- * <p>Ported from upstream e341fa733. Vanilla model parts are shared by every entity of that kind in
- * the world, so the pose is ADDED on top of the angles {@code setupAnim} just computed and the
- * originals are put aside to be restored the moment the render is over. Both halves live here
- * because the film's offline matrix evaluation needs exactly the same pair, and a second copy of
- * this arithmetic is how the two would quietly drift apart.</p>
+ * <p>Vanilla model parts are shared by every entity of that kind in the world, so the pose is
+ * ADDED on top of the angles {@code setAngles} just computed and the originals are put aside to be
+ * restored the moment the render is over. Both halves live here because the film's offline matrix
+ * evaluation needs exactly the same pair, and a second copy of this arithmetic is how the two
+ * would quietly drift apart.</p>
  */
 public class MobPoseApplier
 {
+    private static class SavedTransform extends Transform
+    {
+        public boolean hidden;
+    }
+
     /**
      * The pose stack of a mob form: its pose with the overlay folded in. Same rule as the model
      * form's merge — a non-zero {@code fix} lerps toward the overlay, otherwise it sums.
      */
     public static Pose merge(Pose pose, Pose overlay)
     {
-        Pose merged = pose.copy();
+        return merge(pose, overlay, List.of());
+    }
 
+    public static Pose merge(Pose pose, Pose overlay, List<ValuePose> additional)
+    {
+        Pose merged = pose.copy();
+        applyOverlay(merged, overlay);
+        for (ValuePose value : additional) applyOverlay(merged, value.get());
+        return merged;
+    }
+
+    private static void applyOverlay(Pose merged, Pose overlay)
+    {
         if (overlay == null)
         {
-            return merged;
+            return;
         }
 
         for (Map.Entry<String, PoseTransform> entry : overlay.transforms.entrySet())
         {
-            /* FSR's Pose.get creates the slot on first touch (upstream's getOrCreate). */
-            PoseTransform poseTransform = merged.get(entry.getKey());
+            PoseTransform poseTransform = merged.getOrCreate(entry.getKey());
             PoseTransform value = entry.getValue();
+            poseTransform.visible &= value.visible;
 
             if (value.fix != 0)
             {
@@ -51,8 +69,6 @@ public class MobPoseApplier
                 poseTransform.addRotation(value);
             }
         }
-
-        return merged;
     }
 
     public static void apply(MobRig rig, Pose pose, Map<ModelPart, Transform> saved)
@@ -71,7 +87,10 @@ public class MobPoseApplier
                 continue;
             }
 
-            Transform transform = new Transform();
+            SavedTransform transform = new SavedTransform();
+
+            transform.hidden = part.skipDraw;
+            part.skipDraw |= !poseTransform.visible;
 
             transform.translate.set(part.x, part.y, part.z);
             transform.rotate.set(part.xRot, part.yRot, part.zRot);
@@ -101,6 +120,11 @@ public class MobPoseApplier
         {
             ModelPart part = entry.getKey();
             Transform transform = entry.getValue();
+
+            if (transform instanceof SavedTransform original)
+            {
+                part.skipDraw = original.hidden;
+            }
 
             part.x = transform.translate.x;
             part.y = transform.translate.y;

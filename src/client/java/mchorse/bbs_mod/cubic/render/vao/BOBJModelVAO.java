@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.cubic.render.vao;
 
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
+
 import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJLoader;
 import mchorse.bbs_mod.client.BBSRendering;
@@ -14,6 +16,8 @@ import org.joml.Vector4f;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL30;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class BOBJModelVAO
@@ -27,6 +31,7 @@ public class BOBJModelVAO
 
     private int vao;
     private int count;
+    private List<int[]> visibleRanges;
 
     /* GL buffers */
     public int vertexBuffer;
@@ -42,6 +47,8 @@ public class BOBJModelVAO
     private float[] tmpTangents;
     private int[] dominantBones;
     private Matrix4f[] uploadedMatrices;
+    private boolean[] uploadedVisibility;
+    private boolean uploadedIrisTangents;
     private boolean pickingPrepared;
     private boolean pickingIncrement;
     private int uploadCount;
@@ -181,6 +188,28 @@ public class BOBJModelVAO
         return snapshot;
     }
 
+    /** Null represents the common all-visible pose. */
+    public boolean[] snapshotVisibility()
+    {
+        boolean[] visible = null;
+
+        for (int i = 0; i < this.armature.orderedBones.size(); i++)
+        {
+            if (!this.armature.orderedBones.get(i).visible)
+            {
+                if (visible == null)
+                {
+                    visible = new boolean[this.armature.orderedBones.size()];
+                    Arrays.fill(visible, true);
+                }
+
+                visible[i] = false;
+            }
+        }
+
+        return visible;
+    }
+
     public void updateMesh(StencilMap stencilMap, Matrix4f[] matrices)
     {
         boolean armatureChanged = false;
@@ -199,18 +228,80 @@ public class BOBJModelVAO
      */
     public void updateMesh(StencilMap stencilMap, Matrix4f[] matrices, boolean armatureChanged)
     {
+        this.updateMesh(stencilMap, matrices, this.snapshotVisibility(), armatureChanged);
+    }
+
+    /** Restores a deferred draw's visibility independently of the shared armature's current pose. */
+    public void updateMesh(StencilMap stencilMap, Matrix4f[] matrices, boolean[] visible)
+    {
+        this.updateMesh(stencilMap, matrices, visible, this.hasArmatureChanged(matrices));
+    }
+
+    private void updateMesh(StencilMap stencilMap, Matrix4f[] matrices, boolean[] visible, boolean armatureChanged)
+    {
         if (armatureChanged || this.uploadedMatrices == null
             || matrices == null && this.uploadedMatrices.length != 0
-            || matrices != null && matrices.length != this.uploadedMatrices.length)
+            || matrices != null && matrices.length != this.uploadedMatrices.length
+            || !Arrays.equals(visible, this.uploadedVisibility)
+            || BBSRendering.isIrisShadersEnabled() && !this.uploadedIrisTangents)
         {
+            BBSProfiler.count(BBSProfiler.Section.BOBJ_SKINS);
+            this.updateVisibleRanges(visible);
             this.updateGeometry(matrices);
             this.rememberArmature(matrices);
+            this.uploadedVisibility = visible == null ? null : visible.clone();
             this.uploadCount += 1;
+        }
+        else
+        {
+            BBSProfiler.count(BBSProfiler.Section.BOBJ_SKINS_SKIPPED);
         }
 
         if (stencilMap != null)
         {
             this.updatePicking(stencilMap);
+        }
+    }
+
+    private void updateVisibleRanges(boolean[] visible)
+    {
+        this.visibleRanges = null;
+
+        if (visible == null)
+        {
+            return;
+        }
+
+        this.visibleRanges = new ArrayList<>();
+        int start = 0;
+
+        for (int i = 0; i < this.count; i += 3)
+        {
+            boolean shown = true;
+
+            /* A hidden influence omits the whole triangle, matching pose visibility on cubic bones. */
+            for (int w = i * 4; w < (i + 3) * 4 && shown; w++)
+            {
+                if (this.data.weightData[w] > 0F && !visible[this.data.boneIndexData[w]])
+                {
+                    shown = false;
+                }
+            }
+
+            if (!shown)
+            {
+                if (start < i)
+                {
+                    this.visibleRanges.add(new int[] {start, i - start});
+                }
+
+                start = i + 3;
+            }
+        }
+
+        if (start < this.count)
+        {
+            this.visibleRanges.add(new int[] {start, this.count - start});
         }
     }
 
@@ -336,7 +427,9 @@ public class BOBJModelVAO
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.normalBuffer);
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, newNormals, GL15.GL_DYNAMIC_DRAW);
 
-        if (BBSRendering.isIrisShadersEnabled())
+        this.uploadedIrisTangents = BBSRendering.isIrisShadersEnabled();
+
+        if (this.uploadedIrisTangents)
         {
             BBSRendering.calculateTangents(this.tmpTangents, newVertices, newNormals, this.data.texData);
 
@@ -431,7 +524,17 @@ public class BOBJModelVAO
         if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.TANGENTS);
         if (hasShaders) GL30.glEnableVertexAttribArray(Attributes.MID_TEXTURE_UV);
 
-        GL30.glDrawArrays(GL30.GL_TRIANGLES, 0, this.count);
+        if (this.visibleRanges == null)
+        {
+            GL30.glDrawArrays(GL30.GL_TRIANGLES, 0, this.count);
+        }
+        else
+        {
+            for (int[] range : this.visibleRanges)
+            {
+                GL30.glDrawArrays(GL30.GL_TRIANGLES, range[0], range[1]);
+            }
+        }
 
         GL30.glDisableVertexAttribArray(Attributes.POSITION);
         GL30.glDisableVertexAttribArray(Attributes.TEXTURE_UV);

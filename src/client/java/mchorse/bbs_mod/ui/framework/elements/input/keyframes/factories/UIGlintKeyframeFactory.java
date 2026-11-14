@@ -128,6 +128,13 @@ public class UIGlintKeyframeFactory extends UIKeyframeFactory<GlintControls>
         this.bones.filter(true);
     }
 
+    @Override
+    public void update()
+    {
+        super.update();
+        this.display();
+    }
+
     private void display()
     {
         String bone = this.primaryBone();
@@ -157,7 +164,7 @@ public class UIGlintKeyframeFactory extends UIKeyframeFactory<GlintControls>
 
     private GlintControl displayControl(String bone)
     {
-        GlintControl control = this.keyframe.getValue().controls.get(bone);
+        GlintControl control = this.getDisplayValue().controls.get(bone);
 
         return control == null ? this.baseControl(bone) : control;
     }

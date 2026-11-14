@@ -80,6 +80,28 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
         UIContext context = this.getContext();
         float tick = this.editor.getKeyframeCursor(context == null ? 0F : context.getTransition()) - this.clip.tick.get();
 
+        if (this.clip.additive.get())
+        {
+            Position underneath = this.clip.getUnderneath();
+            float factor = this.clip.envelope.factorEnabled(this.clip.duration.get(), tick);
+
+            /* Editing the reference or a zero-weight sample would change the whole clip. */
+            if (underneath == null || tick <= 0F || factor == 0F || !this.clip.enabled.get())
+            {
+                return;
+            }
+
+            this.insertAdditiveKeyframe(tick, this.clip.x, (newPos.point.x - underneath.point.x) / factor);
+            this.insertAdditiveKeyframe(tick, this.clip.y, (newPos.point.y - underneath.point.y) / factor);
+            this.insertAdditiveKeyframe(tick, this.clip.z, (newPos.point.z - underneath.point.z) / factor);
+            this.insertAdditiveKeyframe(tick, this.clip.yaw, (newPos.angle.yaw - underneath.angle.yaw) / factor);
+            this.insertAdditiveKeyframe(tick, this.clip.pitch, (newPos.angle.pitch - underneath.angle.pitch) / factor);
+            this.insertAdditiveKeyframe(tick, this.clip.roll, (newPos.angle.roll - underneath.angle.roll) / factor);
+            this.insertAdditiveKeyframe(tick, this.clip.fov, (newPos.angle.fov - underneath.angle.fov) / factor);
+
+            return;
+        }
+
         if (!this.clip.distance.isEmpty())
         {
             double distance = this.clip.distance.interpolate(tick);
@@ -104,6 +126,18 @@ public class UIKeyframeClip extends UIClip<KeyframeClip>
         this.insertKeyframe(tick, this.clip.pitch, newPos.angle.pitch);
         this.insertKeyframe(tick, this.clip.roll, newPos.angle.roll);
         this.insertKeyframe(tick, this.clip.fov, newPos.angle.fov);
+    }
+
+    private void insertAdditiveKeyframe(float tick, KeyframeChannel<Double> channel, double offset)
+    {
+        double reference = channel.isEmpty() ? 0D : channel.interpolate(0F);
+
+        if (channel.getKeyframes().stream().noneMatch(keyframe -> keyframe.getTick() == 0F))
+        {
+            this.insertKeyframe(0F, channel, reference);
+        }
+
+        this.insertKeyframe(tick, channel, reference - offset);
     }
 
     private void insertKeyframe(float tick, KeyframeChannel<Double> channel, double x)

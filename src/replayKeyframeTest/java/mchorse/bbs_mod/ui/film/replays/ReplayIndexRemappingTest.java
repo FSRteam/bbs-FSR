@@ -1,6 +1,11 @@
 package mchorse.bbs_mod.ui.film.replays;
 
+import mchorse.bbs_mod.api.client.editor.TrackCategories;
+import mchorse.bbs_mod.api.client.editor.TrackCategory;
+
 import com.mojang.serialization.Lifecycle;
+import mchorse.bbs_mod.api.client.ui.BBSUiRemoteInputState;
+import mchorse.bbs_mod.client.ui.mirror.BBSUiRemoteHeldState;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
@@ -10,6 +15,10 @@ import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.clips.modifiers.LookClip;
 import mchorse.bbs_mod.cubic.glint.GlintControls;
 import mchorse.bbs_mod.data.DataStorageUtils;
+import mchorse.bbs_mod.data.GameRegistriesTest;
+import mchorse.bbs_mod.resources.AssetProviderParityTest;
+import mchorse.bbs_mod.ui.dashboard.textures.TextureEditorParityTest;
+import mchorse.bbs_mod.utils.UtilsRangeParityTest;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
@@ -19,6 +28,7 @@ import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BodyPart;
@@ -27,16 +37,30 @@ import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
 import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.settings.values.core.ValueRecentData;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.KeyframeNavigationTest;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeLoops;
 import mchorse.bbs_mod.ui.film.utils.keyframes.KeyframeInteractionTest;
+import mchorse.bbs_mod.ui.model_editor.ModelEditorMigrationTest;
+import mchorse.bbs_mod.settings.SettingsBuilder;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.factory.MapFactory;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import mchorse.bbs_mod.utils.keyframes.KeyframeLoop;
+import mchorse.bbs_mod.utils.keyframes.KeyframeLoops;
+import mchorse.bbs_mod.ui.framework.UIBaseMenu;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
+import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.utils.keyframes.factories.ItemStackKeyframeFactory;
 import mchorse.bbs_mod.utils.keyframes.factories.SoundKeyframeFactory;
 import net.minecraft.SharedConstants;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.MappedRegistry;
@@ -53,11 +77,15 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.neoforged.fml.loading.LoadingModList;
+import net.neoforged.neoforge.internal.CommonModLoader;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
 
 /**
  * Replay identity under list mutation.
@@ -81,7 +109,7 @@ public final class ReplayIndexRemappingTest
     /** How many replays the identity scenarios build. Single deletion is enumerated over every slot. */
     private static final int REPLAY_COUNT = 4;
 
-    public static void main(String[] args)
+    public static void main(String[] args) throws Exception
     {
         Runnable restoreRuntime = installHeadlessClientRuntime();
 
@@ -106,10 +134,34 @@ public final class ReplayIndexRemappingTest
             testForeignChannelRoundTrip();
             testEnchantedEquipmentSerializationRoundTrip();
             testEnchantedItemPickerNbtRoundTrip();
+            GameRegistriesTest.runAll();
+            AssetProviderParityTest.runAll();
             testDeathKeyframeChannel();
+            testKeyframeLoopRoundTrip();
+            testLoopSplineNeighbours();
+            testLoopEditingAcrossHiddenChannels();
+            testLoopMovesStopAtNeighbours();
+            testLoopBoundaryEditsAndTimeInsertion();
+            testReplayRootPlacementGestures();
+            testRecentDataRoundTrip();
+            ModelEditorMigrationTest.runAll();
+            FS26FormClipParityTest.runAll();
+            FS26TimelineParityTest.runAll();
+            TrackRuntimeParityTest.runAll();
+            PosedFormParityTest.runAll();
+            ReplayStateParityTest.runAll();
+            mchorse.bbs_mod.ui.framework.elements.input.drag.TransformGestureParityTest.runAll();
             ReplayIdentityLookupSourceTest.run();
             KeyframeNavigationTest.run();
             KeyframeInteractionTest.run();
+            mchorse.bbs_mod.ui.forms.editors.AutoKeyframeUndoTest.runAll();
+            mchorse.bbs_mod.ui.forms.FormPaletteParityTest.runAll();
+            mchorse.bbs_mod.ui.forms.editors.BodyPartTreeParityTest.runAll();
+            mchorse.bbs_mod.ui.forms.editors.FaceSetupParityTest.runAll();
+            FS26SupplementalContractTest.runAll();
+            TextureEditorParityTest.runAll();
+            UtilsRangeParityTest.runAll();
+            sample.fs26addon.AddonApiCheck.runAll();
 
             System.out.println("Replay/keyframe consistency tests passed");
         }
@@ -128,14 +180,46 @@ public final class ReplayIndexRemappingTest
             Field cameraFactory = BBSMod.class.getDeclaredField("factoryCameraClips");
             Field actionFactory = BBSMod.class.getDeclaredField("factoryActionClips");
             Field l10n = BBSModClient.class.getDeclaredField("l10n");
+            Field minecraft = Minecraft.class.getDeclaredField("instance");
+            Field registriesLoaded = CommonModLoader.class.getDeclaredField("registriesLoaded");
 
             cameraFactory.setAccessible(true);
             actionFactory.setAccessible(true);
             l10n.setAccessible(true);
+            minecraft.setAccessible(true);
+            registriesLoaded.setAccessible(true);
 
             Object previousCameraFactory = cameraFactory.get(null);
             Object previousActionFactory = actionFactory.get(null);
             Object previousL10n = l10n.get(null);
+            Object previousMinecraft = minecraft.get(null);
+            boolean previousRegistriesLoaded = registriesLoaded.getBoolean(null);
+            Map<Field, Object> previousSettings = new HashMap<>();
+            for (Field field : BBSSettings.class.getFields())
+            {
+                if (BaseValue.class.isAssignableFrom(field.getType()))
+                {
+                    previousSettings.put(field, field.get(null));
+                }
+            }
+            BBSSettings.register(new SettingsBuilder(null, "headless", null));
+            Method installHeld = BBSUiRemoteHeldState.class.getDeclaredMethod("install", long.class, BBSUiRemoteInputState.class);
+            Method clearHeld = BBSUiRemoteHeldState.class.getDeclaredMethod("clear", long.class);
+            installHeld.setAccessible(true);
+            clearHeld.setAccessible(true);
+            long inputLease = (long) installHeld.invoke(null, 73L, new BBSUiRemoteInputState(0D, 0D, 0, Set.of(), 0));
+
+            if (previousMinecraft == null)
+            {
+                Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+                Field singleton = unsafeClass.getDeclaredField("theUnsafe");
+                singleton.setAccessible(true);
+                Object unsafe = singleton.get(null);
+                Object headless = unsafeClass.getMethod("allocateInstance", Class.class).invoke(unsafe, Minecraft.class);
+                long fontOffset = (long) unsafeClass.getMethod("objectFieldOffset", Field.class).invoke(unsafe, Minecraft.class.getField("font"));
+                unsafeClass.getMethod("putObject", Object.class, long.class, Object.class).invoke(unsafe, headless, fontOffset, new HeadlessFont());
+                minecraft.set(null, headless);
+            }
 
             if (previousCameraFactory == null)
             {
@@ -152,6 +236,10 @@ public final class ReplayIndexRemappingTest
                 l10n.set(null, new L10n());
             }
 
+            /* Vanilla registries are ready; mirror the loader phase before client materials load. */
+            registriesLoaded.setBoolean(null, true);
+            FormUtilsClient.setup();
+
             return () ->
             {
                 try
@@ -159,8 +247,15 @@ public final class ReplayIndexRemappingTest
                     l10n.set(null, previousL10n);
                     actionFactory.set(null, previousActionFactory);
                     cameraFactory.set(null, previousCameraFactory);
+                    minecraft.set(null, previousMinecraft);
+                    registriesLoaded.setBoolean(null, previousRegistriesLoaded);
+                    for (Map.Entry<Field, Object> setting : previousSettings.entrySet())
+                    {
+                        setting.getKey().set(null, setting.getValue());
+                    }
+                    clearHeld.invoke(null, inputLease);
                 }
-                catch (IllegalAccessException exception)
+                catch (ReflectiveOperationException exception)
                 {
                     throw new AssertionError("Could not restore the replay/keyframe test runtime", exception);
                 }
@@ -615,20 +710,20 @@ public final class ReplayIndexRemappingTest
 
     private static void testReplayTrackCategories()
     {
-        assertTrackCategory("x", false, UIReplaysEditor.ReplayCategory.PLAYER);
-        assertTrackCategory("visible", true, UIReplaysEditor.ReplayCategory.MODEL);
-        assertTrackCategory("pose", true, UIReplaysEditor.ReplayCategory.POSE);
-        assertTrackCategory("transform_overlay", true, UIReplaysEditor.ReplayCategory.POSE);
-        assertTrackCategory("shape_keys", true, UIReplaysEditor.ReplayCategory.POSE);
-        assertTrackCategory(FormControlKeys.toGlintControlKey(""), true, UIReplaysEditor.ReplayCategory.POSE);
-        assertTrackCategory(PerLimbService.toPoseBoneKey("", "arm"), true, UIReplaysEditor.ReplayCategory.POSE);
-        assertTrackCategory(FormControlKeys.toIKControlKey(""), true, UIReplaysEditor.ReplayCategory.IK);
-        assertTrackCategory(PerLimbService.toIKTargetKey("", "hand"), true, UIReplaysEditor.ReplayCategory.IK);
-        assertTrackCategory(PerLimbService.toPoleTargetKey("", "hand"), true, UIReplaysEditor.ReplayCategory.IK);
-        assertTrackCategory(FormControlKeys.toPhysicsControlKey(""), true, UIReplaysEditor.ReplayCategory.PHYSICS);
-        assertTrackCategory(FormControlKeys.toWindControlKey(""), true, UIReplaysEditor.ReplayCategory.PHYSICS);
-        assertTrackCategory(PerLimbService.toPhysicsTargetKey("", "cape"), true, UIReplaysEditor.ReplayCategory.PHYSICS);
-        assertTrackCategory(PerLimbService.toMaterialTextureKey("", "body"), true, UIReplaysEditor.ReplayCategory.MODEL);
+        assertTrackCategory("x", false, TrackCategories.REPLAY);
+        assertTrackCategory("visible", true, TrackCategories.FORM);
+        assertTrackCategory("pose", true, TrackCategories.POSE);
+        assertTrackCategory("transform_overlay", true, TrackCategories.POSE);
+        assertTrackCategory("shape_keys", true, TrackCategories.POSE);
+        assertTrackCategory(FormControlKeys.toGlintControlKey(""), true, TrackCategories.POSE);
+        assertTrackCategory(PerLimbService.toPoseBoneKey("", "arm"), true, TrackCategories.POSE);
+        assertTrackCategory(FormControlKeys.toIKControlKey(""), true, TrackCategories.IK);
+        assertTrackCategory(PerLimbService.toIKTargetKey("", "hand"), true, TrackCategories.IK);
+        assertTrackCategory(PerLimbService.toPoleTargetKey("", "hand"), true, TrackCategories.IK);
+        assertTrackCategory(FormControlKeys.toPhysicsControlKey(""), true, TrackCategories.PHYSICS);
+        assertTrackCategory(FormControlKeys.toWindControlKey(""), true, TrackCategories.PHYSICS);
+        assertTrackCategory(PerLimbService.toPhysicsTargetKey("", "cape"), true, TrackCategories.PHYSICS);
+        assertTrackCategory(PerLimbService.toMaterialTextureKey("", "body"), true, TrackCategories.FORM);
 
         /* A per-limb track addresses its limb by a NAME, and that name is free text: a bone,
          * material or IK controller may legitimately be called "ik_controls". The whole-form
@@ -651,13 +746,13 @@ public final class ReplayIndexRemappingTest
         assertTrue(!FormControlKeys.isIKControlChannel("not_ik_controls_really"),
             "an unrelated id containing ik_controls was read as the whole-form IK-controls track");
 
-        assertTrackCategory(PerLimbService.toPoseBoneKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.POSE);
-        assertTrackCategory(PerLimbService.toPoseBoneKey("ik_controls", "arm"), true, UIReplaysEditor.ReplayCategory.POSE);
-        assertTrackCategory(PerLimbService.toIKTargetKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.IK);
-        assertTrackCategory(PerLimbService.toPoleTargetKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.IK);
-        assertTrackCategory(PerLimbService.toPhysicsTargetKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.PHYSICS);
-        assertTrackCategory(PerLimbService.toMaterialTextureKey("", "ik_controls"), true, UIReplaysEditor.ReplayCategory.MODEL);
-        assertTrackCategory("not_ik_controls_really", true, UIReplaysEditor.ReplayCategory.MODEL);
+        assertTrackCategory(PerLimbService.toPoseBoneKey("", "ik_controls"), true, TrackCategories.POSE);
+        assertTrackCategory(PerLimbService.toPoseBoneKey("ik_controls", "arm"), true, TrackCategories.POSE);
+        assertTrackCategory(PerLimbService.toIKTargetKey("", "ik_controls"), true, TrackCategories.IK);
+        assertTrackCategory(PerLimbService.toPoleTargetKey("", "ik_controls"), true, TrackCategories.IK);
+        assertTrackCategory(PerLimbService.toPhysicsTargetKey("", "ik_controls"), true, TrackCategories.PHYSICS);
+        assertTrackCategory(PerLimbService.toMaterialTextureKey("", "ik_controls"), true, TrackCategories.FORM);
+        assertTrackCategory("not_ik_controls_really", true, TrackCategories.FORM);
 
         /* The positive side must not have moved: the real control track is still owned by IK. */
         assertTrue(FormControlKeys.isIKControlChannel(FormControlKeys.toIKControlKey("")),
@@ -667,11 +762,11 @@ public final class ReplayIndexRemappingTest
 
         UIKeyframeSheet physics = trackSheet(FormControlKeys.toPhysicsControlKey(""), true);
 
-        assertTrue(UIReplaysEditor.shouldShowTrack(physics, UIReplaysEditor.ReplayCategory.PLAYER, true),
+        assertTrue(UIReplaysEditor.shouldShowTrack(physics, TrackCategories.REPLAY, true),
             "all-tracks mode still applies a category filter");
-        assertTrue(!UIReplaysEditor.shouldShowTrack(physics, UIReplaysEditor.ReplayCategory.PLAYER, false),
+        assertTrue(!UIReplaysEditor.shouldShowTrack(physics, TrackCategories.REPLAY, false),
             "player tab includes physics tracks");
-        assertTrue(UIReplaysEditor.shouldShowTrack(physics, UIReplaysEditor.ReplayCategory.PHYSICS, false),
+        assertTrue(UIReplaysEditor.shouldShowTrack(physics, TrackCategories.PHYSICS, false),
             "physics tab drops its own tracks");
     }
 
@@ -1112,12 +1207,18 @@ public final class ReplayIndexRemappingTest
 
         MapType saved = properties.toData().asMap();
 
-        assertTrue(saved.has("foreign_channel"), "unknown-factory channel is dropped on save");
-        assertEquals("myaddon:custom_factory", saved.getMap("foreign_channel").getString("type"),
-            "unknown-factory channel type is not preserved verbatim");
-        assertEquals(1, saved.getMap("foreign_channel").getList("keyframes").size(),
-            "unknown-factory channel keyframes are not preserved");
-        assertTrue(saved.has("known_channel"), "known channel disappeared next to a foreign one");
+        MapType foreign = null;
+        boolean known = false;
+        for (BaseType item : saved.getList("tracks"))
+        {
+            MapType track = item.asMap();
+            if (track.getString("subject").equals("foreign_channel")) foreign = track.getMap("channel");
+            if (track.getString("subject").equals("known_channel")) known = true;
+        }
+        assertTrue(foreign != null, "unknown-factory channel is dropped on save");
+        assertEquals("myaddon:custom_factory", foreign.getString("type"), "unknown-factory channel type is not preserved verbatim");
+        assertEquals(1, foreign.getList("keyframes").size(), "unknown-factory channel keyframes are not preserved");
+        assertTrue(known, "known channel disappeared next to a foreign one");
     }
 
     private static void testGlintLayerKeyframes()
@@ -1153,9 +1254,9 @@ public final class ReplayIndexRemappingTest
             "an explicit default/off glint bone disappeared during serialization");
     }
 
-    private static void assertTrackCategory(String id, boolean owned, UIReplaysEditor.ReplayCategory expected)
+    private static void assertTrackCategory(String id, boolean owned, TrackCategory expected)
     {
-        UIReplaysEditor.ReplayCategory actual = UIReplaysEditor.categoryOf(trackSheet(id, owned));
+        TrackCategory actual = UIReplaysEditor.categoryOf(trackSheet(id, owned));
 
         assertTrue(actual == expected,
             "track " + id + " was classified as " + actual + " instead of " + expected);
@@ -1352,5 +1453,212 @@ public final class ReplayIndexRemappingTest
         assertEquals(20D, entity.getDeath(), "death 1 after a ramp did not map to 20");
 
         assertTrue(entity.getHurtTimer() >= 1, "applied death did not keep the red flash active");
+    }
+
+    private static void testKeyframeLoopRoundTrip()
+    {
+        KeyframeChannel<Float> channel = new KeyframeChannel<>("loop", KeyframeFactories.FLOAT);
+        channel.insert(0F, 0F);
+        channel.insert(5F, 1F);
+
+        KeyframeLoop loop = new KeyframeLoop("loop-id", 0F, 5F, 10F);
+        channel.putLoop(loop);
+        assertEquals(10D, channel.getLength(), "loop end is missing from channel length");
+        assertEquals(1D, channel.interpolate(5F), "loop source boundary changed the source value");
+        assertEquals((double) channel.interpolate(1F), (double) channel.interpolate(6F), "loop playback did not wrap to the source interval");
+
+        BaseType encoded = DataStorageUtils.readFromBytes(DataStorageUtils.writeToBytes(channel.toData()));
+        KeyframeChannel<Float> restored = new KeyframeChannel<>("loop", KeyframeFactories.FLOAT);
+        restored.fromData(encoded);
+        assertTrue(restored.getLoop("loop-id") != null, "keyframe loop was not persisted");
+        assertEquals(10D, restored.getLength(), "restored loop end is missing from channel length");
+        assertEquals((double) restored.interpolate(1F), (double) restored.interpolate(6F), "restored loop playback did not wrap");
+    }
+
+    private static void testRecentDataRoundTrip()
+    {
+        ValueRecentData recent = new ValueRecentData("recent").limit(2);
+        recent.touch("film", "a");
+        recent.touch("film", "b");
+        recent.touch("film", "a");
+        assertEquals("a", recent.get("film").get(0).id, "recent data did not move touched item to the front");
+        assertEquals(2, recent.get("film").size(), "recent data limit was not enforced");
+
+        recent.rename("film", "a", "renamed");
+        recent.touch("film", "renamed/item");
+        recent.renameFolder("film", "renamed", "folder");
+        BaseType encoded = DataStorageUtils.readFromBytes(DataStorageUtils.writeToBytes(recent.toData()));
+        ValueRecentData restored = new ValueRecentData("recent").limit(2);
+        restored.fromData(encoded);
+        assertEquals("folder/item", restored.get("film").get(0).id, "recent folder rename was not persisted");
+    }
+
+    private static void testLoopEditingAcrossHiddenChannels()
+    {
+        Replay replay = new Replay("loop-owner");
+        replay.keyframes.x.insert(0F, 0D);
+        replay.keyframes.x.insert(5F, 5D);
+        replay.keyframes.y.insert(0F, 10D);
+        replay.keyframes.y.insert(5F, 15D);
+        replay.keyframes.y.insert(14F, 20D);
+        List<KeyframeChannel<?>> channels = List.of(replay.keyframes.x, replay.keyframes.y);
+        KeyframeLoop loop = KeyframeLoops.create(channels, 0F, 5F);
+        assertTrue(loop != null, "selected channels did not create a loop");
+        assertEquals(2, KeyframeLoops.members(replay.keyframes.x, loop.id()).size(), "filtered-out sibling was not found");
+        KeyframeLoops.resize(KeyframeLoops.members(replay.keyframes.x, loop.id()), loop.id(), 100F);
+        assertEquals(14D, replay.keyframes.x.getLoop(loop.id()).end(), "resize crossed a hidden sibling key");
+        assertEquals(14D, replay.keyframes.y.getLoop(loop.id()).end(), "hidden loop member did not resize");
+        assertTrue(KeyframeLoops.create(channels, 4F, 5F) == null, "overlapping loop source was accepted");
+
+        Film film = new Film();
+        film.replays.add(replay);
+        Replay copy = new Replay("copied-owner");
+        copy.fromData(replay.toData());
+        film.replays.add(copy);
+        assertEquals(2, KeyframeLoops.members(replay.keyframes.x, loop.id()).size(), "copied replay leaked into original loop scope");
+        UIKeyframes view = new UIKeyframes(null);
+        view.addSheet(new UIKeyframeSheet(0, false, replay.keyframes.x, null));
+        view.addSheet(new UIKeyframeSheet(0, false, copy.keyframes.x, null));
+        new UIKeyframeLoops(view).setEnd(replay.keyframes.x, loop.id(), 12F);
+        assertEquals(12D, replay.keyframes.y.getLoop(loop.id()).end(), "UI resize missed a hidden owner sibling");
+        assertEquals(14D, copy.keyframes.x.getLoop(loop.id()).end(), "UI resize crossed the copied replay scope");
+        KeyframeLoops.remove(KeyframeLoops.members(replay.keyframes.x, loop.id()), loop.id());
+        assertTrue(replay.keyframes.x.getLoops().isEmpty() && replay.keyframes.y.getLoops().isEmpty(), "group removal left a hidden member");
+        assertTrue(copy.keyframes.x.getLoop(loop.id()) != null, "group removal modified a copied replay");
+    }
+
+    private static void testLoopMovesStopAtNeighbours()
+    {
+        KeyframeChannel<Float> channel = new KeyframeChannel<>("moving", KeyframeFactories.FLOAT);
+        channel.insert(2F, 2F);
+        channel.insert(5F, 5F);
+        channel.insert(10F, 10F);
+        channel.insert(25F, 25F);
+        KeyframeLoop loop = KeyframeLoops.create(List.of(channel), 5F, 10F);
+        BaseType before = channel.toData();
+        KeyframeLoops.move(List.of(channel), loop.id(), 100F);
+        assertEquals(25D, channel.getLoop(loop.id()).end(), "move crossed the next ordinary key");
+        assertEquals(15D, channel.getLoop(loop.id()).start(), "source interval did not follow the loop");
+        assertEquals(15D, channel.get(1).getTick(), "source key did not move");
+        assertEquals(2D, channel.get(0).getTick(), "move shifted a preceding ordinary key");
+        assertEquals(25D, channel.get(3).getTick(), "move shifted a following ordinary key");
+        channel.fromData(before);
+        assertEquals(5D, channel.getLoop(loop.id()).start(), "cancel/undo snapshot lost the original loop");
+        assertEquals(5D, channel.get(1).getTick(), "cancel/undo snapshot lost the original source key");
+        KeyframeLoops.move(List.of(channel), loop.id(), -100F);
+        assertTrue(channel.getLoop(loop.id()).start() > 2F, "move collided with the preceding ordinary key");
+        assertTrue(!KeyframeLoops.canCreate(List.of(channel), Float.NaN, 5F), "non-finite source interval was accepted");
+    }
+
+    private static void testLoopSplineNeighbours()
+    {
+        KeyframeChannel<Double> channel = new KeyframeChannel<>("spline-loop", KeyframeFactories.DOUBLE);
+        KeyframeChannel<Double> expanded = new KeyframeChannel<>("spline-expanded", KeyframeFactories.DOUBLE);
+        float[] ticks = {0F, 5F, 7F, 10F, 20F, 25F};
+        double[] values = {20D, 5D, 10D, 5D, 0D, 20D};
+        for (int i = 0; i < ticks.length; i++)
+        {
+            channel.get(channel.insert(ticks[i], values[i])).getInterpolation().setInterp(Interpolations.HERMITE);
+            expanded.get(expanded.insert(ticks[i], values[i])).getInterpolation().setInterp(Interpolations.HERMITE);
+        }
+        channel.putLoop(new KeyframeLoop("spline-loop-id", 5F, 10F, 15F));
+        expanded.get(expanded.insert(12F, 10D)).getInterpolation().setInterp(Interpolations.HERMITE);
+        expanded.get(expanded.insert(15F, 5D)).getInterpolation().setInterp(Interpolations.HERMITE);
+        for (float tick : new float[] {6F, 11F, 14F, 17F, 22F})
+        {
+            assertEquals(expanded.interpolate(tick), channel.interpolate(tick),
+                "loop spline differs from the expanded key timeline at " + tick);
+        }
+    }
+
+    private static void testLoopBoundaryEditsAndTimeInsertion()
+    {
+        KeyframeChannel<Float> channel = new KeyframeChannel<>("boundaries", KeyframeFactories.FLOAT);
+        channel.insert(0F, 0F);
+        channel.insert(5F, 5F);
+        KeyframeLoop loop = KeyframeLoops.create(List.of(channel), 0F, 5F);
+        channel.insert(20F, 20F);
+        assertEquals(12.5D, channel.interpolate(15F), "post-loop interpolation did not start at the virtual endpoint");
+        int index = channel.insert(6F, 8F);
+        assertEquals(1D, channel.get(index).getTick(), "ghost edit did not write to its source tick");
+        channel.insert(9F, 99F);
+        assertEquals(4D, channel.get(channel.getKeyframes().size() - 3).getTick(), "ghost edit created a hidden repeated key");
+        channel.insert(10F, 100F);
+        assertEquals(100D, channel.interpolate(10F), "real endpoint key did not win over repetition");
+        channel.removeAll();
+        assertTrue(channel.getLoops().isEmpty(), "clearing a channel left orphaned loops");
+
+        channel.insert(0F, 0F);
+        channel.insert(5F, 5F);
+        loop = KeyframeLoops.create(List.of(channel), 0F, 5F);
+        channel.insert(20F, 20F);
+        channel.insertSpace(7, 4);
+        assertEquals(5D, channel.get(1).getTick(), "time insertion stretched source tempo");
+        assertEquals(14D, channel.getLoop(loop.id()).end(), "time insertion did not extend the loop");
+        assertEquals(24D, channel.get(2).getTick(), "time insertion did not move following content");
+        channel.moveX(3F);
+        assertEquals(3D, channel.getLoop(loop.id()).start(), "channel translation left loop bounds behind");
+        assertEquals(8D, channel.getLoop(loop.id()).sourceEnd(), "channel translation lost the source interval");
+    }
+
+    private static void testReplayRootPlacementGestures()
+    {
+        Replay replay = new Replay("root-placement");
+        replay.looping.set(10);
+        StubEntity entity = new StubEntity();
+        entity.setPosition(1D, 2D, 3D);
+        entity.setYaw(30F);
+        entity.setHeadYaw(45F);
+        entity.setBodyYaw(20F);
+        entity.setPitch(5F);
+        UIBaseMenu menu = new UIBaseMenu() {};
+        UIReplayPropTransform transform = new UIReplayPropTransform();
+        menu.main.add(transform);
+        transform.syncFromReplay(replay, entity, 12.5F);
+        transform.enableMode(TransformOp.TRANSLATE, Axis.X);
+        assertTrue(transform.isEditing(), "root move did not begin");
+        transform.setT(Axis.X, 4D, 5D, 6D);
+        assertEquals(2.5D, replay.keyframes.x.get(0).getTick(), "root drag wrote at the raw looping playhead");
+        assertEquals(4D, entity.getX(), "root move did not publish live entity placement");
+        assertEquals(4D, entity.getPrevX(), "root move left an interpolation delay");
+        transform.rejectChanges();
+        assertTrue(replay.keyframes.x.isEmpty() && replay.keyframes.y.isEmpty(), "cancel left inserted root keyframes behind");
+        assertEquals(1D, entity.getX(), "cancel did not restore live placement");
+
+        transform.syncFromReplay(replay, entity, 12.5F);
+        transform.enableMode(TransformOp.TRANSLATE, Axis.X);
+        transform.rejectChanges();
+        assertTrue(replay.keyframes.x.isEmpty() && replay.keyframes.y.isEmpty() && replay.keyframes.z.isEmpty()
+            && replay.keyframes.yaw.isEmpty() && replay.keyframes.pitch.isEmpty()
+            && replay.keyframes.headYaw.isEmpty() && replay.keyframes.bodyYaw.isEmpty(),
+            "cancel before the first root drag update inserted placement keys");
+
+        transform.syncFromReplay(replay, entity, 12.5F);
+        transform.enableMode(TransformOp.ROTATE, Axis.Y);
+        transform.setR(Axis.Y, 15D, -80D, 0D);
+        transform.acceptChanges();
+        assertEquals(80D, replay.keyframes.yaw.interpolate(2.5F), "root rotation used the wrong yaw sign");
+        assertEquals(95D, replay.keyframes.headYaw.interpolate(2.5F), "root rotation lost the head offset");
+        assertEquals(70D, replay.keyframes.bodyYaw.interpolate(2.5F), "root rotation lost the body offset");
+        assertEquals(15D, entity.getPitch(), "root rotation did not publish pitch");
+        assertTrue(UIReplayPropTransform.MASK.allows(Gizmo.Handle.MOVE_Z), "root cannot move on the world Z axis");
+        assertTrue(!UIReplayPropTransform.MASK.allows(Gizmo.Handle.ROTATE_Z)
+            && !UIReplayPropTransform.MASK.allows(Gizmo.Handle.SCALE_ALL)
+            && !UIReplayPropTransform.MASK.allows(Gizmo.Handle.TRACKBALL), "root offers unsupported degrees of freedom");
+        transform.enableMode(TransformOp.SCALE);
+        assertTrue(!transform.isEditing(), "root hotkey started an unsupported scale gesture");
+    }
+    private static final class HeadlessFont extends Font
+    {
+        private HeadlessFont()
+        {
+            super((location) -> null, false);
+        }
+
+        @Override
+        public int width(String text)
+        {
+            return text == null ? 0 : text.length();
+        }
     }
 }

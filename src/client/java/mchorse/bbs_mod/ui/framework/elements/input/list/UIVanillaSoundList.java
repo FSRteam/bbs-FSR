@@ -3,10 +3,10 @@ package mchorse.bbs_mod.ui.framework.elements.input.list;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.AudioCacheManager;
 import mchorse.bbs_mod.audio.SoundLikeManager;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.IOUtils;
@@ -412,7 +412,7 @@ public class UIVanillaSoundList extends UIStringList
             displayText = context.batcher.getFont().limitToWidth(element, maxWidth);
         }
 
-        context.batcher.textShadow(displayText, x + 4, y + (this.scroll.scrollItemSize - context.batcher.getFont().getHeight()) / 2, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
+        context.batcher.textShadow(displayText, x + 4, y + (this.rowHeight() - context.batcher.getFont().getHeight()) / 2, RowStyle.textColor(hover || selected));
 
         String downloadedPath = this.findDownloadedSound(element);
         boolean isDownloaded = downloadedPath != null;

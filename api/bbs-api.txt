@@ -1,4 +1,30 @@
+class mchorse.bbs_mod.api.client.editor.TrackCategories$1 {
+}
+
 class mchorse.bbs_mod.api.client.film.BBSFilmPresence$1 {
+}
+
+final class mchorse.bbs_mod.api.client.editor.TrackCategories$Entry extends java.lang.Record {
+    public final boolean equals(java.lang.Object);
+    public final int hashCode();
+    public final java.lang.String toString();
+    public java.util.function.BiPredicate<mchorse.bbs_mod.film.replays.tracks.TrackId, java.lang.Boolean> matches();
+    public mchorse.bbs_mod.api.client.editor.TrackCategory category();
+}
+
+final class mchorse.bbs_mod.api.client.render.StructureRenderPart$PartRenderer extends mchorse.bbs_mod.forms.renderers.StructureFormRenderer {
+}
+
+public abstract class mchorse.bbs_mod.api.client.editor.FilmEditorTool extends mchorse.bbs_mod.ui.framework.elements.UIElement {
+    public boolean click(mchorse.bbs_mod.ui.framework.UIContext);
+    public boolean key(mchorse.bbs_mod.ui.framework.UIContext);
+    public boolean release(mchorse.bbs_mod.ui.framework.UIContext);
+    public java.lang.Boolean startGizmo(mchorse.bbs_mod.ui.framework.UIContext, int);
+    public mchorse.bbs_mod.api.client.editor.FilmEditorTool();
+    public mchorse.bbs_mod.film.FilmTarget target(mchorse.bbs_mod.film.FilmTarget);
+    public void renderTool(mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext);
+    public void stopTool();
+    public void updateTool(mchorse.bbs_mod.ui.framework.UIContext);
 }
 
 public abstract class mchorse.bbs_mod.api.events.BaseRegisterClipsEvent {
@@ -79,6 +105,11 @@ public class mchorse.bbs_mod.api.client.events.RegisterFormSectionsEvent {
     public void register(java.util.function.Function<mchorse.bbs_mod.forms.FormCategories, mchorse.bbs_mod.forms.sections.FormSection>);
 }
 
+public class mchorse.bbs_mod.api.client.events.RegisterFrameOverlaysEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterFrameOverlaysEvent();
+    public void register(mchorse.bbs_mod.ui.film.FrameOverlays$IFrameOverlayRenderer);
+}
+
 public class mchorse.bbs_mod.api.client.events.RegisterImportersEvent {
     public mchorse.bbs_mod.api.client.events.RegisterImportersEvent();
     public void register(mchorse.bbs_mod.importers.types.IImporter);
@@ -155,6 +186,16 @@ public class mchorse.bbs_mod.api.events.RegisterKeyframeFactoriesEvent {
     public void register(java.lang.String, mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory);
 }
 
+public class mchorse.bbs_mod.api.events.RegisterSettingsEvent extends mchorse.bbs_mod.api.events.BaseRegisterSettingsEvent {
+    public mchorse.bbs_mod.api.events.RegisterSettingsEvent();
+}
+
+public class mchorse.bbs_mod.api.events.RegisterSourcePacksEvent {
+    public final mchorse.bbs_mod.resources.AssetProvider provider;
+    public mchorse.bbs_mod.api.events.RegisterSourcePacksEvent(mchorse.bbs_mod.resources.AssetProvider);
+    public void registerAddon(java.lang.String, java.lang.Class<?>);
+}
+
 public final class mchorse.bbs_mod.api.BBSApi {
     public static boolean isAtLeast(int);
     public static final int VERSION;
@@ -171,6 +212,12 @@ public final class mchorse.bbs_mod.api.BBSApiVersion {
     public static final int MAJOR;
     public static final int MINOR;
     public static final java.lang.String CURRENT;
+}
+
+public final class mchorse.bbs_mod.api.FormPropertyAliases {
+    public static java.lang.String resolve(java.lang.String);
+    public static mchorse.bbs_mod.film.replays.tracks.TrackId resolve(mchorse.bbs_mod.film.replays.tracks.TrackId);
+    public static void register(java.lang.String, java.lang.String);
 }
 
 public final class mchorse.bbs_mod.api.addon.BBSAddonCapability extends java.lang.Enum<mchorse.bbs_mod.api.addon.BBSAddonCapability> {
@@ -309,6 +356,11 @@ public final class mchorse.bbs_mod.api.client.BBSClientApi {
     public static void onStartClientTick(java.util.function.Consumer<net.minecraft.client.Minecraft>);
 }
 
+public final class mchorse.bbs_mod.api.client.compat.ClientVanillaAccess {
+    public static com.mojang.blaze3d.pipeline.RenderTarget getFramebuffer(net.minecraft.client.Minecraft);
+    public static void setFramebuffer(net.minecraft.client.Minecraft, com.mojang.blaze3d.pipeline.RenderTarget);
+}
+
 public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardAnchorResult extends java.lang.Record {
     public boolean available();
     public boolean hittable();
@@ -445,6 +497,35 @@ public final class mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec$Bu
     public mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec$Builder title(mchorse.bbs_mod.l10n.keys.IKey);
 }
 
+public final class mchorse.bbs_mod.api.client.editor.TrackCategories {
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory FORM;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory IK;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory PHYSICS;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory POSE;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory REPLAY;
+    public static java.util.List<mchorse.bbs_mod.api.client.editor.TrackCategory> categories();
+    public static java.util.List<mchorse.bbs_mod.api.client.editor.TrackCategory> values();
+    public static mchorse.bbs_mod.api.client.editor.TrackCategory categoryOf(mchorse.bbs_mod.film.replays.tracks.TrackId, boolean);
+    public static mchorse.bbs_mod.api.client.editor.TrackCategory find(mchorse.bbs_mod.film.replays.tracks.TrackId, boolean);
+    public static void finishRegistration();
+    public static void register(mchorse.bbs_mod.api.client.editor.TrackCategory, java.util.function.BiPredicate<mchorse.bbs_mod.film.replays.tracks.TrackId, java.lang.Boolean>);
+    public static void registerShortcuts(mchorse.bbs_mod.ui.utils.keys.KeybindManager, java.util.function.Supplier<java.util.List<mchorse.bbs_mod.api.client.editor.TrackCategory>>, java.util.function.Consumer<mchorse.bbs_mod.api.client.editor.TrackCategory>);
+}
+
+public final class mchorse.bbs_mod.api.client.editor.TrackCategory {
+    public final java.lang.String id;
+    public final mchorse.bbs_mod.l10n.keys.IKey label;
+    public final mchorse.bbs_mod.l10n.keys.IKey tooltip;
+    public final mchorse.bbs_mod.ui.utils.icons.Icon icon;
+    public mchorse.bbs_mod.api.client.editor.TrackCategory(java.lang.String, mchorse.bbs_mod.ui.utils.icons.Icon, mchorse.bbs_mod.l10n.keys.IKey, mchorse.bbs_mod.l10n.keys.IKey);
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory FORM;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory IK;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory PHYSICS;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory POSE;
+    public static final mchorse.bbs_mod.api.client.editor.TrackCategory REPLAY;
+    public static mchorse.bbs_mod.api.client.editor.TrackCategory builtin(java.lang.String, mchorse.bbs_mod.ui.utils.icons.Icon);
+}
+
 public final class mchorse.bbs_mod.api.client.events.FilmEditEvents {
     public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FilmEditEvents$Changed> CHANGED;
     public static void notifyChanges(java.util.List<mchorse.bbs_mod.settings.values.base.BaseValue>, mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause);
@@ -464,6 +545,7 @@ public final class mchorse.bbs_mod.api.client.events.FilmGizmoEvents {
 
 public final class mchorse.bbs_mod.api.client.events.FormPoseEvents {
     public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$ActorPrepare> ACTOR_BEFORE;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$ChainClaim> CLAIM_CHAIN;
     public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$ModelPose> MODEL_POSE;
     public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$ParentFrame> PARENT_FRAME;
     public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPoseEvents$PivotOffsets> PIVOT_OFFSETS;
@@ -482,12 +564,32 @@ public final class mchorse.bbs_mod.api.client.events.FormPreviewEvents {
     public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormPreviewEvents$Overlay> OVERLAY;
 }
 
+public final class mchorse.bbs_mod.api.client.events.FormRenderEvents {
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormRenderEvents$Render> AFTER;
+    public static final mchorse.bbs_mod.api.client.events.FunctionalEvent<mchorse.bbs_mod.api.client.events.FormRenderEvents$Render> BEFORE;
+}
+
 public final class mchorse.bbs_mod.api.client.events.FunctionalEvent<T> {
     public T invoker();
     public boolean hasListeners();
     public boolean unregister(T);
     public mchorse.bbs_mod.api.client.events.FunctionalEvent(java.util.function.Function<java.util.List<T>, T>);
     public void register(T);
+}
+
+public final class mchorse.bbs_mod.api.client.events.L10nReloadEvent {
+    public final mchorse.bbs_mod.l10n.L10n l10n;
+    public mchorse.bbs_mod.api.client.events.L10nReloadEvent(mchorse.bbs_mod.l10n.L10n);
+}
+
+public final class mchorse.bbs_mod.api.client.events.RegisterFilmToolsEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterFilmToolsEvent();
+    public void register(java.util.function.Function<mchorse.bbs_mod.ui.film.controller.UIFilmController, mchorse.bbs_mod.api.client.editor.FilmEditorTool>);
+}
+
+public final class mchorse.bbs_mod.api.client.events.RegisterTrackCategoriesEvent {
+    public mchorse.bbs_mod.api.client.events.RegisterTrackCategoriesEvent();
+    public void register(mchorse.bbs_mod.api.client.editor.TrackCategory, java.util.function.BiPredicate<mchorse.bbs_mod.film.replays.tracks.TrackId, java.lang.Boolean>);
 }
 
 public final class mchorse.bbs_mod.api.client.events.StructureRenderEvents {
@@ -785,6 +887,19 @@ public final class mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind extend
     public static final mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind WORLD_REPLAY;
     public static mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind valueOf(java.lang.String);
     public static mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind[] values();
+}
+
+public final class mchorse.bbs_mod.api.client.render.RenderAttachment<T> {
+    public T get(mchorse.bbs_mod.forms.renderers.FormRenderer<?>);
+    public mchorse.bbs_mod.api.client.render.RenderAttachment();
+    public void remove(mchorse.bbs_mod.forms.renderers.FormRenderer<?>);
+    public void set(mchorse.bbs_mod.forms.renderers.FormRenderer<?>, T);
+}
+
+public final class mchorse.bbs_mod.api.client.render.StructureRenderPart {
+    public mchorse.bbs_mod.api.client.render.StructureRenderPart(mchorse.bbs_mod.forms.forms.StructureForm, mchorse.bbs_mod.forms.structure.StructureRenderData, java.lang.String, org.joml.Vector3f);
+    public static mchorse.bbs_mod.forms.structure.StructureRenderData createData(java.lang.String, net.minecraft.core.Vec3i, java.util.Map<net.minecraft.core.BlockPos, net.minecraft.world.level.block.state.BlockState>, java.util.Map<net.minecraft.core.BlockPos, net.minecraft.nbt.CompoundTag>);
+    public void render(mchorse.bbs_mod.forms.renderers.FormRenderingContext, org.joml.Matrix4f);
 }
 
 public final class mchorse.bbs_mod.api.client.ui.BBSUiAssetBytes {
@@ -1087,6 +1202,16 @@ public final class mchorse.bbs_mod.api.client.ui.BBSUiVertex {
     public mchorse.bbs_mod.api.client.ui.BBSUiVertex(float, float, int);
 }
 
+public final class mchorse.bbs_mod.api.compat.VanillaAccess {
+    public static int getItemUseTimeLeft(net.minecraft.world.entity.LivingEntity);
+    public static int getRiptideTicks(net.minecraft.world.entity.LivingEntity);
+    public static net.minecraft.world.item.ItemStack getActiveItemStack(net.minecraft.world.entity.LivingEntity);
+    public static void setActiveItemStack(net.minecraft.world.entity.LivingEntity, net.minecraft.world.item.ItemStack);
+    public static void setItemUseTimeLeft(net.minecraft.world.entity.LivingEntity, int);
+    public static void setLivingFlag(net.minecraft.world.entity.LivingEntity, int, boolean);
+    public static void setRiptideTicks(net.minecraft.world.entity.LivingEntity, int);
+}
+
 public final class mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnostics {
     public java.lang.String addonId();
     public java.lang.String addonVersion();
@@ -1101,6 +1226,18 @@ public final class mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnostics {
     public mchorse.bbs_mod.api.addon.BBSAddonProtocol protocol();
     public mchorse.bbs_mod.api.addon.BBSAddonState state();
     public mchorse.bbs_mod.api.diagnostics.BBSAddonDiagnostics(java.lang.String, java.lang.String, java.lang.String, java.lang.String, mchorse.bbs_mod.api.addon.BBSAddonProtocol, mchorse.bbs_mod.api.addon.BBSAddonState, mchorse.bbs_mod.api.addon.BBSAddonPhase, java.lang.String, java.util.List<java.lang.String>, java.util.List<java.lang.String>, java.util.List<java.lang.String>, java.util.List<java.lang.String>);
+}
+
+public final class mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback$Event {
+    public mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback invoker();
+    public mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback$Event();
+    public void invoker(mchorse.bbs_mod.blocks.entities.ModelBlockEntity);
+    public void register(mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback);
+}
+
+public final class mchorse.bbs_mod.api.events.RegisterFormModifiersEvent {
+    public mchorse.bbs_mod.api.events.RegisterFormModifiersEvent();
+    public void register(java.util.function.Consumer<mchorse.bbs_mod.forms.forms.Form>);
 }
 
 public final class mchorse.bbs_mod.api.plugin.BBSPluginApiVersion {
@@ -1302,6 +1439,9 @@ public final class mchorse.bbs_mod.api.registry.BBSRegistrationStatus extends ja
 public interface mchorse.bbs_mod.api.BBSAddonMod {
 }
 
+public interface mchorse.bbs_mod.api.Experimental extends java.lang.annotation.Annotation {
+}
+
 public interface mchorse.bbs_mod.api.Subscribe extends java.lang.annotation.Annotation {
 }
 
@@ -1387,6 +1527,11 @@ public interface mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelRegistry 
     public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult register(mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelSpec, mchorse.bbs_mod.api.client.dashboard.BBSDashboardPanelFactory);
 }
 
+public interface mchorse.bbs_mod.api.client.editor.FormEditorTool {
+    public abstract mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform getGizmoTransform();
+    public abstract org.joml.Matrix4f getGizmoOrigin(float, mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace);
+}
+
 public interface mchorse.bbs_mod.api.client.events.FilmEditEvents$Changed {
     public abstract void changed(mchorse.bbs_mod.film.Film, java.util.List<mchorse.bbs_mod.settings.values.base.BaseValue>, mchorse.bbs_mod.api.client.events.FilmEditEvents$Cause);
 }
@@ -1415,6 +1560,10 @@ public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$ActorPrepare {
     public abstract void prepare(mchorse.bbs_mod.film.FilmControllerContext);
 }
 
+public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$ChainClaim {
+    public abstract boolean claims(mchorse.bbs_mod.forms.forms.ModelForm, mchorse.bbs_mod.cubic.IModel, mchorse.bbs_mod.forms.forms.utils.FormBone);
+}
+
 public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$ModelPose {
     public abstract void apply(mchorse.bbs_mod.forms.forms.ModelForm, mchorse.bbs_mod.forms.entities.IEntity, mchorse.bbs_mod.cubic.ModelInstance, float, org.joml.Matrix4f, mchorse.bbs_mod.api.client.events.FormPoseEvents$Pass);
 }
@@ -1437,6 +1586,10 @@ public interface mchorse.bbs_mod.api.client.events.FormPoseEvents$TransformPose 
 
 public interface mchorse.bbs_mod.api.client.events.FormPreviewEvents$Overlay {
     public abstract void render(mchorse.bbs_mod.ui.forms.editors.utils.UIFormRenderer, mchorse.bbs_mod.ui.framework.UIContext);
+}
+
+public interface mchorse.bbs_mod.api.client.events.FormRenderEvents$Render {
+    public abstract void onFormRender(mchorse.bbs_mod.forms.forms.Form, mchorse.bbs_mod.forms.renderers.FormRenderingContext);
 }
 
 public interface mchorse.bbs_mod.api.client.events.StructureRenderEvents$Render {
@@ -1511,8 +1664,14 @@ public interface mchorse.bbs_mod.api.events.BBSEventRegistry {
     public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerSubscriber(java.lang.Object);
 }
 
+public interface mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback {
+    public abstract void update(mchorse.bbs_mod.blocks.entities.ModelBlockEntity);
+    public static final mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback$Event EVENT;
+}
+
 public interface mchorse.bbs_mod.api.forms.BBSFormRegistry {
     public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult register(mchorse.bbs_mod.resources.Link, java.lang.Class<? extends mchorse.bbs_mod.forms.forms.Form>);
+    public abstract mchorse.bbs_mod.api.registry.BBSRegistrationResult registerModifier(java.util.function.Consumer<mchorse.bbs_mod.forms.forms.Form>);
 }
 
 public interface mchorse.bbs_mod.api.network.BBSAddonClientNetworkReceiver {

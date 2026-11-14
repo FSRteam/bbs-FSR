@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
+import mchorse.bbs_mod.mob.MobPoseApplier;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
@@ -51,7 +53,7 @@ public final class MobRenderContext implements AutoCloseable
     private final boolean incrementPicking;
     private boolean closed;
 
-    private MobRenderContext(Object renderer, Pose pose, Pose overlay, Color color, Matrix4f base, boolean picking, boolean incrementPicking)
+    private MobRenderContext(Object renderer, Pose pose, Pose overlay, List<ValuePose> additional, Color color, Matrix4f base, boolean picking, boolean incrementPicking)
     {
         this.previous = CURRENT.get();
         VanillaRendererBones.Discovery discovery = VanillaRendererBones.discover(renderer);
@@ -61,7 +63,15 @@ public final class MobRenderContext implements AutoCloseable
 
         hierarchy.migratePose(mergedPose);
         hierarchy.migratePose(mergedOverlay);
-        mergedPose = mergePose(mergedPose, mergedOverlay);
+        mergedPose = MobPoseApplier.merge(mergedPose, mergedOverlay);
+
+        for (ValuePose value : additional)
+        {
+            Pose layer = value.get().copy();
+
+            hierarchy.migratePose(layer);
+            mergedPose = MobPoseApplier.merge(mergedPose, layer);
+        }
 
         this.discovery = discovery;
         this.hierarchies = discovery.getRuntimeHierarchies();
@@ -80,12 +90,23 @@ public final class MobRenderContext implements AutoCloseable
 
     public static MobRenderContext push(Object renderer, Pose pose, Pose overlay, Color color)
     {
-        return new MobRenderContext(renderer, pose, overlay, color, null, false, false);
+        return push(renderer, pose, overlay, List.of(), color, null, false, false);
     }
 
     public static MobRenderContext push(Object renderer, Pose pose, Pose overlay, Color color, Matrix4f base, boolean picking, boolean incrementPicking)
     {
-        return new MobRenderContext(renderer, pose, overlay, color, base, picking, incrementPicking);
+        return push(renderer, pose, overlay, List.of(), color, base, picking, incrementPicking);
+    }
+
+    public static MobRenderContext push(Object renderer, Pose pose, Pose overlay, List<ValuePose> additional, Color color)
+    {
+        return push(renderer, pose, overlay, additional, color, null, false, false);
+    }
+
+    public static MobRenderContext push(Object renderer, Pose pose, Pose overlay, List<ValuePose> additional,
+        Color color, Matrix4f base, boolean picking, boolean incrementPicking)
+    {
+        return new MobRenderContext(renderer, pose, overlay, additional, color, base, picking, incrementPicking);
     }
 
     public static PoseTransform getTransform(ModelPart part)
@@ -741,32 +762,6 @@ public final class MobRenderContext implements AutoCloseable
     private Matrix4f toLocal(Matrix4f matrix)
     {
         return new Matrix4f(this.inverseBase).mul(matrix);
-    }
-
-    private static Pose mergePose(Pose pose, Pose overlay)
-    {
-        Pose result = pose.copy();
-
-        for (Map.Entry<String, PoseTransform> entry : overlay.transforms.entrySet())
-        {
-            PoseTransform transform = result.get(entry.getKey());
-            PoseTransform value = entry.getValue();
-
-            if (value.fix != 0F)
-            {
-                transform.translate.lerp(value.translate, value.fix);
-                transform.scale.lerp(value.scale, value.fix);
-                transform.lerpRotation(value, value.fix);
-            }
-            else
-            {
-                transform.translate.add(value.translate);
-                transform.scale.add(value.scale).sub(1F, 1F, 1F);
-                transform.addRotation(value);
-            }
-        }
-
-        return result;
     }
 
     private static IdentityHashMap<ModelPart, VanillaBoneHierarchy.Bone> resolveBones(

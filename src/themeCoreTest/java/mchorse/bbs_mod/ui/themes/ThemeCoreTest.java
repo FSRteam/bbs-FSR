@@ -57,6 +57,7 @@ public final class ThemeCoreTest
         testBuiltinJsonParity();
         testBatcherGlobalAlphaStack();
         ThemeWidgetForegroundTest.run();
+        SecondarySurfaceTest.run();
         testSpecExampleTheme();
         testBuiltinPacks();
         testThemeTemplateExport();

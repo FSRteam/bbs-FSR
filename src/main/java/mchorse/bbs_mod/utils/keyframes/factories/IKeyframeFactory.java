@@ -40,6 +40,11 @@ public interface IKeyframeFactory <T>
 
     public T interpolate(T preA, T a, T b, T postB, IInterp interpolation, float x);
 
+    public default int contentHash(T value)
+    {
+        return String.valueOf(this.toData(value)).hashCode();
+    }
+
     public default double getY(T value)
     {
         return 0D;

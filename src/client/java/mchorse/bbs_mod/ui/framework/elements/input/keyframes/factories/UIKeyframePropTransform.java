@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIDeltaPropTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
@@ -43,6 +44,17 @@ public abstract class UIKeyframePropTransform extends UIDeltaPropTransform
         return panels.isEmpty() ? null : panels.get(0);
     }
 
+    protected UIKeyframes getKeyframes()
+    {
+        UIKeyframeFactory factory = this.getParent(UIKeyframeFactory.class);
+        return factory == null ? null : factory.editor;
+    }
+
+    protected Transform getAutoKeyTransform(float tick)
+    {
+        return this.getRecordedTransform((int) tick);
+    }
+
     protected boolean isTransformRecording()
     {
         UIFilmPanel panel = this.getPanel();
@@ -65,6 +77,13 @@ public abstract class UIKeyframePropTransform extends UIDeltaPropTransform
             return this.getRecordedTransform(this.getRecordingTick());
         }
 
+        UIKeyframes editor = this.getKeyframes();
+        Float tick = editor == null ? null : editor.getAutoKeyframeTick();
+        if (tick != null)
+        {
+            Transform target = this.getAutoKeyTransform(tick);
+            if (target != null) return target;
+        }
         return this.getTransform();
     }
 

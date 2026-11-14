@@ -80,30 +80,22 @@ public class Colors
 
     public static float getA(int color)
     {
-        COLOR.set(color);
-
-        return COLOR.a;
+        return ((color >> 24) & 0xff) / 255F;
     }
 
     public static float getR(int color)
     {
-        COLOR.set(color);
-
-        return COLOR.r;
+        return ((color >> 16) & 0xff) / 255F;
     }
 
     public static float getG(int color)
     {
-        COLOR.set(color);
-
-        return COLOR.g;
+        return ((color >> 8) & 0xff) / 255F;
     }
 
     public static float getB(int color)
     {
-        COLOR.set(color);
-
-        return COLOR.b;
+        return (color & 0xff) / 255F;
     }
 
     public static int setA(int color, float alpha)
@@ -177,6 +169,12 @@ public class Colors
         }
 
         throw new Exception("Given color \"" + color + "\" can't be parsed!");
+    }
+
+    /** Bright hues keep markers and top-level folders distinct on editor surfaces. */
+    public static int randomBright()
+    {
+        return HSVtoRGB((float) Math.random(), 0.75F, 1F).getRGBColor();
     }
 
     public static Color HSVtoRGB(float h, float s, float v)

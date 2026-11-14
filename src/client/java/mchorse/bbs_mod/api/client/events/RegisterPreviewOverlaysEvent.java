@@ -15,12 +15,8 @@ import java.util.function.Function;
  * <p>The element becomes a child of the preview, so it is laid out and receives input the way
  * everything else in the editor does.</p>
  *
- * <p><b>Deviation from upstream.</b> Upstream's {@code register(...)} delegates straight into the
- * preview ({@code UIFilmPreview.registerOverlay}); FSR keeps the factories in a table on this class
- * and the preview reads them back with {@link #getOverlays()}. Same call shape for an addon, a
- * different owner for the list — the preview that consumes it is edited separately from this batch.
- * Until that one line exists, a registered factory is collected and readable but no element is
- * built from it. {@link #unregister} is the way back out.</p>
+ * <p>Each preview, including auxiliary views, consumes {@link #getOverlays()} after its built-in
+ * controls are created. {@link #unregister} affects future preview instances.</p>
  */
 public class RegisterPreviewOverlaysEvent
 {

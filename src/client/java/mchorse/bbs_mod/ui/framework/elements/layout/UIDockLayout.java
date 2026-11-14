@@ -1,17 +1,18 @@
 package mchorse.bbs_mod.ui.framework.elements.layout;
 
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.ui.EditorLayoutNode;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITabStrip;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -41,15 +42,13 @@ import java.util.function.UnaryOperator;
  * {@link EditorLayoutNode} tree provided by an {@link ILayoutSource}: resizable splitters,
  * drag-to-dock with edge/center drop zones, tab/stack grouping, lock toggle and reset.
  *
- * <p>Panels are registered with {@link #addPanel} and become direct children of this element.
+ * <p>Panels are registered with {@link #addPanel} and retain their content layout inside slots.
  * Film- or particle-specific behavior (which panels exist, default tree, frameless preview,
  * data gating, follow-up visibility) is supplied as configuration so a single implementation
  * serves both editors.
  */
 public class UIDockLayout extends UIElement
 {
-    private static final float DRAG_HANDLE_HEIGHT_NORM = 0.02F;
-    private static final float DRAG_HANDLE_TOP_OFFSET_NORM = 0.01F;
     /** Space a panel's content leaves at the top while unlocked; the drag strip fills all of it. */
     private static final int DRAG_STRIP_HEIGHT_PX = 20;
     private static final int SPLITTER_HANDLE_PX = 14;
@@ -59,7 +58,6 @@ public class UIDockLayout extends UIElement
     private static final int DROP_PANEL_EDGE_PX = 48;
     private static final float DROP_PANEL_EDGE_MAX = 0.25F;
     private static final float DROP_ROOT_RATIO = 0.25F;
-    private static final int EDITOR_MIN_SIZE_FOR_PX_HANDLES = 10;
     /** Solid outline on the highlighted edge; a wash alone would sink into the 3D viewport. */
     private static final int DROP_OUTLINE_PX = 2;
     /** Share of the target the highlight covers. It marks the zone, not the size the panel ends up. */
@@ -74,12 +72,12 @@ public class UIDockLayout extends UIElement
     private static final int LAYOUT_UNDO_CAP = 32;
     /** Two clicks on a seam within this window even the split back out. */
     private static final long SPLITTER_DOUBLE_CLICK_MS = 300;
+    private static final int[] NO_GUTTER = new int[4];
     private static final int PANEL_GAP_PX = 4;
     private static final float PANEL_EDGE_EPS = 0.001F;
 
-    private final Map<String, UIElement> panelById = new LinkedHashMap<>();
+    private final Map<String, UIDockSlot> slotById = new LinkedHashMap<>();
     private final Map<String, Icon> iconById = new HashMap<>();
-    private final Map<String, UIDraggable> dragHandlesById = new LinkedHashMap<>();
     private final Map<String, IKey> labelById = new HashMap<>();
     private final List<UIDraggable> splitterHandles = new ArrayList<>();
     private final List<EditorLayoutNode.SplitterHandleInfo> splitterHandleInfos = new ArrayList<>();
@@ -88,8 +86,6 @@ public class UIDockLayout extends UIElement
     private final List<Integer> draggedSplitterIndices = new ArrayList<>();
     private final Map<String, float[]> transitionFromPanels = new HashMap<>();
     private final Map<String, float[]> transitionToPanels = new HashMap<>();
-    private final Map<String, float[]> transitionFromHandles = new HashMap<>();
-    private final Map<String, float[]> transitionToHandles = new HashMap<>();
     private final UITween layoutTransition = new UITween();
     /** Undo history of structural layout changes; snapshots are cheap because the tree is immutable. */
     private final List<LayoutSnapshot> layoutUndo = new ArrayList<>();
@@ -99,8 +95,7 @@ public class UIDockLayout extends UIElement
     private long lastSplitterClickTime;
     private boolean splitterDragChanged;
 
-    private final UIRenderable surfaces = new UIRenderable(this::renderPanelSurfaces);
-    private final UIRenderable borders = new UIRenderable(this::renderPanelBorders);
+    private final UIRenderable canvas = new UIRenderable(this::renderCanvas);
     private final UIRenderable dropHighlight = new UIRenderable(this::renderDropZoneHighlight);
 
     private boolean layoutLocked = true;
@@ -223,7 +218,7 @@ public class UIDockLayout extends UIElement
     }
 
     /**
-     * Register a panel. The panel becomes a direct child of this element and is arranged by the
+     * Register a panel in a slot that owns its frame and drag strip. The panel keeps its own flex
      * layout. Call {@link #mount()} once after registering all panels.
      */
     public UIDockLayout addPanel(String id, UIElement panel, Icon icon)
@@ -233,33 +228,25 @@ public class UIDockLayout extends UIElement
 
     public UIDockLayout addPanel(String id, UIElement panel, Icon icon, IKey label)
     {
-        this.panelById.put(id, panel);
+        UIDockSlot slot = new UIDockSlot(this, id, panel);
+
+        this.slotById.put(id, slot);
         this.iconById.put(id, icon == null ? Icons.FILE : icon);
         this.labelById.put(id, label == null ? IKey.EMPTY : label);
-        UIDraggable handle = this.createPanelDragHandle(id);
-
-        handle.context((menu) -> this.fillSlotContextMenu(menu, id));
-        this.dragHandlesById.put(id, handle);
-
         return this;
     }
 
     /** Add all children in z-order and run the first layout pass. Call after {@link #addPanel}s. */
     public void mount()
     {
-        this.add(this.surfaces);
+        this.add(this.canvas);
 
-        for (UIElement panel : this.panelById.values())
+        for (UIDockSlot slot : this.slotById.values())
         {
-            this.add(panel);
+            this.add(slot);
         }
 
-        this.add(this.borders, this.dropHighlight);
-
-        for (UIDraggable handle : this.dragHandlesById.values())
-        {
-            this.add(handle);
-        }
+        this.add(this.dropHighlight);
 
         this.setupFlex(false);
     }
@@ -275,7 +262,9 @@ public class UIDockLayout extends UIElement
 
     public UIElement getPanel(String id)
     {
-        return this.panelById.get(id);
+        UIDockSlot slot = this.slotById.get(id);
+
+        return slot == null ? null : slot.panel;
     }
 
     public boolean isLocked()
@@ -286,6 +275,11 @@ public class UIDockLayout extends UIElement
     public boolean isSplitterDragging()
     {
         return this.splitterHandles.stream().anyMatch(UIDraggable::isDragging);
+    }
+
+    public boolean isAnySplitterDragging()
+    {
+        return this.isSplitterDragging();
     }
 
     public boolean isPanelActive(String panelId)
@@ -320,16 +314,6 @@ public class UIDockLayout extends UIElement
     private void setLayoutRoot(EditorLayoutNode root)
     {
         this.source.setRoot(root);
-    }
-
-    private List<EditorLayoutNode.SplitterNode> layoutSplitters()
-    {
-        return this.source.getSplitters();
-    }
-
-    private List<EditorLayoutNode.SplitterNode> layoutSplittersForWrite()
-    {
-        return this.source.getSplittersForWrite();
     }
 
     /* Public actions */
@@ -421,8 +405,7 @@ public class UIDockLayout extends UIElement
         if (this.animateLayoutChanges.get() && this.area.w > 0 && this.area.h > 0)
         {
             this.advanceLayoutTransition();
-            this.captureBounds(this.panelById, this.transitionFromPanels);
-            this.captureBounds(this.dragHandlesById, this.transitionFromHandles);
+            this.captureBounds(this.slotById, this.transitionFromPanels);
             this.transitionCapturePending = true;
         }
         else
@@ -443,11 +426,9 @@ public class UIDockLayout extends UIElement
         }
 
         this.transitionCapturePending = false;
-        this.captureBounds(this.panelById, this.transitionToPanels);
-        this.captureBounds(this.dragHandlesById, this.transitionToHandles);
+        this.captureBounds(this.slotById, this.transitionToPanels);
 
-        if (!hasChangedBounds(this.transitionFromPanels, this.transitionToPanels)
-            && !hasChangedBounds(this.transitionFromHandles, this.transitionToHandles))
+        if (!hasChangedBounds(this.transitionFromPanels, this.transitionToPanels))
         {
             this.clearLayoutTransition();
 
@@ -548,7 +529,7 @@ public class UIDockLayout extends UIElement
             return true;
         }
 
-        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
+        for (Map.Entry<String, UIDockSlot> entry : this.slotById.entrySet())
         {
             UIElement panel = entry.getValue();
 
@@ -583,8 +564,7 @@ public class UIDockLayout extends UIElement
 
     private void applyInterpolatedBounds(float progress)
     {
-        this.applyInterpolatedBounds(this.panelById, this.transitionFromPanels, this.transitionToPanels, progress);
-        this.applyInterpolatedBounds(this.dragHandlesById, this.transitionFromHandles, this.transitionToHandles, progress);
+        this.applyInterpolatedBounds(this.slotById, this.transitionFromPanels, this.transitionToPanels, progress);
         this.resize();
     }
 
@@ -614,8 +594,6 @@ public class UIDockLayout extends UIElement
         this.transitionCapturePending = false;
         this.transitionFromPanels.clear();
         this.transitionToPanels.clear();
-        this.transitionFromHandles.clear();
-        this.transitionToHandles.clear();
     }
 
     private void toggleMaximizePanel(String panelId)
@@ -708,7 +686,7 @@ public class UIDockLayout extends UIElement
             }
         }
 
-        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
+        for (Map.Entry<String, UIDockSlot> entry : this.slotById.entrySet())
         {
             UIElement panel = entry.getValue();
 
@@ -794,7 +772,7 @@ public class UIDockLayout extends UIElement
 
         for (String id : ids)
         {
-            if (!this.panelById.containsKey(id))
+            if (!this.slotById.containsKey(id))
             {
                 out = EditorLayoutNode.copyWithRemovedPanel(out, id);
             }
@@ -806,12 +784,12 @@ public class UIDockLayout extends UIElement
     private EditorLayoutNode ensureRegisteredPanels(EditorLayoutNode root)
     {
         HashSet<String> ids = new HashSet<>();
-        this.collectPanelIds(root, ids);
+        EditorLayoutNode.collectPanelIds(root, ids);
 
         Set<String> hidden = this.source.getHiddenPanels();
         EditorLayoutNode out = root;
 
-        for (String id : this.panelById.keySet())
+        for (String id : this.slotById.keySet())
         {
             if (!ids.contains(id) && !hidden.contains(id))
             {
@@ -824,24 +802,6 @@ public class UIDockLayout extends UIElement
         return out;
     }
 
-    private void collectPanelIds(EditorLayoutNode node, HashSet<String> out)
-    {
-        if (node instanceof EditorLayoutNode.PanelNode)
-        {
-            out.add(((EditorLayoutNode.PanelNode) node).getPanelId());
-        }
-        else if (node instanceof EditorLayoutNode.StackNode)
-        {
-            out.addAll(((EditorLayoutNode.StackNode) node).getPanelIds());
-        }
-        else if (node instanceof EditorLayoutNode.SplitterNode)
-        {
-            EditorLayoutNode.SplitterNode s = (EditorLayoutNode.SplitterNode) node;
-            this.collectPanelIds(s.getFirst(), out);
-            this.collectPanelIds(s.getSecond(), out);
-        }
-    }
-
     public void setupFlex(boolean resize)
     {
         EditorLayoutNode originalRoot = this.layoutRoot();
@@ -852,85 +812,44 @@ public class UIDockLayout extends UIElement
             this.setLayoutRoot(root);
         }
 
-        EditorLayoutNode effectiveRoot = this.effectiveLayoutTree(root);
-        List<EditorLayoutNode.SplitterNode> splitters = new ArrayList<>();
-
-        EditorLayoutNode.collectSplitters(effectiveRoot, splitters);
-
-        if (resize && splitters.size() == this.splitterHandles.size())
-        {
-            this.updateFlexBoundsOnly(effectiveRoot);
-            this.resize();
-            this.resize();
-
-            if (this.draggedSplitterIndices.isEmpty())
-            {
-                this.onLayoutSettled.run();
-            }
-
-            return;
-        }
-
-        this.clearSplitterDragState();
-
-        List<DockStackInfo> stackInfos = new ArrayList<>();
-        this.collectDockStacks(effectiveRoot, 0F, 0F, 1F, 1F, stackInfos);
-
-        for (UIElement el : this.panelById.values())
-        {
-            el.resetFlex();
-        }
-
-        for (UIDraggable h : this.splitterHandles)
-        {
-            h.removeFromParent();
-        }
-
-        this.splitterHandles.clear();
-
-        for (UIDockStackTabs tabs : this.dockStackTabs)
-        {
-            tabs.removeFromParent();
-        }
-
-        this.dockStackTabs.clear();
-        this.dockStackByPanelId.clear();
-
-        for (UIDraggable h : this.dragHandlesById.values())
-        {
-            h.resetFlex();
-        }
-
-        this.applyPanelBoundsFromStacks(stackInfos);
-        this.rebuildDockStackTabs(stackInfos);
+        LayoutPass pass = this.computeLayoutPass(this.effectiveLayoutTree(root));
+        boolean reuseHandles = resize && pass.handles.size() == this.splitterHandles.size();
 
         this.splitterHandleInfos.clear();
-        EditorLayoutNode.computeSplitterHandles(effectiveRoot, 0F, 0F, 1F, 1F, this.splitterHandleInfos);
+        this.splitterHandleInfos.addAll(pass.handles);
 
-        for (int i = 0; i < splitters.size(); i++)
+        if (!reuseHandles)
         {
-            UIDraggable handle = this.createSplitterHandle(i);
-            this.splitterHandles.add(handle);
-            this.addBefore(this.borders, handle);
-        }
+            this.clearSplitterDragState();
 
-        if (this.layoutLocked)
-        {
-            for (UIDraggable h : this.dragHandlesById.values())
+            for (UIDraggable handle : this.splitterHandles)
             {
-                h.setVisible(false);
+                handle.removeFromParent();
+            }
+
+            this.splitterHandles.clear();
+
+            for (int i = 0; i < pass.handles.size(); i++)
+            {
+                UIDraggable handle = this.createSplitterHandle(i);
+
+                this.splitterHandles.add(handle);
+                this.addBefore(this.dropHighlight, handle);
             }
         }
-        else
+
+        this.applyPanelBoundsFromStacks(pass.slots);
+
+        if (!reuseHandles || !this.updateDockStackTabsBoundsOnly(pass.slots))
         {
-            this.applyDragHandleBoundsFromStacks(stackInfos);
+            this.rebuildDockStackTabs(pass.slots);
         }
 
+        this.syncSplitterHandleBounds();
         this.updateTabVisibility();
 
         if (resize)
         {
-            this.resize();
             this.resize();
 
             if (this.draggedSplitterIndices.isEmpty())
@@ -940,23 +859,21 @@ public class UIDockLayout extends UIElement
         }
     }
 
-    private void updateFlexBoundsOnly(EditorLayoutNode root)
+    /** Slots, splitter geometry and gutters are derived from the same tree in one pass. */
+    private LayoutPass computeLayoutPass(EditorLayoutNode root)
     {
-        List<DockStackInfo> stackInfos = new ArrayList<>();
+        LayoutPass pass = new LayoutPass();
 
-        this.collectDockStacks(root, 0F, 0F, 1F, 1F, stackInfos);
-        this.applyPanelBoundsFromStacks(stackInfos);
+        this.collectLayout(root, 0F, 0F, 1F, 1F, pass);
 
-        if (!this.updateDockStackTabsBoundsOnly(stackInfos))
+        float[] frameless = this.framelessStackRect(pass.slots);
+
+        for (DockStackInfo slot : pass.slots)
         {
-            this.rebuildDockStackTabs(stackInfos);
+            slot.gutter = this.panelGutter(slot, frameless);
         }
 
-        this.splitterHandleInfos.clear();
-        EditorLayoutNode.computeSplitterHandles(root, 0F, 0F, 1F, 1F, this.splitterHandleInfos);
-        this.syncSplitterHandleBounds();
-        this.applyDragHandleBoundsFromStacks(stackInfos);
-        this.updateTabVisibility();
+        return pass;
     }
 
     private void updateTabVisibility()
@@ -965,25 +882,25 @@ public class UIDockLayout extends UIElement
 
         if (!show)
         {
-            for (UIElement panel : this.panelById.values())
+            for (UIElement panel : this.slotById.values())
             {
                 panel.setVisible(false);
             }
         }
         else
         {
-            for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
+            for (Map.Entry<String, UIDockSlot> entry : this.slotById.entrySet())
             {
                 entry.getValue().setVisible(this.isPanelActive(entry.getKey()));
             }
         }
 
-        for (Map.Entry<String, UIDraggable> entry : this.dragHandlesById.entrySet())
+        for (Map.Entry<String, UIDockSlot> entry : this.slotById.entrySet())
         {
             DockStackInfo stack = this.dockStackByPanelId.get(entry.getKey());
             boolean active = stack != null && entry.getKey().equals(stack.activePanelId);
 
-            entry.getValue().setVisible(show && !this.layoutLocked && active);
+            entry.getValue().dragHandle.setVisible(show && !this.layoutLocked && active);
         }
 
         for (UIDockStackTabs tabs : this.dockStackTabs)
@@ -1003,26 +920,17 @@ public class UIDockLayout extends UIElement
 
     private void applySplitterHandleBounds(UIDraggable handle, EditorLayoutNode.SplitterHandleInfo info)
     {
-        int ew = this.area.w;
-        int eh = this.area.h;
+        int half = SPLITTER_HANDLE_PX / 2;
 
-        if (ew < EDITOR_MIN_SIZE_FOR_PX_HANDLES || eh < EDITOR_MIN_SIZE_FOR_PX_HANDLES)
-        {
-            handle.relative(this).x(info.hx).y(info.hy).w(info.hw).h(info.hh);
-            return;
-        }
+        handle.referenceAxis(!info.horizontal, info.horizontal);
 
         if (info.horizontal)
         {
-            float centerY = info.hy + info.hh * 0.5F;
-            float hyNew = centerY - (SPLITTER_HANDLE_PX / (2F * eh));
-            handle.relative(this).x(info.hx).y(hyNew).w(info.hw).h(SPLITTER_HANDLE_PX);
+            handle.relative(this).x(info.hx).y(info.hy + info.hh * 0.5F, -half).w(info.hw).h(SPLITTER_HANDLE_PX);
         }
         else
         {
-            float centerX = info.hx + info.hw * 0.5F;
-            float hxNew = centerX - (SPLITTER_HANDLE_PX / (2F * ew));
-            handle.relative(this).x(hxNew).y(info.hy).w(SPLITTER_HANDLE_PX).h(info.hh);
+            handle.relative(this).x(info.hx + info.hw * 0.5F, -half).y(info.hy).w(SPLITTER_HANDLE_PX).h(info.hh);
         }
     }
 
@@ -1176,37 +1084,35 @@ public class UIDockLayout extends UIElement
             return;
         }
 
-        BaseValue.edit(this.source.value(), (__) ->
-        {
-            List<EditorLayoutNode.SplitterNode> splitters = this.layoutSplittersForWrite();
+        EditorLayoutNode root = this.layoutRoot();
+        List<EditorLayoutNode.SplitterNode> splitters = new ArrayList<>();
+        Map<EditorLayoutNode.SplitterNode, Float> ratios = new HashMap<>();
 
-            for (int draggedIndex : this.draggedSplitterIndices)
+        EditorLayoutNode.collectSplitters(root, splitters);
+
+        for (int draggedIndex : this.draggedSplitterIndices)
+        {
+            if (draggedIndex < 0 || draggedIndex >= splitters.size())
             {
-                this.applySplitterRatioFromMouse(splitters, draggedIndex, mouseX, mouseY);
+                continue;
             }
-        });
 
-        this.setupFlex(true);
-    }
+            float ratio = this.getSplitterRatioFromMouse(draggedIndex, mouseX, mouseY);
 
-    private void applySplitterRatioFromMouse(List<EditorLayoutNode.SplitterNode> splitters, int index, int mouseX, int mouseY)
-    {
-        if (index < 0 || index >= splitters.size())
-        {
-            return;
+            if (ratio >= 0F)
+            {
+                ratios.put(splitters.get(draggedIndex), ratio);
+            }
         }
 
-        float ratio = this.getSplitterRatioFromMouse(index, mouseX, mouseY);
+        /* Rebuild against one snapshot so intersecting splitter drags retain every target. */
+        EditorLayoutNode next = EditorLayoutNode.copyWithSplitterRatios(root, ratios);
 
-        if (ratio >= 0F)
+        if (next != root)
         {
-            EditorLayoutNode.SplitterNode splitter = splitters.get(index);
-
-            if (splitter.getRatio() != ratio)
-            {
-                splitter.setRatio(ratio);
-                this.splitterDragChanged = true;
-            }
+            this.setLayoutRoot(next);
+            this.splitterDragChanged = true;
+            this.setupFlex(true);
         }
     }
 
@@ -1244,7 +1150,10 @@ public class UIDockLayout extends UIElement
 
     private Vector2i getSplitterHandleReferencePosition(int index)
     {
-        List<EditorLayoutNode.SplitterNode> splitters = this.layoutSplitters();
+        EditorLayoutNode root = this.layoutRoot();
+        List<EditorLayoutNode.SplitterNode> splitters = new ArrayList<>();
+
+        EditorLayoutNode.collectSplitters(root, splitters);
 
         if (index < 0 || index >= this.splitterHandleInfos.size() || index >= splitters.size())
         {
@@ -1326,14 +1235,14 @@ public class UIDockLayout extends UIElement
 
     /* Dock stacks */
 
-    private void collectDockStacks(EditorLayoutNode node, float x, float y, float w, float h, List<DockStackInfo> out)
+    private void collectLayout(EditorLayoutNode node, float x, float y, float w, float h, LayoutPass out)
     {
         if (node instanceof EditorLayoutNode.PanelNode)
         {
             String panelId = ((EditorLayoutNode.PanelNode) node).getPanelId();
             List<String> ids = new ArrayList<>();
             ids.add(panelId);
-            out.add(new DockStackInfo(ids, panelId, x, y, w, h));
+            out.slots.add(new DockStackInfo(ids, panelId, x, y, w, h));
 
             return;
         }
@@ -1341,7 +1250,7 @@ public class UIDockLayout extends UIElement
         if (node instanceof EditorLayoutNode.StackNode)
         {
             EditorLayoutNode.StackNode stack = (EditorLayoutNode.StackNode) node;
-            out.add(new DockStackInfo(new ArrayList<>(stack.getPanelIds()), stack.getActivePanelId(), x, y, w, h));
+            out.slots.add(new DockStackInfo(new ArrayList<>(stack.getPanelIds()), stack.getActivePanelId(), x, y, w, h));
 
             return;
         }
@@ -1357,15 +1266,17 @@ public class UIDockLayout extends UIElement
         {
             float h1 = h * splitter.getRatio();
 
-            this.collectDockStacks(splitter.getFirst(), x, y, w, h1, out);
-            this.collectDockStacks(splitter.getSecond(), x, y + h1, w, h - h1, out);
+            out.handles.add(new EditorLayoutNode.SplitterHandleInfo(x, y + h1 - 0.01F, w, 0.02F, x, y, w, h, true));
+            this.collectLayout(splitter.getFirst(), x, y, w, h1, out);
+            this.collectLayout(splitter.getSecond(), x, y + h1, w, h - h1, out);
         }
         else
         {
             float w1 = w * splitter.getRatio();
 
-            this.collectDockStacks(splitter.getFirst(), x, y, w1, h, out);
-            this.collectDockStacks(splitter.getSecond(), x + w1, y, w - w1, h, out);
+            out.handles.add(new EditorLayoutNode.SplitterHandleInfo(x + w1 - 0.01F, y, 0.02F, h, x, y, w, h, false));
+            this.collectLayout(splitter.getFirst(), x, y, w1, h, out);
+            this.collectLayout(splitter.getSecond(), x + w1, y, w - w1, h, out);
         }
     }
 
@@ -1426,28 +1337,27 @@ public class UIDockLayout extends UIElement
     {
         this.dockStackByPanelId.clear();
 
-        float[] frameless = this.framelessStackRect(stackInfos);
-
         for (DockStackInfo info : stackInfos)
         {
             int topOffset = info.isStacked() ? DOCK_STACK_TABS_HEIGHT_PX : 0;
 
             for (String panelId : info.panelIds)
             {
-                UIElement panel = this.panelById.get(panelId);
+                UIDockSlot slot = this.slotById.get(panelId);
 
-                if (panel == null)
+                if (slot == null)
                 {
                     continue;
                 }
 
-                int[] g = this.isFrameless(panelId) ? new int[4] : this.panelGutter(info, frameless);
+                int[] g = this.isFrameless(panelId) ? NO_GUTTER : info.gutter;
 
-                panel.relative(this)
+                slot.relative(this)
                     .x(info.x, g[0])
                     .y(info.y, topOffset + g[1])
                     .w(info.w, -g[0] - g[2])
                     .h(info.h, -topOffset - g[1] - g[3]);
+                slot.setContentInset(this.layoutLocked ? 0 : DRAG_STRIP_HEIGHT_PX);
                 this.dockStackByPanelId.put(panelId, info);
             }
         }
@@ -1462,8 +1372,6 @@ public class UIDockLayout extends UIElement
 
         this.dockStackTabs.clear();
 
-        float[] frameless = this.framelessStackRect(stackInfos);
-
         for (DockStackInfo info : stackInfos)
         {
             if (!info.isStacked())
@@ -1473,7 +1381,7 @@ public class UIDockLayout extends UIElement
 
             UIDockStackTabs tabs = new UIDockStackTabs(this);
             tabs.configure(info);
-            int[] g = this.panelGutter(info, frameless);
+            int[] g = info.gutter;
 
             tabs.relative(this).x(info.x, g[0]).y(info.y, g[1]).w(info.w, -g[0] - g[2]).h(DOCK_STACK_TABS_HEIGHT_PX);
             this.dockStackTabs.add(tabs);
@@ -1506,51 +1414,18 @@ public class UIDockLayout extends UIElement
             }
         }
 
-        float[] frameless = this.framelessStackRect(stackInfos);
-
         for (int i = 0; i < stackedInfos.size(); i++)
         {
             UIDockStackTabs tabs = this.dockStackTabs.get(i);
             DockStackInfo info = stackedInfos.get(i);
 
             tabs.configure(info);
-            int[] g = this.panelGutter(info, frameless);
+            int[] g = info.gutter;
 
             tabs.relative(this).x(info.x, g[0]).y(info.y, g[1]).w(info.w, -g[0] - g[2]).h(DOCK_STACK_TABS_HEIGHT_PX);
         }
 
         return true;
-    }
-
-    private void applyDragHandleBoundsFromStacks(List<DockStackInfo> stackInfos)
-    {
-        for (UIDraggable handle : this.dragHandlesById.values())
-        {
-            handle.setVisible(false);
-        }
-
-        int editorHeight = Math.max(1, this.area.h);
-        float[] frameless = this.framelessStackRect(stackInfos);
-
-        for (DockStackInfo info : stackInfos)
-        {
-            UIDraggable handle = this.dragHandlesById.get(info.activePanelId);
-
-            if (handle == null)
-            {
-                continue;
-            }
-
-            float tabsOffset = info.isStacked() ? (float) DOCK_STACK_TABS_HEIGHT_PX / editorHeight : 0F;
-            int[] g = this.isFrameless(info.activePanelId) ? new int[4] : this.panelGutter(info, frameless);
-
-            handle.relative(this)
-                .x(info.x, g[0])
-                .y(info.y + tabsOffset + DRAG_HANDLE_TOP_OFFSET_NORM, g[1])
-                .w(info.w, -g[0] - g[2])
-                .h(DRAG_HANDLE_HEIGHT_NORM);
-            handle.setVisible(!this.layoutLocked);
-        }
     }
 
     /* Panel drag-to-dock */
@@ -1653,7 +1528,7 @@ public class UIDockLayout extends UIElement
                 continue;
             }
 
-            int index = tabs.getTabIndex(mouseX);
+            int index = tabs.getTabIndex(mouseX, mouseY);
 
             if (index >= 0)
             {
@@ -1685,7 +1560,7 @@ public class UIDockLayout extends UIElement
         }
 
         /* Panels never overlap outside stacks, so the first visible hit is the only hit. */
-        for (Map.Entry<String, UIElement> e : this.panelById.entrySet())
+        for (Map.Entry<String, UIDockSlot> e : this.slotById.entrySet())
         {
             UIElement panel = e.getValue();
 
@@ -1954,7 +1829,7 @@ public class UIDockLayout extends UIElement
     {
         Set<String> hidden = this.source.getHiddenPanels();
 
-        for (String id : this.panelById.keySet())
+        for (String id : this.slotById.keySet())
         {
             if (hidden.contains(id))
             {
@@ -1987,7 +1862,7 @@ public class UIDockLayout extends UIElement
     private EditorLayoutNode effectiveLayoutTree(EditorLayoutNode root)
     {
         if (this.maximizedPanelId != null
-            && (!this.panelById.containsKey(this.maximizedPanelId) || this.source.getHiddenPanels().contains(this.maximizedPanelId)))
+            && (!this.slotById.containsKey(this.maximizedPanelId) || this.source.getHiddenPanels().contains(this.maximizedPanelId)))
         {
             this.maximizedPanelId = null;
         }
@@ -2069,46 +1944,9 @@ public class UIDockLayout extends UIElement
         return this.framelessPanelId != null && this.framelessPanelId.equals(panelId);
     }
 
-    private void renderPanelSurfaces(UIContext context)
+    private void renderCanvas(UIContext context)
     {
         this.area.render(context.batcher, BBSSettings.baseSurface());
-
-        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
-        {
-            UIElement panel = entry.getValue();
-
-            if (panel.isVisible() && !this.isFrameless(entry.getKey()))
-            {
-                panel.area.render(context.batcher, BBSSettings.deepSurface());
-            }
-        }
-    }
-
-    private void renderPanelBorders(UIContext context)
-    {
-        if (!BBSSettings.interfaceShadows.get())
-        {
-            return;
-        }
-
-        int fade = Colors.setA(Colors.A100, 0F);
-
-        for (Map.Entry<String, UIElement> entry : this.panelById.entrySet())
-        {
-            UIElement panel = entry.getValue();
-
-            if (!panel.isVisible() || this.isFrameless(entry.getKey()))
-            {
-                continue;
-            }
-
-            Area a = panel.area;
-
-            context.batcher.gradientVBox(a.x, a.y, a.ex(), a.y + 4, Colors.A25, fade);
-            context.batcher.gradientVBox(a.x, a.ey() - 4, a.ex(), a.ey(), fade, Colors.A25);
-            context.batcher.gradientHBox(a.x, a.y, a.x + 4, a.ey(), Colors.A25, fade);
-            context.batcher.gradientHBox(a.ex() - 4, a.y, a.ex(), a.ey(), fade, Colors.A25);
-        }
     }
 
     @Override
@@ -2153,10 +1991,7 @@ public class UIDockLayout extends UIElement
 
         if (this.dropTargetTabStrip != null && this.dropTargetTabStrip.isVisible() && this.dropTargetTabIndex >= 0)
         {
-            UIDockStackTabs strip = this.dropTargetTabStrip;
-            int x = Math.min(strip.area.x + (this.dropTargetTabIndex + 1) * strip.getTabSize(), strip.area.ex() - 1);
-
-            context.batcher.box(x - 1, strip.area.y, x + 1, strip.area.ey(), BBSSettings.primaryColor(Colors.A100));
+            this.dropTargetTabStrip.renderInsertionCaret(context, this.dropTargetTabIndex);
         }
 
         String label = this.getPanelLabel(this.draggingPanelId).get();
@@ -2186,7 +2021,7 @@ public class UIDockLayout extends UIElement
 
         if (!this.dropTargetIsRoot)
         {
-            UIElement target = this.panelById.get(this.dropTargetPanelId);
+            UIElement target = this.slotById.get(this.dropTargetPanelId);
 
             if (target == null)
             {
@@ -2201,7 +2036,7 @@ public class UIDockLayout extends UIElement
 
         if (this.isSwapDrop())
         {
-            UIElement dragged = this.panelById.get(this.draggingPanelId);
+            UIElement dragged = this.slotById.get(this.draggingPanelId);
 
             if (dragged != null && dragged.isVisible())
             {
@@ -2213,6 +2048,59 @@ public class UIDockLayout extends UIElement
     }
 
     /* Helper types */
+
+    /** Owns a panel's frame and drag strip without replacing the panel's content layout. */
+    private static class UIDockSlot extends UIElement
+    {
+        private final UIDockLayout layout;
+        private final String panelId;
+        private final UIElement panel;
+        private final UIDraggable dragHandle;
+
+        public UIDockSlot(UIDockLayout layout, String panelId, UIElement panel)
+        {
+            this.layout = layout;
+            this.panelId = panelId;
+            this.panel = panel;
+            this.dragHandle = layout.createPanelDragHandle(panelId);
+
+            panel.relative(this).x(0F).y(0F).w(1F).h(1F);
+            this.dragHandle.relative(this).x(0F).y(0).w(1F).h(DRAG_STRIP_HEIGHT_PX);
+            this.dragHandle.context((menu) -> layout.fillSlotContextMenu(menu, panelId));
+
+            this.add(panel, this.dragHandle);
+        }
+
+        public void setContentInset(int inset)
+        {
+            this.panel.y(0F, inset).h(1F, -inset);
+        }
+
+        @Override
+        public void render(UIContext context)
+        {
+            boolean framed = !this.layout.isFrameless(this.panelId);
+
+            if (framed)
+            {
+                this.area.render(context.batcher, BBSSettings.deepSurface());
+            }
+
+            super.render(context);
+
+            if (framed && BBSSettings.interfaceShadows.get())
+            {
+                int fade = Colors.setA(Colors.A100, 0F);
+                Area a = this.area;
+
+                context.batcher.gradientVBox(a.x, a.y, a.ex(), a.y + 4, Colors.A25, fade);
+                context.batcher.gradientVBox(a.x, a.ey() - 4, a.ex(), a.ey(), fade, Colors.A25);
+                context.batcher.gradientHBox(a.x, a.y, a.x + 4, a.ey(), Colors.A25, fade);
+                context.batcher.gradientHBox(a.ex() - 4, a.y, a.ex(), a.ey(), fade, Colors.A25);
+            }
+        }
+    }
+
 
     /** One undo step: the tree plus the hidden set that went with it. */
     private static class LayoutSnapshot
@@ -2226,6 +2114,12 @@ public class UIDockLayout extends UIElement
             this.hidden = hidden;
         }
     }
+    private static class LayoutPass
+    {
+        public final List<DockStackInfo> slots = new ArrayList<>();
+        public final List<EditorLayoutNode.SplitterHandleInfo> handles = new ArrayList<>();
+    }
+
     private static class DockStackInfo
     {
         public final List<String> panelIds;
@@ -2234,6 +2128,7 @@ public class UIDockLayout extends UIElement
         public final float y;
         public final float w;
         public final float h;
+        public int[] gutter = NO_GUTTER;
 
         public DockStackInfo(List<String> panelIds, String activePanelId, float x, float y, float w, float h)
         {
@@ -2256,7 +2151,11 @@ public class UIDockLayout extends UIElement
         }
     }
 
-    private static class UIDockStackTabs extends UIElement
+    /**
+     * The tab strip of a stack: square icon tabs on the shared strip, plus the dock's own press
+     * handling - a press arms a panel drag and only activates the tab if it never moved.
+     */
+    private static class UIDockStackTabs extends UITabStrip
     {
         private final UIDockLayout layout;
         private String anchorPanelId = "";
@@ -2265,15 +2164,38 @@ public class UIDockLayout extends UIElement
 
         public UIDockStackTabs(UIDockLayout layout)
         {
+            super(ScrollDirection.HORIZONTAL);
+
             this.layout = layout;
+
+            this.fixed();
+            this.background(BBSSettings::chromeSurface);
+            this.activeEdge(Direction.BOTTOM);
+            this.active(() -> this.panelIds.indexOf(this.activePanelId));
+            this.hoverLabels((index) -> this.layout.getPanelLabel(this.panelIds.get(index)));
         }
 
         public void configure(DockStackInfo info)
         {
             this.anchorPanelId = info.getAnchorPanelId();
-            this.panelIds.clear();
-            this.panelIds.addAll(info.panelIds);
             this.activePanelId = info.activePanelId;
+
+            if (!this.panelIds.equals(info.panelIds))
+            {
+                this.panelIds.clear();
+                this.panelIds.addAll(info.panelIds);
+                this.removeAll();
+
+                for (String panelId : this.panelIds)
+                {
+                    UIIcon tab = new UIIcon(this.layout.getDockPanelIcon(panelId), null);
+
+                    /* Stays white under the cursor: the label card is the hover cue here */
+                    tab.hoverColor(Colors.WHITE).wh(DOCK_STACK_TABS_HEIGHT_PX, DOCK_STACK_TABS_HEIGHT_PX);
+                    this.addTab(tab);
+                }
+            }
+
             this.setVisible(info.isStacked());
         }
 
@@ -2283,24 +2205,12 @@ public class UIDockLayout extends UIElement
         }
 
         @Override
-        public boolean subMouseClicked(UIContext context)
+        protected boolean pressTab(int index, UIContext context)
         {
-            if (!this.isVisible() || context.mouseButton != 0 || !this.area.isInside(context) || this.panelIds.isEmpty())
-            {
-                return super.subMouseClicked(context);
-            }
+            /* Activation waits for the release: the same press may grow into a drag. */
+            this.layout.onTabPressed(this.panelIds.get(index), context.mouseX, context.mouseY);
 
-            int index = this.getTabIndex(context.mouseX);
-
-            if (index >= 0 && index < this.panelIds.size())
-            {
-                /* Activation waits for the release: the same press may grow into a drag. */
-                this.layout.onTabPressed(this.panelIds.get(index), context.mouseX, context.mouseY);
-
-                return true;
-            }
-
-            return super.subMouseClicked(context);
+            return true;
         }
 
         @Override
@@ -2312,80 +2222,20 @@ public class UIDockLayout extends UIElement
         }
 
         @Override
+        protected boolean canShowHoverCard()
+        {
+            return this.layout.draggingPanelId == null && this.layout.tabPressPanelId == null;
+        }
+
+        @Override
         public void render(UIContext context)
         {
-            if (!this.isVisible() || this.panelIds.isEmpty())
-            {
-                return;
-            }
-
             if (this.area.isInside(context))
             {
                 context.requestCursor(GLFW.GLFW_HAND_CURSOR);
             }
 
-            int tabSize = this.getTabSize();
-            int y = this.area.y;
-            int ey = this.area.ey();
-
-            context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.chromeSurface());
-
-            for (int i = 0; i < this.panelIds.size(); i++)
-            {
-                int x = this.area.x + i * tabSize;
-
-                if (x >= this.area.ex())
-                {
-                    break;
-                }
-
-                int ex = Math.min(this.area.ex(), x + tabSize);
-                String panelId = this.panelIds.get(i);
-                boolean active = panelId.equals(this.activePanelId);
-                Icon icon = this.layout.getDockPanelIcon(panelId);
-
-                if (active)
-                {
-                    Area.SHARED.set(x, y, ex - x, ey - y);
-                    UIDashboardPanels.renderHighlight(context.batcher, Area.SHARED, Direction.BOTTOM);
-                }
-
-                context.batcher.icon(icon, Colors.WHITE, (x + ex) / 2, (y + ey) / 2, 0.5F, 0.5F);
-            }
-
-            int hovered = this.area.isInside(context) ? this.getTabIndex(context.mouseX) : -1;
-
-            if (hovered >= 0 && this.layout.draggingPanelId == null && this.layout.tabPressPanelId == null)
-            {
-                String label = this.layout.getPanelLabel(this.panelIds.get(hovered)).get();
-
-                if (!label.isEmpty())
-                {
-                    int ty = this.area.y - 14;
-
-                    context.batcher.textCard(label, context.mouseX + 6, ty < 2 ? this.area.ey() + 4 : ty);
-                }
-            }
-
             super.render(context);
         }
-
-        private int getTabSize()
-        {
-            return Math.max(1, this.area.h);
-        }
-
-        private int getTabIndex(int mouseX)
-        {
-            int index = (mouseX - this.area.x) / this.getTabSize();
-
-            if (index < 0 || index >= this.panelIds.size())
-            {
-                return -1;
-            }
-
-            return index;
-        }
-
     }
 }

@@ -2,19 +2,21 @@ package mchorse.bbs_mod.forms;
 
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsConfig;
 import mchorse.bbs_mod.cubic.physics.ModelPhysicsIO;
+import mchorse.bbs_mod.cubic.physics.PhysicsControl;
+import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.ui.forms.editors.panels.UIFormPanel;
+import mchorse.bbs_mod.ui.forms.editors.panels.UIBoneListFormPanel;
+import java.util.function.Consumer;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.test.HeadlessClientTestBootstrap;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIModelPhysicsFormPanel;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 
 import sun.misc.Unsafe;
 
@@ -29,10 +31,8 @@ import sun.misc.Unsafe;
  * switch, silently reset a project's weights to 1 with no control anywhere to notice or restore
  * them. The round trip below is what keeps that from coming back.</p>
  *
- * <p>The panel cannot be constructed here: its constructor builds text boxes, and those ask a live
- * {@code Minecraft} instance for a font. So the tests allocate one without running its constructor
- * and fill the three fields {@link UIModelPhysicsFormPanel} reads back. The two methods under test
- * are the real production ones, not a reimplementation of them.</p>
+ * <p>The tests bypass widget construction to drive the production typed control edit and preset
+ * export paths directly, without a Minecraft font or GL context.</p>
  */
 public final class PhysicsWeightRoundTripTest
 {
@@ -58,7 +58,7 @@ public final class PhysicsWeightRoundTripTest
 
         try
         {
-            run("the editor state carries every scalar", PhysicsWeightRoundTripTest::testEditorStateHasAWeightField);
+            run("the editor state carries every scalar", PhysicsWeightRoundTripTest::testTypedControlEditPreservesWeight);
             run("a save writes the weight back unchanged", PhysicsWeightRoundTripTest::testPanelLoadSaveRoundTripPreservesWeight);
         }
         finally
@@ -94,28 +94,21 @@ public final class PhysicsWeightRoundTripTest
         }
     }
 
-    /**
-     * The editor state is what the save path rebuilds the chain from, so a scalar it cannot hold is
-     * a scalar a save cannot write. This is the half that names the defect directly; the round trip
-     * below is the half that shows the consequence.
-     */
-    private static void testEditorStateHasAWeightField() throws Exception
+    private static void testTypedControlEditPreservesWeight() throws Exception
     {
-        Class<?> boneData = Class.forName("mchorse.bbs_mod.ui.forms.editors.panels.UIModelPhysicsFormPanel$BoneData");
-        Field weight = null;
-
-        try
-        {
-            weight = boneData.getDeclaredField("weight");
-        }
-        catch (NoSuchFieldException exception)
-        {
-            throw new AssertionError("the physics panel's editor state has no weight field, so saving a chain "
-                + "drops its weight back to the default: " + describeFields(boneData), exception);
-        }
-
-        require(weight.getType() == float.class, "the editor state's weight is " + weight.getType()
-            + ", but ModelPhysicsConfig.Bone.weight is a float");
+        ModelForm form = new ModelForm();
+        form.bones.getOrCreate("root").physicsEnd.set("tip");
+        PhysicsControl configured = new PhysicsControl();
+        configured.weight = WEIGHT;
+        form.bones.getBone("root").physics.set(configured);
+        Object panel = newPanelWithoutConstructor(form);
+        Method edit = UIModelPhysicsFormPanel.class.getDeclaredMethod("editControl", Consumer.class);
+        edit.setAccessible(true);
+        edit.invoke(panel, (Consumer<PhysicsControl>) control -> control.gravity = GRAVITY);
+        PhysicsControl actual = form.bones.getBone("root").physics.get();
+        require(actual.gravity == GRAVITY && actual.weight == WEIGHT,
+            "editing a typed physics scalar overwrote the authored weight");
+        require(form.bones.getBone("root").physicsEnd.get().equals("tip"), "scalar edit erased chain topology");
     }
 
     /**
@@ -156,71 +149,29 @@ public final class PhysicsWeightRoundTripTest
             "a save turned the disabled chain's weight into " + hair.weight());
     }
 
-    /** Run one configured chain through the panel's own load and save, as the editor does. */
+    /** Exercise the same compatibility load and canonical preset export used by the panel. */
     private static MapType loadAndSave(ModelPhysicsConfig config) throws Exception
     {
-        Object panel = newPanelWithoutConstructor();
-        Method load = UIModelPhysicsFormPanel.class.getDeclaredMethod("load", ModelPhysicsConfig.class);
+        ModelForm form = new ModelForm();
+        form.physics.set(ModelPhysicsIO.toData(config));
+        Object panel = newPanelWithoutConstructor(form);
         Method toPresetData = UIModelPhysicsFormPanel.class.getDeclaredMethod("toPresetData");
-
-        load.setAccessible(true);
         toPresetData.setAccessible(true);
-
-        load.invoke(panel, config);
-
         return (MapType) toPresetData.invoke(panel);
     }
 
-    /**
-     * An instance with the constructor skipped. {@code load} and {@code toPresetData} read only
-     * these three fields, so filling them is enough to drive both real paths.
-     */
-    private static Object newPanelWithoutConstructor() throws Exception
+    private static Object newPanelWithoutConstructor(ModelForm form) throws Exception
     {
         Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-
         theUnsafe.setAccessible(true);
-
         Object panel = ((Unsafe) theUnsafe.get(null)).allocateInstance(UIModelPhysicsFormPanel.class);
-
-        setField(panel, "data", new LinkedHashMap<Object, Object>());
-        setField(panel, "wind", newWindData());
-        setField(panel, "availableBones", Collections.emptyList());
-
+        Field formField = UIFormPanel.class.getDeclaredField("form");
+        formField.setAccessible(true);
+        formField.set(panel, form);
+        Field selection = UIBoneListFormPanel.class.getDeclaredField("selectedBone");
+        selection.setAccessible(true);
+        selection.set(panel, "root");
         return panel;
-    }
-
-    private static Object newWindData() throws Exception
-    {
-        Class<?> windData = Class.forName("mchorse.bbs_mod.ui.forms.editors.panels.UIModelPhysicsFormPanel$WindData");
-        Constructor<?> constructor = windData.getDeclaredConstructor();
-
-        constructor.setAccessible(true);
-
-        return constructor.newInstance();
-    }
-
-    private static void setField(Object target, String name, Object value) throws Exception
-    {
-        Field field = UIModelPhysicsFormPanel.class.getDeclaredField(name);
-
-        field.setAccessible(true);
-        field.set(target, value);
-    }
-
-    private static String describeFields(Class<?> type)
-    {
-        Map<String, String> fields = new TreeMap<>();
-
-        for (Field field : type.getDeclaredFields())
-        {
-            if (!field.isSynthetic())
-            {
-                fields.put(field.getName(), field.getType().getSimpleName());
-            }
-        }
-
-        return "it has " + fields;
     }
 
     private static void require(boolean condition, String message)

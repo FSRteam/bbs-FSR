@@ -2,7 +2,6 @@ package mchorse.bbs_mod.ui.film.controller;
 
 import mchorse.bbs_mod.settings.values.ui.ValueMotionPath;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -44,21 +43,28 @@ public class UIMotionPathContextMenu extends UIContextMenu
 
     private UIElement column;
 
-    private UIFilmPanel panel;
+    private final UIFilmController controller;
     private ValueMotionPath motionPath;
 
     public UIMotionPathContextMenu(UIFilmPanel panel, ValueMotionPath motionPath)
     {
-        this.panel = panel;
+        this(panel.getController(), motionPath);
+    }
+
+    public UIMotionPathContextMenu(UIFilmController controller, ValueMotionPath motionPath)
+    {
+        this.controller = controller;
         this.motionPath = motionPath;
 
         this.enable = new UIIcon(() -> this.motionPath.enabled.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.motionPath.enabled.toggle());
         this.enable.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_TITLE);
-        this.pin = new UIIcon(() -> this.panel.getController().isMotionPathPinned() ? Icons.LOCKED : Icons.UNLOCKED, (b) -> this.togglePin());
+        this.pin = new UIIcon(() -> this.controller.isMotionPathPinned() ? Icons.LOCKED : Icons.UNLOCKED, (b) -> this.togglePin());
         this.pin.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_PIN);
         this.gradient = new UIIcon(Icons.GRAPH, (b) -> this.motionPath.gradient.toggle());
+        this.gradient.highlight(this.motionPath.gradient::get, Direction.BOTTOM);
         this.gradient.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_GRADIENT);
         this.around = new UIIcon(Icons.MAXIMIZE, (b) -> this.motionPath.aroundCurrent.toggle());
+        this.around.highlight(this.motionPath.aroundCurrent::get, Direction.BOTTOM);
         this.around.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_AROUND);
 
         this.color = new UIColor((c) -> this.motionPath.color.set(c));
@@ -112,7 +118,7 @@ public class UIMotionPathContextMenu extends UIContextMenu
 
     private void togglePin()
     {
-        this.panel.getController().toggleMotionPathPin();
+        this.controller.toggleMotionPathPin();
     }
 
     @Override
@@ -129,19 +135,4 @@ public class UIMotionPathContextMenu extends UIContextMenu
             .bounds(context.menu.overlay, 5);
     }
 
-    @Override
-    protected void renderBackground(UIContext context)
-    {
-        super.renderBackground(context);
-
-        if (this.motionPath.gradient.get())
-        {
-            UIDashboardPanels.renderHighlight(context.batcher, this.gradient.area, Direction.BOTTOM);
-        }
-
-        if (this.motionPath.aroundCurrent.get())
-        {
-            UIDashboardPanels.renderHighlight(context.batcher, this.around.area, Direction.BOTTOM);
-        }
-    }
 }

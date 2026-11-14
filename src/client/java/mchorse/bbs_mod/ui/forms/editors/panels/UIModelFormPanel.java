@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.cubic.ModelInstance;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
@@ -124,7 +125,7 @@ public class UIModelFormPanel extends UIPoseFormPanel<ModelForm>
         this.cemInLava = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_IN_LAVA, false, (b) -> this.form.cemInLava.set(b.getValue()));
         this.cemClimbing = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_CLIMBING, false, (b) -> this.form.cemClimbing.set(b.getValue()));
         this.cemCrawling = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_CRAWLING, false, (b) -> this.form.cemCrawling.set(b.getValue()));
-        this.cemHealth = new UITrackpad((v) -> this.form.cemHealth.set(v.floatValue()));
+        this.cemHealth = UIValues.trackpad(() -> this.form.cemHealth);
 
         this.cemHealth.limit(0D, 1D).tooltip(UIKeys.FORMS_EDITOR_MODEL_CEM_HEALTH_TOOLTIP);
 
@@ -209,8 +210,12 @@ public class UIModelFormPanel extends UIPoseFormPanel<ModelForm>
         Set<String> modelShapeKeys = model == null ? Collections.emptySet() : model.model.getShapeKeys();
 
         this.shapeKeysSection.removeFromParent();
-        this.options.add(this.shapeKeysSection);
         this.shapeKeys.setShapeKeys(model == null ? "" : model.getPoseGroup(), modelShapeKeys, this.form.shapeKeys.get());
+
+        if (!modelShapeKeys.isEmpty())
+        {
+            this.options.add(this.shapeKeysSection);
+        }
 
         /* Nothing reads these unless a CEM program is what animates the model, so they only show there. */
         this.cemSection.removeFromParent();

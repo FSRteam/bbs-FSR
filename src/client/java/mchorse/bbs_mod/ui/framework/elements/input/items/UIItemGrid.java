@@ -1,8 +1,11 @@
 package mchorse.bbs_mod.ui.framework.elements.input.items;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.tooltips.TooltipPlacement;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.GridLayout;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
@@ -15,17 +18,17 @@ import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
 /**
- * Items as cells of a grid laid out by a {@link GridLayout}: a caret between cells for a
- * drop, a stack of cards for the ghost.
+ * Items as cells of a grid laid out by a {@link GridLayout}: hover with quick actions along
+ * the cell's top, a caret between cells for a drop, a stack of cards for the ghost.
  *
- * <p>Two ways of running: down the usual rows, or {@link #horizontal()} — one row of cells
+ * <p>Two ways of being hosted. On its own, the grid scrolls and clips itself. {@link #embedded()}
+ * in a parent scroll view (one grid per category down a column, say), it has no scrolling of
+ * its own: it reports its height through {@link #contentSize()}, keeps its {@link #area} in
+ * step with it, and the parent lays it out and scrolls.</p>
+ *
+ * <p>And two ways of running: down the usual rows, or {@link #horizontal()} — one row of cells
  * that scrolls sideways, for a strip of frames under a canvas. The geometry stays the layout's;
  * only which axis is the long one changes.</p>
- *
- * <p>FSR note: this is the minimal wave the frame strip needed (upstream aebdf23b1 + the
- * horizontal mode of 1f51d0e25). Deliberately left out until B7's UI-infra wave adopts it for
- * the browser: the embedded-in-a-parent-scroll-view mode (needs UIContext.invalidateLayout),
- * the hover caption card (needs TooltipPlacement) and per-cell quick actions.</p>
  *
  * @param <T> what's in the cells
  */
@@ -33,14 +36,24 @@ public abstract class UIItemGrid<T> extends UIItems<T>
 {
     public static final int GHOST_SIZE = 48;
 
+    /** How far from the cursor the name card of a cell that can't carry its own name sits. */
+    private static final int CAPTION_OFFSET = 8;
+
+    private static final Area CAPTION_CARD = new Area();
+
     protected final GridLayout layout;
     protected final CellState state = new CellState();
 
     private int cellSize = 60;
+    private boolean embedded;
     private boolean horizontal;
+    private int lastHeight = -1;
 
     /* What's under the cursor, refreshed every frame */
     protected int hoverIndex = -1;
+
+    /* The name of the hovered cell when the cell itself doesn't say it whole */
+    private String hoverCaption;
 
     public UIItemGrid(Consumer<List<T>> callback, GridLayout layout)
     {
@@ -59,11 +72,23 @@ public abstract class UIItemGrid<T> extends UIItems<T>
 
         this.layout = layout;
         this.scroll.scrollSpeed = 40;
+
+        /* The name card is drawn as a tooltip, and only an element with one gets asked to draw it */
+        this.tooltip(IKey.EMPTY);
     }
 
     /* Settings */
 
-    /** One row of cells scrolling sideways, instead of rows scrolling down. */
+    /** Hosted inside a parent scroll view: no scrolling or clipping of its own. */
+    public UIItemGrid<T> embedded()
+    {
+        this.embedded = true;
+        this.scroll.scrollbar = false;
+
+        return this;
+    }
+
+    /** One row of cells scrolling sideways, instead of rows scrolling down. Not for an embedded grid. */
     public UIItemGrid<T> horizontal()
     {
         this.horizontal = true;
@@ -91,7 +116,6 @@ public abstract class UIItemGrid<T> extends UIItems<T>
     public void setCellSize(int size)
     {
         this.cellSize = Math.max(1, size);
-
         this.relayout();
     }
 
@@ -99,6 +123,12 @@ public abstract class UIItemGrid<T> extends UIItems<T>
 
     /** Paint one cell; {@code state} says what overlays it gets. */
     protected abstract void renderCell(UIContext context, T item, int x, int y, int w, int h, CellState state);
+
+    /** A caption for a cell, or null for none. */
+    protected String caption(T item)
+    {
+        return null;
+    }
 
     /**
      * Something under a point that takes a drop of its own (a folder cell), instead of a
@@ -109,26 +139,73 @@ public abstract class UIItemGrid<T> extends UIItems<T>
         return null;
     }
 
-    /**
-     * Whether the cells are shown at all — a collapsed category keeps only its band.
-     * Everything shows here; the collapsible-category grids of a later wave override it.
-     */
+    /** Whether the cells are shown at all — a collapsed category keeps only its band. */
     protected boolean isExpanded()
+    {
+        return true;
+    }
+
+    /**
+     * Whether a cell this wide says the item's whole {@link #caption(Object) name} itself. When
+     * it doesn't — no name strip at a small zoom, or a name longer than the strip — the name is
+     * shown by the cursor instead, so a grid of tiny cells can still be read.
+     */
+    protected boolean showsCaption(UIContext context, T item, int cellWidth)
     {
         return true;
     }
 
     /* Layout */
 
-    /** Lay the cells out for the current width and count, and tell the scrollbar how long that is. */
+    /** Lay the cells out for the current width and count, and tell whoever scrolls how tall that is. */
     public void relayout()
     {
         int width = Math.max(this.cellSize, this.area.w);
 
         this.layout.set(width, this.cellSize, this.visible().size());
 
-        this.scroll.scrollSize = this.contentSize();
-        this.scroll.clamp();
+        int h = this.contentSize();
+
+        if (this.embedded)
+        {
+            this.syncHeight(h);
+        }
+        else
+        {
+            this.scroll.scrollSize = h;
+            this.scroll.clamp();
+        }
+    }
+
+    /**
+     * Embedded: the element's height is the content's, and the parent is told when it changes.
+     *
+     * <p>Told by {@link UIElement#invalidateLayout() invalidating} its layout rather than by resizing
+     * it on the spot, because the height is measured in {@link #relayout()}, which runs from a render
+     * and from a resize — both in the middle of the parent's pass over its children. Resizing the
+     * parent from there re-enters the column's running cursor: the grids after this one are placed a
+     * second time, on top of a cursor the nested pass had already advanced, and land far below
+     * everything the scroll view shows. Collapsing every category at once did exactly that — all the
+     * bands but one flew out of view, and only the next honest pass (dragging the panel's edge) put
+     * them back. Queued instead, every grid that changed height in a frame shares one clean pass
+     * before the next one.</p>
+     */
+    private void syncHeight(int h)
+    {
+        if (this.lastHeight == h)
+        {
+            return;
+        }
+
+        this.lastHeight = h;
+        this.h(h);
+
+        UIElement container = this.getParentContainer();
+
+        if (container != null)
+        {
+            container.invalidateLayout();
+        }
     }
 
     @Override
@@ -137,6 +214,12 @@ public abstract class UIItemGrid<T> extends UIItems<T>
         super.resize();
 
         this.relayout();
+    }
+
+    @Override
+    protected boolean hasOwnScroll()
+    {
+        return !this.embedded;
     }
 
     /** Sideways, the scrolling is taken out of X rather than Y. */
@@ -149,7 +232,7 @@ public abstract class UIItemGrid<T> extends UIItems<T>
     @Override
     protected int originY()
     {
-        return this.horizontal ? this.area.y : super.originY();
+        return this.embedded || this.horizontal ? this.area.y : super.originY();
     }
 
     @Override
@@ -210,7 +293,7 @@ public abstract class UIItemGrid<T> extends UIItems<T>
     @Override
     protected void scrollIntoView(int index)
     {
-        if (index >= 0 && index < this.layout.getCount())
+        if (!this.embedded && index >= 0 && index < this.layout.getCount())
         {
             if (this.horizontal)
             {
@@ -224,6 +307,12 @@ public abstract class UIItemGrid<T> extends UIItems<T>
     }
 
     /* Input */
+
+    @Override
+    protected boolean pressItem(int index, UIContext context)
+    {
+        return super.pressItem(index, context);
+    }
 
     @Override
     protected void reportDropTarget(int x, int y)
@@ -247,6 +336,21 @@ public abstract class UIItemGrid<T> extends UIItems<T>
         int y = this.contentY(context);
 
         this.hoverIndex = inside ? this.indexAt(x, y) : -1;
+        this.hoverCaption = null;
+
+        if (this.hoverIndex == -1)
+        {
+            return;
+        }
+
+        T item = this.visible().get(this.hoverIndex);
+        int width = this.layout.getCellWidth();
+
+        /* A band being stretched is drawing rather than pointing */
+        if (!this.marquee.isActive() && !this.showsCaption(context, item, width))
+        {
+            this.hoverCaption = this.caption(item);
+        }
     }
 
     /* Rendering */
@@ -260,6 +364,26 @@ public abstract class UIItemGrid<T> extends UIItems<T>
         super.render(context);
     }
 
+    /**
+     * The name of the hovered cell beside the cursor, for a cell too small to carry it. It goes
+     * through the tooltip — drawn after the whole screen — so no neighbouring cell, column or
+     * panel painted after the grid covers it.
+     */
+    @Override
+    public void renderTooltip(UIContext context, Area area)
+    {
+        if (this.hoverCaption == null)
+        {
+            return;
+        }
+
+        FontRenderer font = context.batcher.getFont();
+        /* The card is the text plus its 3px padding on each side */
+        Area card = TooltipPlacement.nearMouse(context, font.getWidth(this.hoverCaption) + 6, font.getHeight() + 6, CAPTION_OFFSET, true, 2, CAPTION_CARD);
+
+        context.batcher.textCard(this.hoverCaption, card.x + 3, card.y + 3, Colors.WHITE, Colors.A75, 3);
+    }
+
     @Override
     protected void renderContent(UIContext context)
     {
@@ -271,9 +395,20 @@ public abstract class UIItemGrid<T> extends UIItems<T>
         }
     }
 
-    /** The area the cells must fall into to be worth painting. */
+    /**
+     * The window of Y (in the space the cells are painted in) the cells must fall into to be
+     * worth painting; null to paint them all. Embedded, it's the container's area — a grid
+     * inside a scroll view overrides this with the view's slice, shifted by its scrolling.
+     */
     protected Area visibleWindow()
     {
+        if (this.embedded)
+        {
+            UIElement container = this.getParentContainer();
+
+            return container == null ? null : container.area;
+        }
+
         return this.area;
     }
 
@@ -356,7 +491,8 @@ public abstract class UIItemGrid<T> extends UIItems<T>
     @Override
     protected void renderDragGhost(UIContext context)
     {
-        if (this.drag.getItems().isEmpty())
+        /* Inside a parent's scroll view the ghost would be clipped to it; the host draws it instead */
+        if (this.embedded || this.drag.getItems().isEmpty())
         {
             return;
         }

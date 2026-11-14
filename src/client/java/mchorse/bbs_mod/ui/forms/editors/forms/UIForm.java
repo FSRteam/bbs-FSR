@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.ui.forms.editors.forms;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.api.client.editor.FormEditorTool;
+import mchorse.bbs_mod.api.client.events.RegisterFormPanelsEvent;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -12,6 +14,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIFormPanel;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIGeneralFormPanel;
+import mchorse.bbs_mod.ui.forms.editors.panels.UIMaterialFormPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIPanelBase;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
@@ -25,6 +28,8 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
+import java.util.function.Consumer;
+
 public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>>
 {
     public UIFormEditor editor;
@@ -37,13 +42,19 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
     public UIForm()
     {
-        super(Direction.LEFT);
+        super(Direction.RIGHT);
 
+        this.buttonTabs.activeEdge(Direction.RIGHT);
         this.keys().register(Keys.FILM_CONTROLLER_CYCLE_EDITORS, this::cyclePanels);
     }
 
     public UIPropTransform getEditableTransform()
     {
+        if (this.view instanceof FormEditorTool tool && tool.getGizmoTransform() != null)
+        {
+            return tool.getGizmoTransform();
+        }
+
         this.setPanel(this.generalPanel);
 
         return this.general;
@@ -79,6 +90,11 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     public Matrix4f getOriginMatrix(float transition)
     {
         return this.getOrigin(transition, FormUtils.getPath(this.form), true);
+    }
+
+    public Matrix4f getParentOriginMatrix(float transition)
+    {
+        return this.getOrigin(transition, FormUtils.getPath(this.form), false);
     }
 
     public Vector3f getRotationOffset(float transition)
@@ -145,9 +161,15 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
     protected void registerDefaultPanels()
     {
+        for (Consumer<UIForm<?>> factory : RegisterFormPanelsEvent.getPanels())
+        {
+            factory.accept(this);
+        }
+
         UIGeneralFormPanel panel = new UIGeneralFormPanel(this);
 
         this.registerPanel(panel, UIKeys.FORMS_EDITORS_GENERAL, Icons.GEAR);
+        this.registerPanel(new UIMaterialFormPanel(this), UIKeys.FORMS_EDITORS_MATERIAL, Icons.MATERIAL);
 
         this.generalPanel = panel;
         this.general = panel.transform;

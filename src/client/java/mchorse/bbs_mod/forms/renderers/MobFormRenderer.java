@@ -20,7 +20,6 @@ import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.mixin.LimbAnimatorAccessor;
 import mchorse.bbs_mod.resources.Link;
-import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -29,8 +28,6 @@ import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.joml.Vectors;
-import mchorse.bbs_mod.utils.pose.Pose;
-import mchorse.bbs_mod.utils.pose.PoseTransform;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.RemotePlayer;
@@ -124,37 +121,6 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         return super.getBoneHierarchy();
     }
 
-    private Pose mergeOverlays()
-    {
-        Pose overlay = this.form.poseOverlay.get().copy();
-
-        for (ValuePose additional : this.form.additionalOverlays)
-        {
-            Pose additionalPose = additional.get();
-
-            for (Map.Entry<String, PoseTransform> entry : additionalPose.transforms.entrySet())
-            {
-                PoseTransform target = overlay.get(entry.getKey());
-                PoseTransform value = entry.getValue();
-
-                if (value.fix != 0F)
-                {
-                    target.translate.lerp(value.translate, value.fix);
-                    target.scale.lerp(value.scale, value.fix);
-                    target.lerpRotation(value, value.fix);
-                }
-                else
-                {
-                    target.translate.add(value.translate);
-                    target.scale.add(value.scale).sub(1F, 1F, 1F);
-                    target.addRotation(value);
-                }
-            }
-        }
-
-        return overlay;
-    }
-
     private void bindTexture()
     {
         Link link = this.form.texture.get();
@@ -167,6 +133,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
 
     private void ensureEntity()
     {
+        this.form.syncOverlayTracks();
         String id = this.form.mobID.get();
         String nbt = this.form.mobNBT.get();
         boolean slim = this.form.slim.get();
@@ -296,7 +263,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             this.prepareRenderLook(null, context.getTransition());
             this.recordRenderSample(transition, PAUSE_SAMPLE_UI);
 
-            try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.mergeOverlays(), this.getColor(0xffffffff)))
+            try (MobRenderContext ignored = MobRenderContext.push(renderer, this.form.pose.get(), this.form.poseOverlay.get(), this.form.additionalOverlays, this.getColor(0xffffffff)))
             {
                 Minecraft.getInstance().getEntityRenderDispatcher().render(this.entity, 0D, 0D, 0D, 0F, transition, stack, consumers, LightTexture.FULL_BLOCK);
             }
@@ -397,7 +364,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                 MobRenderContext mobContext = MobRenderContext.push(
                     renderer,
                     this.form.pose.get(),
-                    this.mergeOverlays(),
+                    this.form.poseOverlay.get(), this.form.additionalOverlays,
                     this.getColor(context.color),
                     captureBase,
                     context.isPicking(),
@@ -534,7 +501,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         for (BodyPart part : this.form.parts.getAllTyped())
         {
             String boneId = this.getBoneHierarchy().resolveId(part.bone.get());
-            Matrix4f matrix = this.bones.get(boneId == null ? part.bone.get() : boneId).matrix();
+            Matrix4f matrix = part.filterBoneMatrix(this.bones.get(boneId == null ? part.bone.get() : boneId).matrix());
 
             context.stack.pushPose();
             if (context.world != null)
@@ -610,8 +577,6 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             );
         }
 
-        int i = 0;
-
         for (BodyPart part : this.form.parts.getAllTyped())
         {
             Form form = part.getForm();
@@ -619,7 +584,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
             if (form != null)
             {
                 String boneId = this.getBoneHierarchy().resolveId(part.bone.get());
-                Matrix4f boneMatrix = bones.get(boneId == null ? part.bone.get() : boneId).matrix();
+                Matrix4f boneMatrix = part.filterBoneMatrix(bones.get(boneId == null ? part.bone.get() : boneId).matrix());
 
                 stack.pushPose();
 
@@ -650,14 +615,13 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                     allowWorldCollisions,
                     stack,
                     matrices,
-                    StringUtils.combinePaths(prefix, String.valueOf(i)),
+                    StringUtils.combinePaths(prefix, part.getId()),
                     transition
                 );
 
                 stack.popPose();
             }
 
-            i += 1;
         }
 
         stack.popPose();
@@ -686,7 +650,7 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         MobRenderContext context = MobRenderContext.push(
             renderer,
             this.form.pose.get(),
-            this.mergeOverlays(),
+            this.form.poseOverlay.get(), this.form.additionalOverlays,
             Color.white(),
             captureBase,
             false,

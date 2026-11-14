@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.forms.forms.ItemForm;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
@@ -22,7 +23,7 @@ public class UIItemFormPanel extends UIFormPanel<ItemForm>
     {
         super(editor);
 
-        this.color = new UIColor((c) -> this.form.color.set(Color.rgba(c))).withAlpha();
+        this.color = UIValues.color(() -> this.form.color).withAlpha();
         this.modelTransform = new UIButton(IKey.EMPTY, (b) ->
         {
             this.getContext().replaceContextMenu((menu) ->

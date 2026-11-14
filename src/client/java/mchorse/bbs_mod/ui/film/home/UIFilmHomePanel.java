@@ -14,6 +14,8 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.dashboard.list.UIDataPathList;
+import mchorse.bbs_mod.ui.dashboard.panels.landing.UILandingScreen;
+import mchorse.bbs_mod.ui.dashboard.panels.landing.UIRecentDataList;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
@@ -25,12 +27,16 @@ import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
+import mchorse.bbs_mod.settings.values.core.ValueRecentData.Entry;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
@@ -46,8 +52,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Film home start page: full-width banner, toolbar (search/sort/view/breadcrumb/CRUD)
@@ -121,6 +129,11 @@ public class UIFilmHomePanel extends UIElement
     private final UILabel title;
     private final UILabel stats;
     private final UIElement bar;
+    private final UIElement recentSection;
+    private final UIRecentDataList recent;
+    private final UIIcon recentButton;
+    private final UIElement community;
+    private Set<String> knownFilms;
 
     /* Content sections */
     private final UINewsStrip newsStrip = new UINewsStrip();
@@ -181,6 +194,47 @@ public class UIFilmHomePanel extends UIElement
 
         this.banner.add(new UIRenderable((ctx) -> this.renderBanner(ctx, this.banner.area)), this.title, this.stats);
 
+        this.recentSection = new UIElement();
+        this.recentSection.relative(this.banner).x(1F, -310).y(8).w(300).h(1F, -16);
+        UILabel recentTitle = UI.label(UIKeys.PANELS_LANDING_RECENT);
+
+        recentTitle.relative(this.recentSection).xy(6, 4).w(1F, -12).h(16);
+        this.recent = new UIRecentDataList((entries) -> this.panel.pickData(entries.get(0).id), (id) -> Icons.FILM)
+        {
+            @Override
+            protected boolean subKeyPressed(UIContext context)
+            {
+                return (this.area.isInside(context) || !this.isDeselected()) && super.subKeyPressed(context);
+            }
+        };
+        this.recent.relative(this.recentSection).xy(4, 24).w(1F, -8).h(1F, -28);
+        this.recent.context((menu) ->
+        {
+            Entry entry = this.recent.getEntryAtCursor(this.getContext());
+
+            if (entry != null)
+            {
+                menu.action(Icons.FILM, UIKeys.PANELS_LANDING_OPEN, () -> this.panel.pickData(entry.id));
+                menu.action(Icons.MORE, UIKeys.PANELS_LANDING_SHOW_IN_MANAGER, () -> this.showInManager(entry.id));
+                menu.icon(MenuVerb.REMOVE, () ->
+                {
+                    BBSSettings.recentData.forget(this.panel.getType().getId(), entry.id);
+                    this.refreshRecent();
+                }).label(UIKeys.PANELS_LANDING_FORGET);
+            }
+        });
+        this.recentSection.add(new UIRenderable((context) -> this.recentSection.area.render(context.batcher,
+            BBSSettings.color(BBSSettings.chromeSurface(), Colors.A75))), recentTitle, this.recent);
+        this.recentButton = new UIIcon(Icons.UNDO, (button) -> this.openRecentOverlay());
+        this.recentButton.tooltip(UIKeys.PANELS_LANDING_RECENT);
+        this.recentButton.relative(this.banner).x(1F, -28).y(8);
+        this.community = UI.row(4,
+            new UIButton(IKey.raw("Discord"), (button) -> UIUtils.openWebLink(UILandingScreen.DISCORD_LINK)),
+            new UIButton(UIKeys.PANELS_LANDING_TUTORIALS, (button) -> UIUtils.openWebLink(UILandingScreen.TUTORIALS_LINK)),
+            new UIButton(UIKeys.PANELS_LANDING_WIKI, (button) -> UIUtils.openWebLink(UILandingScreen.WIKI_LINK)));
+        this.community.relative(this.banner).xy(12, 0).wh(216, 20);
+        this.banner.add(this.recentSection, this.recentButton, this.community);
+
         /* Toolbar */
         this.bar = new UIElement();
 
@@ -232,15 +286,15 @@ public class UIFilmHomePanel extends UIElement
         {
             this.addPasteAction(menu);
 
-            menu.action(Icons.ADD, UIKeys.GENERAL_ADD, this::addData);
+            menu.icon(MenuVerb.ADD, this::addData);
             menu.action(Icons.FOLDER, UIKeys.PANELS_MODALS_ADD_FOLDER_TITLE, this::addNewFolder);
             menu.action(Icons.EDIT, UIKeys.GENERAL_RENAME, this::renameSelected);
             menu.action(Icons.DUPE, UIKeys.GENERAL_DUPE, this::dupeSelected);
-            menu.action(Icons.REMOVE, UIKeys.GENERAL_REMOVE, this::removeSelected);
+            menu.icon(MenuVerb.REMOVE, this::removeSelected);
 
             if (this.getSelectedFiles().size() == 1)
             {
-                menu.action(Icons.COPY, UIKeys.PANELS_CONTEXT_COPY, this::copySelected);
+                menu.icon(MenuVerb.COPY, this::copySelected);
             }
         });
         this.grid.keys().register(Keys.DELETE, this::removeSelected).active(this::canUseGridKeys);
@@ -272,15 +326,15 @@ public class UIFilmHomePanel extends UIElement
         {
             this.addPasteAction(menu);
 
-            menu.action(Icons.ADD, UIKeys.GENERAL_ADD, this::addData);
+            menu.icon(MenuVerb.ADD, this::addData);
             menu.action(Icons.FOLDER, UIKeys.PANELS_MODALS_ADD_FOLDER_TITLE, this::addNewFolder);
             menu.action(Icons.EDIT, UIKeys.GENERAL_RENAME, this::renameSelected);
             menu.action(Icons.DUPE, UIKeys.GENERAL_DUPE, this::dupeSelected);
-            menu.action(Icons.REMOVE, UIKeys.GENERAL_REMOVE, this::removeSelected);
+            menu.icon(MenuVerb.REMOVE, this::removeSelected);
 
             if (this.getSelectedFiles().size() == 1)
             {
-                menu.action(Icons.COPY, UIKeys.PANELS_CONTEXT_COPY, this::copySelected);
+                menu.icon(MenuVerb.COPY, this::copySelected);
             }
         });
         this.namesList.keys().register(Keys.DELETE, this::removeSelected).active(this::canUseListKeys);
@@ -320,6 +374,12 @@ public class UIFilmHomePanel extends UIElement
         this.banner.relative(this).xy(0, 0).w(1F).h(bannerH);
         this.title.relative(this.banner).xy(12, Math.max(4, bannerH - 58)).w(1F, -160).h(16);
         this.stats.relative(this.banner).xy(12, Math.max(4, bannerH - 38)).w(1F, -160).h(12);
+        this.community.y(bannerH - 24).w(Math.min(216, Math.max(0, this.area.w - 40)));
+
+        boolean recentVisible = this.area.w >= T2_W && bannerH >= BANNER_H_SHORT;
+
+        this.recentSection.setVisible(recentVisible);
+        this.recentButton.setVisible(!recentVisible);
 
         int y = bannerH;
 
@@ -582,8 +642,46 @@ public class UIFilmHomePanel extends UIElement
     public void fillNames(Collection<String> names)
     {
         this.namesList.fill(names);
+        this.knownFilms = new HashSet<>(names);
+        this.refreshRecent();
         this.syncCards();
         this.requestMeta();
+    }
+
+    private void showInManager(String id)
+    {
+        this.setView(false);
+        this.namesList.setCurrentFile(id);
+    }
+
+    private void refreshRecent()
+    {
+        this.recent.setList(UILandingScreen.recentEntries(this.panel.getType().getId(), this.knownFilms));
+        this.recent.deselect();
+    }
+
+    private void openRecentOverlay()
+    {
+        UIOverlayPanel overlay = new UIOverlayPanel(UIKeys.PANELS_LANDING_RECENT);
+        UILandingScreen landing = new UILandingScreen(this.panel.getType().getId(), UIKeys.FILM_TITLE,
+            (id) -> Icons.FILM, (id) ->
+            {
+                overlay.close();
+                this.panel.pickData(id);
+            }, () ->
+            {
+                overlay.close();
+                this.setView(false);
+            }, () -> this.panel.getRepository().getFolder());
+
+        if (this.knownFilms != null)
+        {
+            landing.fillNames(this.knownFilms);
+        }
+
+        landing.full(overlay.content);
+        overlay.content.add(landing);
+        UIOverlay.addOverlay(this.getContext(), overlay, 500, 280);
     }
 
     /**
@@ -1004,7 +1102,7 @@ public class UIFilmHomePanel extends UIElement
 
             if (data != null)
             {
-                menu.action(Icons.PASTE, UIKeys.PANELS_CONTEXT_PASTE, () -> this.paste(data));
+                menu.icon(MenuVerb.PASTE, () -> this.paste(data));
             }
         }
         catch (Exception e)
@@ -1238,6 +1336,7 @@ public class UIFilmHomePanel extends UIElement
 
         if (visible && !wasVisible)
         {
+            this.refreshRecent();
             this.search.setText("");
             this.filter = "";
             this.grid.deselect();

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
 import mchorse.bbs_mod.forms.forms.sound.SoundFalloff;
 import mchorse.bbs_mod.forms.renderers.sound.SoundGuideInteraction;
@@ -70,17 +71,17 @@ public abstract class UIAbstractSoundFormPanel <T extends AbstractSoundForm> ext
             UIOverlay.addOverlay(this.getContext(), panel.set(this.form.audio.get()));
         });
 
-        this.playing = new UIToggle(UIKeys.FORMS_EDITORS_SOUND_PLAYING, (b) -> this.form.playing.set(b.getValue()));
+        this.playing = UIValues.toggle(UIKeys.FORMS_EDITORS_SOUND_PLAYING, () -> this.form.playing);
         this.playing.tooltip(UIKeys.FORMS_EDITORS_SOUND_PLAYING_TOOLTIP);
 
-        this.volume = new UITrackpad((v) -> this.form.volume.set(v.floatValue()));
+        this.volume = UIValues.trackpad(() -> this.form.volume);
         this.volume.tooltip(UIKeys.FORMS_EDITORS_SOUND_VOLUME);
-        this.pitch = new UITrackpad((v) -> this.form.pitch.set(v.floatValue()));
+        this.pitch = UIValues.trackpad(() -> this.form.pitch);
         this.pitch.tooltip(UIKeys.FORMS_EDITORS_SOUND_PITCH);
-        this.looping = new UIToggle(UIKeys.FORMS_EDITORS_SOUND_LOOPING, (b) -> this.form.looping.set(b.getValue()));
-        this.loopInterval = new UITrackpad((v) -> this.form.loopInterval.set(v.floatValue()));
+        this.looping = UIValues.toggle(UIKeys.FORMS_EDITORS_SOUND_LOOPING, () -> this.form.looping);
+        this.loopInterval = UIValues.trackpad(() -> this.form.loopInterval);
         this.loopInterval.tooltip(UIKeys.FORMS_EDITORS_SOUND_LOOP_INTERVAL);
-        this.startOffset = new UITrackpad((v) -> this.form.startOffset.set(v.floatValue()));
+        this.startOffset = UIValues.trackpad(() -> this.form.startOffset);
         this.startOffset.tooltip(UIKeys.FORMS_EDITORS_SOUND_START_OFFSET);
 
         this.preview = new UIButton(UIKeys.FORMS_EDITORS_SOUND_PREVIEW, (b) -> this.previewAudio());
@@ -90,18 +91,18 @@ public abstract class UIAbstractSoundFormPanel <T extends AbstractSoundForm> ext
         this.falloff.addLabel(UIKeys.FORMS_EDITORS_SOUND_FALLOFF_LINEAR);
         this.falloff.addLabel(UIKeys.FORMS_EDITORS_SOUND_FALLOFF_EXPONENTIAL);
 
-        this.refDistance = new UITrackpad((v) -> this.form.refDistance.set(v.floatValue()));
+        this.refDistance = UIValues.trackpad(() -> this.form.refDistance);
         this.refDistance.tooltip(UIKeys.FORMS_EDITORS_SOUND_REF_DISTANCE_TOOLTIP);
-        this.rolloff = new UITrackpad((v) -> this.form.rolloff.set(v.floatValue()));
+        this.rolloff = UIValues.trackpad(() -> this.form.rolloff);
         this.rolloff.tooltip(UIKeys.FORMS_EDITORS_SOUND_ROLLOFF);
-        this.airAbsorption = new UITrackpad((v) -> this.form.airAbsorption.set(v.floatValue()));
+        this.airAbsorption = UIValues.trackpad(() -> this.form.airAbsorption);
         this.airAbsorption.tooltip(UIKeys.FORMS_EDITORS_SOUND_AIR_ABSORPTION);
 
-        this.reflections = new UIToggle(UIKeys.FORMS_EDITORS_SOUND_REFLECTIONS_ENABLED, (b) -> this.form.reflections.set(b.getValue()));
-        this.reflectionCount = new UITrackpad((v) -> this.form.reflectionCount.set(v.intValue()));
+        this.reflections = UIValues.toggle(UIKeys.FORMS_EDITORS_SOUND_REFLECTIONS_ENABLED, () -> this.form.reflections);
+        this.reflectionCount = UIValues.trackpad(() -> this.form.reflectionCount);
         this.reflectionCount.integer();
         this.reflectionCount.tooltip(UIKeys.FORMS_EDITORS_SOUND_REFLECTION_COUNT);
-        this.reflectionDecay = new UITrackpad((v) -> this.form.reflectionDecay.set(v.floatValue()));
+        this.reflectionDecay = UIValues.trackpad(() -> this.form.reflectionDecay);
         this.reflectionDecay.tooltip(UIKeys.FORMS_EDITORS_SOUND_REFLECTION_DECAY_TOOLTIP);
         this.blockReflections = new UIToggle(UIKeys.FORMS_EDITORS_SOUND_BLOCK_REFLECTIONS,
             (b) -> this.form.blockReflections.set(b.getValue()));
@@ -112,8 +113,8 @@ public abstract class UIAbstractSoundFormPanel <T extends AbstractSoundForm> ext
         this.passThroughEntities = new UIToggle(UIKeys.FORMS_EDITORS_SOUND_PASS_THROUGH_ENTITIES,
             (b) -> this.form.passThroughEntities.set(b.getValue()));
 
-        this.showGuide = new UIToggle(UIKeys.FORMS_EDITORS_SOUND_SHOW_GUIDE, (b) -> this.form.showGuide.set(b.getValue()));
-        this.guideColor = new UIColor((v) -> this.form.guideColor.set(Color.rgba(v))).withAlpha();
+        this.showGuide = UIValues.toggle(UIKeys.FORMS_EDITORS_SOUND_SHOW_GUIDE, () -> this.form.showGuide);
+        this.guideColor = UIValues.color(() -> this.form.guideColor).withAlpha();
     }
 
     protected void addSourceOptions()

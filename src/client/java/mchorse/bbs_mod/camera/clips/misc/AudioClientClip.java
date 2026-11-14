@@ -89,26 +89,18 @@ public class AudioClientClip extends AudioClip
     @Override
     protected void applyClip(ClipContext context, Position position)
     {
-        Link link = this.audio.get();
-        float localTick = context.relativeTick + context.transition;
+        scheduleAudio(context, this, this.volume.get());
+    }
 
-        if (link == null || localTick < 0F || localTick >= this.duration.get())
-        {
-            return;
-        }
-
-        float seconds = TimeUtils.toSeconds(this.offset.get()) + localTick / 20F;
-
-        if (seconds >= 0F)
-        {
-            getPlayback(context).put(this, new Playback(link, seconds, this.volume.get()));
-        }
+    public static void scheduleAudio(ClipContext context, AudioClip clip, float gain)
+    {
+        scheduleAudio(context, clip, gain, 0F);
     }
 
     /**
      * Schedule a clip's audio track for this frame. Shared entry point for clips whose
      * audio rides this clip's playback machinery (the video clip's audio track) - the
-     * audio clip itself keeps its own {@link #applyClip} gating.
+     * audio clip itself uses the same activity and offset checks.
      *
      * @param loopSeconds when positive, the playback position wraps around this
      *                    period (the video clip loops its audio with its picture)

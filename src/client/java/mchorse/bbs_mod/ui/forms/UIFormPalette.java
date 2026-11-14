@@ -141,6 +141,19 @@ public class UIFormPalette extends UIElement implements IUIFormList
     }
 
     @Override
+    public void confirm()
+    {
+        if (this.immersive)
+        {
+            if (!this.editor.isEditing()) this.toggleEditor();
+        }
+        else
+        {
+            this.exit();
+        }
+    }
+
+    @Override
     public void toggleEditor()
     {
         this.events.emit(new UIToggleEditorEvent(this, !this.editor.isEditing()));
@@ -158,9 +171,9 @@ public class UIFormPalette extends UIElement implements IUIFormList
         {
             Form form = this.editor.finish();
 
-            if (this.canModify && this.lastSelected.category.canModify(form))
+            if (this.canModify && this.lastSelected != null && this.lastSelected.category.canModify(form))
             {
-                int index = this.lastSelected.category.getForms().indexOf(this.lastSelected.selected);
+                int index = this.lastSelected.category.indexOfForm(this.lastSelected.selected);
 
                 if (index >= 0)
                 {

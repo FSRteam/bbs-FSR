@@ -1,13 +1,15 @@
 package mchorse.bbs_mod.ui.dashboard.panels.overlay;
 
 import mchorse.bbs_mod.data.types.MapType;
-import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDataDashboardPanel;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
+import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 
 import java.io.File;
 import java.util.function.Consumer;
@@ -15,12 +17,18 @@ import java.util.function.Consumer;
 public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPanel
 {
     protected UIDataDashboardPanel<T> panel;
+    protected UICopyPasteController copyPasteController;
 
     public UIDataOverlayPanel(IKey title, UIDataDashboardPanel<T> panel, Consumer<String> callback)
     {
         super(title, callback);
 
         this.panel = panel;
+        this.copyPasteController = new UICopyPasteController(null, "_ContentType_" + panel.getType().getId())
+            .labels(UIKeys.PANELS_CONTEXT_COPY, UIKeys.PANELS_CONTEXT_PASTE)
+            .supplier(() -> this.panel.getData() == null ? null : this.panel.getData().toData().asMap())
+            .canCopy(() -> this.panel.getData() != null)
+            .consumer((data, mouseX, mouseY) -> this.addNewData(this.getContext(), data));
 
         this.namesList.context((menu) ->
         {
@@ -33,22 +41,15 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
                 menu.action(Icons.FOLDER, UIKeys.PANELS_MODALS_ADD_FOLDER_TITLE, this::addNewFolder);
             }
 
-            if (this.panel.getData() != null)
+            if (editable)
             {
-                menu.action(Icons.COPY, UIKeys.PANELS_CONTEXT_COPY, this::copy);
+                this.copyPasteController.installClipboard(menu, 0, 0);
             }
-
-            try
+            else
             {
-                MapType data = editable ? Window.getClipboardMap("_ContentType_" + this.panel.getType().getId()) : null;
-
-                if (data != null)
-                {
-                    menu.action(Icons.PASTE, UIKeys.PANELS_CONTEXT_PASTE, () -> this.paste(data));
-                }
+                menu.icon(MenuVerb.COPY, this.copyPasteController::copy).label(UIKeys.PANELS_CONTEXT_COPY)
+                    .enabled(this.copyPasteController.canCopy());
             }
-            catch (Exception e)
-            {}
 
             File folder = this.panel.getRepository().getFolder();
 
@@ -62,24 +63,20 @@ public class UIDataOverlayPanel <T extends ValueGroup> extends UICRUDOverlayPane
         });
     }
 
-    private void copy()
-    {
-        Window.setClipboard(this.panel.getData().toData().asMap(), "_ContentType_" + this.panel.getType().getId());
-    }
-
-    private void paste(MapType data)
-    {
-        this.addNewData(data);
-    }
-
     /* CRUD */
 
     @Override
     protected void addNewData(String name, MapType mapType)
     {
+        this.addNewData(this.getContext(), name, mapType);
+    }
+
+    @Override
+    protected void addNewData(UIContext context, String name, MapType mapType)
+    {
         if (name.trim().isEmpty())
         {
-            this.getContext().notifyError(UIKeys.PANELS_MODALS_EMPTY);
+            context.notifyError(UIKeys.PANELS_MODALS_EMPTY);
 
             return;
         }

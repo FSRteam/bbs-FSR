@@ -11,6 +11,7 @@ import mchorse.bbs_mod.utils.PNGEncoder;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.resources.GifFrames;
 import mchorse.bbs_mod.utils.resources.Pixels;
+import mchorse.bbs_mod.utils.resources.PlayerSkins;
 
 import java.io.File;
 import java.io.IOException;
@@ -60,7 +61,9 @@ public class TextureFiles
     /** Whether a link can be thrown away. Kept separate from {@link #canModify(Link)}: what can and can't be deleted may diverge. */
     public static boolean canDelete(Link link)
     {
-        return canModify(link);
+        String nickname = PlayerSkins.nickname(link);
+
+        return nickname != null ? PlayerSkins.getFile(nickname) != null : canModify(link);
     }
 
     /** Whether a folder (or a source root) is read-only: nothing in it can be changed, only copied out. */
@@ -440,6 +443,16 @@ public class TextureFiles
 
     public static boolean delete(Link link)
     {
+        String nickname = PlayerSkins.nickname(link);
+
+        if (nickname != null)
+        {
+            PlayerSkins.forget(nickname);
+            TexturePins.follow(link, null);
+
+            return true;
+        }
+
         File file = file(link);
 
         if (file == null || !file.exists())

@@ -4,6 +4,10 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.l10n.L10n;
+import mchorse.bbs_mod.ui.forms.editors.UIForms;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
+import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -33,14 +37,32 @@ public class UIReplaysListPanel extends UIElement
     public final UIIcon presets;
 
     public final UIReplayList replays;
+    public final UITextbox search;
+    public final UIForms bodyParts;
+    private Replay bodyPartsReplay;
+    private final UISection bodyPartsSection = new UISection(L10n.lang("bbs.ui.film.replays.body_parts"));
 
     private final Area rightClickAnchorArea = new Area();
 
     public UIReplaysListPanel(UIFilmPanel panel, Consumer<List<Replay>> callback, Consumer<Form> formConsumer)
     {
+        this(panel, callback, formConsumer, path -> {});
+    }
+
+    public UIReplaysListPanel(UIFilmPanel panel, Consumer<List<Replay>> callback, Consumer<Form> formConsumer, Consumer<String> partConsumer)
+    {
         this.filmPanel = panel;
+        this.bodyParts = new UIForms(list ->
+        {
+            if (!list.isEmpty()) partConsumer.accept(list.get(0).getPath());
+        });
+        this.bodyPartsSection.relative(this.content).x(5).y(1F, -5).w(1F, -10).anchorY(1F);
+        this.bodyPartsSection.fields.add(this.bodyParts);
         this.replays = new UIReplayList(callback, formConsumer, panel);
 
+        this.search = new UITextbox(1000, this.replays::filter);
+        this.search.placeholder(UIKeys.GENERAL_SEARCH);
+        this.search.relative(this.content).x(0).y(BAR_HEIGHT).w(1F).h(BAR_HEIGHT);
         this.addReplay = new UIIcon(Icons.ADD, (b) -> this.replays.addReplay());
         this.dupeReplay = new UIIcon(Icons.DUPE, (b) -> this.replays.dupeReplay());
         this.removeReplay = new UIIcon(Icons.REMOVE, (b) -> this.replays.removeReplay());
@@ -61,8 +83,8 @@ public class UIReplaysListPanel extends UIElement
         this.leftBar.add(this.addReplay, this.dupeReplay, this.removeReplay);
         this.bar.add(this.leftBar, this.presets);
 
-        this.replays.relative(this.content).x(0).y(0, BAR_HEIGHT).w(1F).h(1F, -BAR_HEIGHT);
-        this.content.add(this.bar, this.replays);
+        this.replays.relative(this.content).x(0).y(0, BAR_HEIGHT * 2).w(1F).h(1F, -BAR_HEIGHT * 2);
+        this.content.add(this.bar, this.search, this.bodyPartsSection, this.replays);
 
         this.refreshEditPanelOffset();
         this.add(this.content);
@@ -73,6 +95,32 @@ public class UIReplaysListPanel extends UIElement
         int top = this.filmPanel.getEditPanelTopOffsetPx();
         this.content.relative(this).x(0).y(0, top).w(1F).h(1F, -top);
         this.resize();
+    }
+
+    public String setBodyPartsReplay(Replay replay, String path)
+    {
+        double scroll = this.bodyPartsReplay == replay ? this.bodyParts.scroll.getScroll() : 0;
+        this.bodyPartsReplay = replay;
+        if (replay == null || replay.form.get() == null)
+        {
+            this.bodyParts.clear();
+            return "";
+        }
+        this.bodyParts.setForm(replay.form.get());
+        String selected = this.bodyParts.setCurrentPath(path);
+        this.bodyParts.scroll.setScroll(scroll);
+        return selected;
+    }
+
+    @Override
+    public void resize()
+    {
+        boolean visible = this.bodyPartsReplay != null;
+        int maxHeight = Math.min(160, this.getFlex().getH() / 2);
+        this.bodyParts.h(Math.max(1, Math.min(this.bodyParts.getList().size() * this.bodyParts.scroll.scrollItemSize, maxHeight)));
+        this.bodyPartsSection.setVisible(visible);
+        this.replays.hTo(visible ? this.bodyPartsSection.area : this.content.area, visible ? 0F : 1F);
+        super.resize();
     }
 
     private void updateButtonsState()

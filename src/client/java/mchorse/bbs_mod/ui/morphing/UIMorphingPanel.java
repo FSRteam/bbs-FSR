@@ -29,6 +29,10 @@ public class UIMorphingPanel extends UIDashboardPanel
     {
         super(dashboard);
 
+        this.onClose(this::onPanelClosed);
+        this.onAppear(this::onPanelAppeared);
+        this.onDisappear(this::onPanelDisappeared);
+
         this.palette = new UIFormPalette(this::setForm);
         this.palette.updatable().cantExit();
         this.palette.immersive();
@@ -73,11 +77,8 @@ public class UIMorphingPanel extends UIDashboardPanel
         return !this.palette.editor.isEditing();
     }
 
-    @Override
-    public void appear()
+    private void onPanelAppeared()
     {
-        super.appear();
-
         this.palette.list.forms.scroll.scrollSpeed = 40;
 
         Morph morph = ((IMorphProvider) Minecraft.getInstance().player).getMorph();
@@ -94,20 +95,14 @@ public class UIMorphingPanel extends UIDashboardPanel
         Minecraft.getInstance().options.setCameraType(CameraType.THIRD_PERSON_BACK);
     }
 
-    @Override
-    public void disappear()
+    private void onPanelDisappeared()
     {
-        super.disappear();
-
         BBSModClient.getCameraController().remove(this.controller);
         Minecraft.getInstance().options.setCameraType(CameraType.FIRST_PERSON);
     }
 
-    @Override
-    public void close()
+    private void onPanelClosed()
     {
-        super.close();
-
         BBSModClient.getCameraController().remove(this.controller);
     }
 }

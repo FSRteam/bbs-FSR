@@ -76,9 +76,12 @@ public class ExtrudedFormRenderer extends FormRenderer<ExtrudedForm>
             shading = true;
         }
 
-        VertexFormat format = shading ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR;
+        VertexFormat format = shading ? DefaultVertexFormat.NEW_ENTITY : DefaultVertexFormat.POSITION_TEX_COLOR;
+        Supplier<ShaderInstance> normal = shading && !BBSRendering.isIrisShadersEnabled()
+            ? BBSShaders::getModel
+            : (shading ? GameRenderer::getRendertypeEntityTranslucentShader : GameRenderer::getPositionTexColorShader);
         Supplier<ShaderInstance> shader = this.getShader(context,
-            shading ? GameRenderer::getRendertypeEntityTranslucentShader : GameRenderer::getPositionColorTexLightmapShader,
+            normal,
             shading ? BBSShaders::getPickerBillboardProgram : BBSShaders::getPickerBillboardNoShadingProgram
         );
 

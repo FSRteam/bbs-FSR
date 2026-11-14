@@ -4,12 +4,15 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.color.UIColorPicker;
+import mchorse.bbs_mod.ui.framework.elements.input.color.UIColorPresets;
+import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Color GUI element
@@ -24,13 +27,14 @@ public class UIColor extends UIElement
     public Direction direction;
 
     private UIElement target;
+    private Supplier<Integer> defaultColor;
+    private Runnable onReset;
 
     public UIColor(Consumer<Integer> callback)
     {
         super();
 
         this.picker = new UIColorPicker(callback);
-        this.picker.wh(200, 85);
 
         this.direction(Direction.BOTTOM).h(UIConstants.CONTROL_HEIGHT);
     }
@@ -75,6 +79,12 @@ public class UIColor extends UIElement
     }
 
     @Override
+    public boolean isUserEditing()
+    {
+        return this.picker.hasParent();
+    }
+
+    @Override
     public boolean subMouseClicked(UIContext context)
     {
         if (this.area.isInside(context) && context.mouseButton == 0)
@@ -99,7 +109,44 @@ public class UIColor extends UIElement
             return true;
         }
 
+        if (this.area.isInside(context) && context.mouseButton == 1)
+        {
+            this.openPresets(context);
+
+            return true;
+        }
+
         return super.subMouseClicked(context);
+    }
+
+    public UIColor withDefault(Supplier<Integer> defaultColor, Runnable onReset)
+    {
+        this.defaultColor = defaultColor;
+        this.onReset = onReset;
+
+        return this;
+    }
+
+    private void openPresets(UIContext context)
+    {
+        UIColorPresets presets = new UIColorPresets(this.picker::applyOpaqueColor);
+        Integer declared = this.defaultColor == null ? null : this.defaultColor.get();
+
+        if (declared != null)
+        {
+            presets.withDefault(new Color().set(declared, this.picker.editAlpha), this.onReset);
+        }
+
+        this.picker.removeFromParent();
+        presets.anchor(1 - this.direction.anchorX, 1 - this.direction.anchorY);
+
+        UIElement popup = this.target == null ? context.menu.overlay : this.target;
+
+        popup.add(presets);
+        presets.setup(context.globalX(this.area.x(this.direction.anchorX) + 2 * this.direction.factorX),
+            context.globalY(this.area.y(this.direction.anchorY) + 2 * this.direction.factorY));
+        presets.bounds(context.menu.main, 2);
+        presets.resize();
     }
 
     @Override

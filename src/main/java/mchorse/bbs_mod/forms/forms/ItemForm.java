@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.forms.forms;
 
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.ItemDisplayContext;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
@@ -9,6 +11,8 @@ import mchorse.bbs_mod.utils.colors.Color;
 
 public class ItemForm extends Form
 {
+    public static final Icon ICON = Icons.LINE;
+
     public final ValueItemStack stack = new ValueItemStack("item_stack");
     public final ValueModelTransformationMode modelTransform = new ValueModelTransformationMode("modelTransform", ItemDisplayContext.NONE);
     public final ValueColor color = new ValueColor("color", Color.white());
@@ -30,5 +34,11 @@ public class ItemForm extends Form
     public boolean supportsGlint()
     {
         return true;
+    }
+
+    @Override
+    public Icon getIcon()
+    {
+        return ICON;
     }
 }

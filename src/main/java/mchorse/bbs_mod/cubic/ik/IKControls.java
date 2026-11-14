@@ -1,135 +1,45 @@
 package mchorse.bbs_mod.cubic.ik;
 
-import mchorse.bbs_mod.data.IMapSerializable;
-import mchorse.bbs_mod.data.types.MapType;
-
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import mchorse.bbs_mod.cubic.chains.ChainControls;
 
 /**
- * Keyframe value holding the per-chain {@link IKControl} scalars, keyed by the
- * chain's tip bone. Mirrors {@link mchorse.bbs_mod.utils.pose.Pose} (its
- * {@code Map<bone, PoseTransform>}), so the ordinary keyframe-track path handles
- * the IK track with the same union-of-keys interpolation as the pose track.
+ * The IK track's keyframe value: {@link IKControl} scalars keyed by the chain's tip bone.
  */
-public class IKControls implements IMapSerializable
+public class IKControls extends ChainControls<IKControl, IKControls>
 {
-    private static Set<String> keys = new HashSet<>();
-
-    public final Map<String, IKControl> controls = new HashMap<>();
-
-    public IKControl get(String tip)
+    /** Typed entry points retain the method descriptors used by existing addons. */
+    @Override
+    public IKControl get(String bone)
     {
-        IKControl control = this.controls.get(tip);
-
-        if (control == null)
-        {
-            control = new IKControl();
-
-            this.controls.put(tip, control);
-        }
-
-        return control;
+        return super.get(bone);
     }
 
+    @Override
     public IKControls copy()
     {
-        IKControls controls = new IKControls();
-
-        controls.copy(this);
-
-        return controls;
+        return super.copy();
     }
 
     public void copy(IKControls other)
     {
-        this.controls.clear();
-
-        for (Map.Entry<String, IKControl> entry : other.controls.entrySet())
-        {
-            if (!entry.getValue().isDefault())
-            {
-                this.controls.put(entry.getKey(), entry.getValue().copy());
-            }
-        }
+        super.copy(other);
     }
 
     @Override
-    public void toData(MapType data)
+    protected IKControls createControls()
     {
-        if (this.controls.isEmpty())
-        {
-            return;
-        }
-
-        MapType ik = new MapType();
-
-        for (Map.Entry<String, IKControl> entry : this.controls.entrySet())
-        {
-            if (!entry.getValue().isDefault())
-            {
-                ik.put(entry.getKey(), entry.getValue().toData());
-            }
-        }
-
-        data.put("ik", ik);
+        return new IKControls();
     }
 
     @Override
-    public void fromData(MapType data)
+    protected IKControl createControl()
     {
-        this.controls.clear();
-
-        MapType ik = data.getMap("ik");
-
-        for (String key : ik.keys())
-        {
-            IKControl control = new IKControl();
-
-            control.fromData(ik.getMap(key));
-
-            if (!control.isDefault())
-            {
-                this.controls.put(key, control);
-            }
-        }
+        return new IKControl();
     }
 
-    public boolean isEmpty()
-    {
-        return this.controls.isEmpty();
-    }
-
-    /** Value equality over the union of chains, a chain absent on one side counting as default — so two keyframes the user means as identical are marked identical even when one dropped its default entries. */
     @Override
-    public boolean equals(Object obj)
+    protected String getDataKey()
     {
-        if (this == obj)
-        {
-            return true;
-        }
-
-        if (obj instanceof IKControls other)
-        {
-            keys.clear();
-            keys.addAll(this.controls.keySet());
-            keys.addAll(other.controls.keySet());
-
-            for (String key : keys)
-            {
-                IKControl a = this.controls.get(key);
-                IKControl b = other.controls.get(key);
-
-                if (a != null && b != null && !a.equals(b)) return false;
-                if (a == null && !b.isDefault()) return false;
-                if (b == null && !a.isDefault()) return false;
-            }
-
-            return true;
-        }
-
-        return false;
+        return "ik";
     }
 }

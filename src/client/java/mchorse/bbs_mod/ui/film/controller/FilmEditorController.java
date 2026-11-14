@@ -1,14 +1,17 @@
 package mchorse.bbs_mod.ui.film.controller;
 
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FilmControllerContext;
+import mchorse.bbs_mod.film.FilmTarget;
 import mchorse.bbs_mod.film.FilmEntityRenderer;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.ui.ValueOnionSkin;
 import mchorse.bbs_mod.utils.CollectionUtils;
@@ -192,6 +195,7 @@ public class FilmEditorController extends BaseFilmController
                     float tick = ticks + this.getTransition(entity, context.tickDelta());
                     Form form = entity.getForm();
                     replay.properties.applyProperties(form, tick);
+                    RenderFrame.invalidate();
 
                     if (!isPlaying)
                     {
@@ -210,31 +214,41 @@ public class FilmEditorController extends BaseFilmController
 
     private void renderOnion(Replay replay, int index, int direction, KeyframeChannel<?> pose, int color, int frames, IBbsWorldRenderContext context, boolean isPlaying, IEntity entity)
     {
-        List<? extends Keyframe<?>> keyframes = pose.getKeyframes();
-        float alpha = Colors.getA(color);
+        BBSProfiler.begin(BBSProfiler.Timer.ONION);
 
-        for (; CollectionUtils.inRange(keyframes, index) && frames > 0; index += direction)
+        try
         {
-            Keyframe<?> keyframe = keyframes.get(index);
+            List<? extends Keyframe<?>> keyframes = pose.getKeyframes();
+            float alpha = Colors.getA(color);
 
-            if (keyframe.getTick() == this.getTick())
+            for (; CollectionUtils.inRange(keyframes, index) && frames > 0; index += direction)
             {
-                continue;
+                Keyframe<?> keyframe = keyframes.get(index);
+
+                if (keyframe.getTick() == this.getTick())
+                {
+                    continue;
+                }
+
+                int tick1 = (int) keyframe.getTick();
+                replay.keyframes.apply(tick1, entity);
+                float tick = (int) keyframe.getTick();
+                Form form = entity.getForm();
+                replay.properties.applyProperties(form, tick);
+                RenderFrame.invalidate();
+
+                FilmEntityRenderer.renderEntity(FilmControllerContext.instance
+                    .setup(this.getEntities(), entity, replay, context)
+                    .color(Colors.setA(color, alpha))
+                    .transition(0F));
+
+                frames -= 1;
+                alpha *= alpha;
             }
-
-            int tick1 = (int) keyframe.getTick();
-            replay.keyframes.apply(tick1, entity);
-            float tick = (int) keyframe.getTick();
-            Form form = entity.getForm();
-            replay.properties.applyProperties(form, tick);
-
-            FilmEntityRenderer.renderEntity(FilmControllerContext.instance
-                .setup(this.getEntities(), entity, replay, context)
-                .color(Colors.setA(color, alpha))
-                .transition(0F));
-
-            frames -= 1;
-            alpha *= alpha;
+        }
+        finally
+        {
+            BBSProfiler.end(BBSProfiler.Timer.ONION);
         }
     }
 
@@ -270,7 +284,9 @@ public class FilmEditorController extends BaseFilmController
             .bone(aBone, local)
             .gizmoSpace(this.controller.getBoneSpace(), this.controller.getGizmoView())
             .bone2(aBone2, local2)
-            .anchorGizmo(anchorGizmo, this.controller.getAnchorLocal());
+            .anchorGizmo(anchorGizmo, this.controller.getAnchorLocal())
+            .gizmoTarget(this.isCurrent(entity) && !this.controller.panel.recorder.isRecording()
+                ? this.controller.getEditTarget() : FilmTarget.NONE);
     }
 
     private boolean isCurrent(IEntity entity)

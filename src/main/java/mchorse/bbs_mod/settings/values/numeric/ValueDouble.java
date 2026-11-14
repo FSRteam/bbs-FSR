@@ -8,6 +8,12 @@ import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 
 public class ValueDouble extends BaseValueNumber<Double>
 {
+    @Override
+    public void setNumber(double value)
+    {
+        this.set(value);
+    }
+
     public ValueDouble(String id, Double defaultValue)
     {
         this(id, defaultValue, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);

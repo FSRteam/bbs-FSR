@@ -34,7 +34,7 @@ public class UIDebugPanel extends UIDashboardPanel
         for (int i = 0; i < 20; i++)
         {
             KeyframeChannel<Double> channel = new KeyframeChannel<>("baboy", KeyframeFactories.DOUBLE);
-            UIKeyframeSheet sheet = new UIKeyframeSheet("baboy_" + i, IKey.raw("Baboy " + i), Colors.HSVtoRGB((float) Math.random(), 1F, 1F).getRGBColor(), false, channel, null);
+            UIKeyframeSheet sheet = new UIKeyframeSheet("baboy_" + i, IKey.raw("Baboy " + i), Colors.HSVtoRGB((float) Math.random(), 1F, 1F).getRGBColor(), channel, null);
 
             channel.insert(0L, 0D);
             channel.insert(20L + (long) (Math.random() * 18 - 9), 0D);
@@ -138,7 +138,7 @@ public class UIDebugPanel extends UIDashboardPanel
         this.slider = new UISliderTrackpad();
         this.slider.limit(-1D, 1D).values(0.05D, 0.01D, 0.25D).increment(0.1D);
         this.slider.setValue(0.35D);
-        this.slider.relative(this).xy(10, 56).wh(180, 20);
+        this.slider.relative(this).xy(10, 56).w(180);
 
         this.add(this.button, this.sliderLabel, this.slider);
         // this.add(this.keyframes);

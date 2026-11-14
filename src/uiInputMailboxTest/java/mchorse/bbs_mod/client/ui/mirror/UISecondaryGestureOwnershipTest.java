@@ -149,21 +149,25 @@ public final class UISecondaryGestureOwnershipTest
     private static void assertListOwnership()
     {
         String source = readSource(LIST);
-        String clicked = method(source, "public boolean subMouseClicked(UIContext context)");
-        String released = method(source, "public boolean subMouseReleased(UIContext context)");
+        String items = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/items/UIItems.java");
+        String clicked = method(items, "public boolean subMouseClicked(UIContext context)");
+        String released = method(items, "public boolean subMouseReleased(UIContext context)");
         String swap = method(source, "protected void handleSwap(int from, int to)");
 
-        assertCommonOwnership(source, "list sorting");
+        assertCommonOwnership(items, "shared list/grid sorting");
+        check(source.contains("extends UIItems<T>"), "list bypasses the shared collection owner");
         check(clicked.contains("this.dragOwnership.isActive()")
                 && clicked.contains("this.dragOwnership.acquireToken(context.mouseButton)"),
             "list sorting allows a second press to replace the active drag");
-        assertReleaseOrder(released, "dragOwnership", "dragGeneration", "this.dragging = -1;", "list sorting");
-        check(indexOf(released, "this.handleSwap(draggedIndex, index);")
-                > indexOf(released, "this.dragging = -1;"),
-            "list sorting swaps before retiring and clearing its old drag");
+        check(indexOf(released, "this.dragOwnership.release(context.mouseButton, generation)")
+                < indexOf(released, "this.release();"),
+            "shared list/grid sorting commits before retiring its owner");
+        String finish = method(items, "protected void release()");
+        check(indexOf(finish, "this.drag.reset();") < indexOf(finish, "this.drop(items, target, insertion);"),
+            "shared list/grid sorting drops before clearing its old payload");
         check(swap.contains("this.list.remove(from)") && !swap.contains("this.list.remove(this.dragging)"),
             "list swap still reads cleared mutable drag state instead of its snapshot");
-        check(source.contains("this.rollbackDragStart(context.mouseButton, startedGeneration)"),
+        check(clicked.contains("!handled && this.dragOwnership.release(context.mouseButton, generation)"),
             "list sorting does not roll back ownership when its selection callback fails");
     }
 

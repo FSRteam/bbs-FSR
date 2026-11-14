@@ -15,7 +15,10 @@ public class AnchorKeyframeFactory implements IKeyframeFactory<Anchor>
     {
         Anchor anchor = new Anchor();
 
-        anchor.fromData(data.asMap());
+        if (data.isMap())
+        {
+            anchor.fromData(data.asMap());
+        }
 
         return anchor;
     }

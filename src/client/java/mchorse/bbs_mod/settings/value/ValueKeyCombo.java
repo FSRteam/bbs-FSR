@@ -21,6 +21,27 @@ public class ValueKeyCombo extends BaseValueBasic<KeyCombo>
     }
 
     @Override
+    protected KeyCombo copyValue(KeyCombo value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        KeyCombo combo = new KeyCombo(value.label);
+
+        combo.copy(value);
+
+        return combo;
+    }
+
+    @Override
+    protected boolean compareValue(KeyCombo a, KeyCombo b)
+    {
+        return a == b || (a != null && b != null && a.keys.equals(b.keys));
+    }
+
+    @Override
     public BaseType toData()
     {
         ListType list = new ListType();

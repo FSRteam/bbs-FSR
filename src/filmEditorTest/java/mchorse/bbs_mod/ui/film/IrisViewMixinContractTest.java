@@ -61,7 +61,7 @@ public final class IrisViewMixinContractTest
     {
         List<String> mixins = new ArrayList<>(MIXINS.stream().map(name -> PREFIX + name).toList());
 
-        for (String name : List.of("SodiumBufferBuilderAccessor", "SodiumWorldRendererViewMixin",
+        for (String name : List.of("SodiumWorldRendererViewMixin",
             "SodiumRenderSectionManagerViewMixin", "EntityVertexMixin", "ColorAttributeMixin"))
         {
             mixins.add("mchorse/bbs_mod/mixin/client/sodium/" + name);

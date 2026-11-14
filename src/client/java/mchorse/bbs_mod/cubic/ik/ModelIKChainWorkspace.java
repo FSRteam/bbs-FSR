@@ -3,25 +3,8 @@ package mchorse.bbs_mod.cubic.ik;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-/**
- * Per-chain scratch for {@link ModelIKDlsApplier}, the production IK applier.
- *
- * <p>It holds ONE chain's calibration baseline across frames: the target's and the
- * pole's rest-relative bind positions, and the deltas derived from them. The bind
- * baseline is what makes a film-driven controller move the chain by its DELTA
- * rather than teleport it onto the controller — see
- * {@link ModelIKDlsApplier#apply}. {@code bindingValid} and {@code bindPoleValid}
- * are the lifecycle flags: they open on the first solve, drop when the chain goes
- * off (disabled, weightless, its target frame missing, or its pole toggled), and
- * re-open on the next live solve, so a chain that is turned back on rebases
- * instead of snapping to a stale calibration.
- *
- * <p>Extracted from the deleted {@code ModelIKApplier} (the dead direct-solver
- * applier, removed in B8·R5-0) because this is the only part of it the production
- * path still uses. Only the members the applier actually reads live here; the
- * deleted class's own solver scratch — its positions, frames, bend-hint state,
- * solver workspace and limit arrays — went with it.
- */
+/** Historical calibration scratch for the compatibility overload; never retained by the runtime. */
+@Deprecated
 final class ModelIKChainWorkspace
 {
     /* Target-rotation bind state: the target's orientation expressed in the root's

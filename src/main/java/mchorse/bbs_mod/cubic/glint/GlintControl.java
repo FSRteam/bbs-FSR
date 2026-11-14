@@ -51,6 +51,13 @@ public class GlintControl implements IMapSerializable
 
     public void copy(PoseTransform pose)
     {
+        if (pose == null)
+        {
+            this.copy(DEFAULT);
+
+            return;
+        }
+
         this.mode = pose.glintMode;
         this.color.copy(pose.glintColor);
         this.speed = pose.glintSpeed;

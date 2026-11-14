@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.DoubleClick;
 import mchorse.bbs_mod.ui.utils.Marquee;
@@ -60,6 +61,8 @@ public abstract class UIItems<T> extends UIElement
     private final List<T> marqueeBase = new ArrayList<>();
 
     private final Area cell = new Area();
+    private final MouseGestureOwnership dragOwnership = new MouseGestureOwnership();
+    private long dragGeneration;
 
     public UIItems(Consumer<List<T>> callback)
     {
@@ -284,6 +287,11 @@ public abstract class UIItems<T> extends UIElement
     @Override
     public boolean subMouseClicked(UIContext context)
     {
+        if (this.area.isInside(context) && this.dragOwnership.isActive())
+        {
+            return true;
+        }
+
         if (this.hasOwnScroll() && this.scroll.mouseClicked(context))
         {
             return true;
@@ -298,12 +306,31 @@ public abstract class UIItems<T> extends UIElement
         int y = this.contentY(context);
         int index = this.indexAt(x, y);
 
-        if (index >= 0 && index < this.visible().size())
+        long generation = this.dragOwnership.acquireToken(context.mouseButton);
+
+        if (generation == 0L)
         {
-            return this.pressItem(index, context);
+            return false;
         }
 
-        return this.pressEmpty(context);
+        this.dragGeneration = generation;
+        boolean handled = false;
+
+        try
+        {
+            handled = index >= 0 && index < this.visible().size()
+                ? this.pressItem(index, context) : this.pressEmpty(context);
+
+            return handled;
+        }
+        finally
+        {
+            if (!handled && this.dragOwnership.release(context.mouseButton, generation))
+            {
+                this.dragGeneration = 0L;
+                this.cancelGesture();
+            }
+        }
     }
 
     /** A left press over a visible item. */
@@ -322,7 +349,14 @@ public abstract class UIItems<T> extends UIElement
             this.drag.start(payload, context.mouseX, context.mouseY);
         }
 
-        this.fireCallback();
+        if (context.menu == null)
+        {
+            this.fireCallback();
+        }
+        else
+        {
+            context.menu.runWithPreservedMouseCapture(this, this::fireCallback);
+        }
 
         if (twice)
         {
@@ -369,49 +403,73 @@ public abstract class UIItems<T> extends UIElement
     @Override
     public boolean subMouseReleased(UIContext context)
     {
-        this.release();
-        this.scroll.mouseReleased(context);
+        boolean handled = this.scroll.tryMouseReleased(context);
+        long generation = this.dragGeneration;
 
-        return super.subMouseReleased(context);
+        if (this.dragOwnership.isOwnedBy(context.mouseButton, generation))
+        {
+            this.updateDrag(context);
+            this.dragOwnership.release(context.mouseButton, generation);
+            this.dragGeneration = 0L;
+            this.release();
+            handled = true;
+        }
+
+        return super.subMouseReleased(context) || handled;
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        this.scroll.cancelDragging(context.mouseButton);
+
+        if (this.dragOwnership.release(context.mouseButton, this.dragGeneration))
+        {
+            this.dragGeneration = 0L;
+            this.cancelGesture();
+        }
+
+        super.subMouseCanceled(context);
+    }
+
+    protected void cancelGesture()
+    {
+        this.drag.reset();
+        this.marquee.reset();
+        this.marqueeBase.clear();
     }
 
     /** The button went up: finish whatever gesture was on. */
     protected void release()
     {
-        if (this.marquee.isPressed())
+        boolean applied = this.marquee.isActive();
+        boolean dragged = this.drag.isActive();
+        List<T> items = new ArrayList<>(this.drag.getItems());
+        Object target = this.drag.getTarget();
+        int insertion = this.drag.getInsertion();
+
+        this.drag.reset();
+        this.marquee.reset();
+        this.marqueeBase.clear();
+
+        if (applied)
         {
-            boolean applied = this.marquee.isActive();
-
-            this.marquee.reset();
-            this.marqueeBase.clear();
-
-            if (applied)
-            {
-                this.fireCallback();
-            }
+            this.fireCallback();
         }
 
-        if (this.drag.isPressed())
+        if (dragged)
         {
-            if (this.drag.isActive())
-            {
-                this.drop();
-            }
-
-            this.drag.reset();
+            this.drop(items, target, insertion);
         }
     }
 
-    private void drop()
+    private void drop(List<T> items, Object target, int insertion)
     {
-        List<T> items = new ArrayList<>(this.drag.getItems());
-        Object target = this.drag.getTarget();
-
         if (target == this)
         {
-            if (this.drag.getInsertion() >= 0)
+            if (insertion >= 0)
             {
-                this.reorder(items, this.drag.getInsertion());
+                this.reorder(items, insertion);
             }
         }
         else if (target != null)
@@ -449,25 +507,18 @@ public abstract class UIItems<T> extends UIElement
             this.scroll.drag(context);
         }
 
-        /* A release swallowed by another element (an overlay, a button) must not leave a gesture hanging */
-        if ((this.drag.isPressed() || this.marquee.isPressed()) && !Window.isMouseButtonPressed(GLFW.GLFW_MOUSE_BUTTON_LEFT))
+        /* Lost capture cancels the old intent instead of applying a drop over a new overlay. */
+        if (this.dragOwnership.isActive() && !Window.isMouseButtonPressed(GLFW.GLFW_MOUSE_BUTTON_LEFT))
         {
-            this.release();
+            this.dragOwnership.cancel();
+            this.dragGeneration = 0L;
+            this.cancelGesture();
         }
 
-        boolean inside = this.area.isInside(context);
         int x = this.contentX(context);
         int y = this.contentY(context);
 
-        if (this.drag.isPressed())
-        {
-            this.drag.update(context.mouseX, context.mouseY);
-
-            if (this.drag.isActive())
-            {
-                this.updateDropTarget(inside, x, y);
-            }
-        }
+        this.updateDrag(context);
 
         if (this.marquee.isPressed())
         {
@@ -484,6 +535,19 @@ public abstract class UIItems<T> extends UIElement
         if (this.hasOwnScroll() && (this.drag.isActive() || this.marquee.isActive()))
         {
             this.scroll.autoScrollAt(context.mouseX, context.mouseY, Scroll.AUTO_SCROLL_EDGE, Scroll.AUTO_SCROLL_SPEED);
+        }
+    }
+
+    private void updateDrag(UIContext context)
+    {
+        if (this.drag.isPressed())
+        {
+            this.drag.update(context.mouseX, context.mouseY);
+
+            if (this.drag.isActive())
+            {
+                this.updateDropTarget(this.area.isInside(context), this.contentX(context), this.contentY(context));
+            }
         }
     }
 
@@ -642,7 +706,7 @@ public abstract class UIItems<T> extends UIElement
 
         if (this.hasOwnScroll())
         {
-            this.scroll.renderScrollbar(context.batcher);
+            this.scroll.renderScrollbar(context.batcher, context.mouseX, context.mouseY);
             context.batcher.unclip(context);
         }
 
@@ -697,6 +761,6 @@ public abstract class UIItems<T> extends UIElement
 
         int sy = this.originY() + y;
 
-        context.batcher.box(this.area.x + this.insertionInset(insertion), sy - 1, this.area.ex(), sy + 1, Colors.A100 | BBSSettings.primaryColor.get());
+        context.batcher.box(this.area.x + this.insertionInset(insertion), sy - 1, this.area.ex(), sy + 1, BBSSettings.primaryColor());
     }
 }

@@ -15,6 +15,7 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.textures.TextureEntry;
 import mchorse.bbs_mod.ui.textures.TextureFiles;
 import mchorse.bbs_mod.ui.textures.UITextureBrowser;
+import mchorse.bbs_mod.ui.dashboard.panels.bar.UIPanelTopBar;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.IUITabs;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
 import mchorse.bbs_mod.ui.dashboard.textures.UITextureEditor;
@@ -29,11 +30,13 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
+import mchorse.bbs_mod.ui.utils.DoubleClick;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 import mchorse.bbs_mod.utils.resources.FilteredLink;
@@ -65,6 +68,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
     public UIFilteredLinkList multiList;
     public UIMultiLinkEditor editor;
 
+    public UIPanelTopBar topBar;
     public UIDataTabs tabs;
     public UIElement browseContent;
     public UITexturePainter painter;
@@ -85,6 +89,8 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
     public Link current;
 
     private String initialModelPreview;
+
+    private final DoubleClick<Link> doubleClick = new DoubleClick<>(false);
 
     private boolean canBeClosed = true;
 
@@ -174,6 +180,11 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
         this.add = new UIIcon(Icons.ADD, (b) -> this.addMulti());
         this.remove = new UIIcon(Icons.REMOVE, (b) -> this.removeMulti());
         this.edit = new UIIcon(Icons.EDIT, (b) -> this.toggleEditor());
+        this.edit.highlight(this.editor::isVisible, Direction.BOTTOM);
+
+        this.add.relative(this.buttons).set(0, 0, 20, 20);
+        this.remove.relative(this.add).set(20, 0, 20, 20);
+        this.edit.relative(this.buttons).wh(20, 20).x(1F, -20);
 
         this.buttons.add(this.add, this.remove, this.edit);
 
@@ -192,13 +203,17 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
 
         this.painter = new UITexturePainter(this::onTextureSaved).onRename(this::onTextureRenamed);
 
-        this.tabs = new UIDataTabs(this);
-        this.tabs.relative(this).w(1F).h(UIDataTabs.TABS_HEIGHT_PX);
-        this.browseContent.relative(this.tabs).y(1F).w(1F).hTo(this.area, 1F);
-        this.painter.relative(this.tabs).y(1F).w(1F).hTo(this.area, 1F);
+        this.topBar = new UIPanelTopBar();
+        this.topBar.relative(this).w(1F).h(UIPanelTopBar.HEIGHT);
+        this.tabs = this.topBar.enableTabs(this);
+        this.painter.installActions(this.topBar.actions);
+        this.painter.setActionsVisible(false);
+
+        this.browseContent.relative(this.topBar).y(1F).w(1F).hTo(this.area, 1F);
+        this.painter.relative(this.topBar).y(1F).w(1F).hTo(this.area, 1F);
         this.painter.setVisible(false);
 
-        this.add(this.tabs, this.browseContent, this.painter);
+        this.add(this.topBar, this.browseContent, this.painter);
 
         this.callback = callback;
 
@@ -364,11 +379,18 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
 
     /**
      * Grid click: selects the texture (single click), and opens it in a tab on a double click of
-     * the same file — the double click detection itself lives in the browser's list.
+     * the same file.
      */
     public void onFileClicked(Link link)
     {
+        boolean doubleClick = this.doubleClick.hit(link);
+
         this.selectCurrent(link);
+
+        if (doubleClick && this.multiLink == null)
+        {
+            this.openTexture(link);
+        }
     }
 
     /**
@@ -440,6 +462,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
 
         this.painter.setEditor(editor);
         this.painter.setVisible(!browse);
+        this.painter.setActionsVisible(!browse);
         this.browseContent.setVisible(browse);
 
         if (this.browser != null)

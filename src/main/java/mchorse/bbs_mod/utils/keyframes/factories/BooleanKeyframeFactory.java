@@ -7,6 +7,11 @@ import mchorse.bbs_mod.utils.interps.IInterp;
 public class BooleanKeyframeFactory implements IKeyframeFactory<Boolean>
 {
     @Override
+    public int contentHash(Boolean value)
+    {
+        return value.hashCode();
+    }
+    @Override
     public boolean isStepped()
     {
         return true;

@@ -15,12 +15,8 @@ import java.util.function.Consumer;
  * <p>A listener must survive being called once per editor instance: it is asked for a new panel
  * each time one is opened, so it builds a panel rather than handing back one it made earlier.</p>
  *
- * <p><b>Deviation from upstream.</b> Upstream's {@code register(...)} delegates straight into the UI
- * controller ({@code UIForm.registerPanelExtension}); FSR keeps the factories in a table on this
- * class and the editor reads them back with {@link #getPanels()}. Same call shape for an addon, a
- * different owner for the list — the editor that consumes it is edited separately from this batch.
- * The consequence to know about: until that one line exists, a registered factory is collected and
- * readable but nothing builds a panel from it. {@link #unregister} is the way back out.</p>
+ * <p>FSR stores the factories here; each editor consumes {@link #getPanels()} before its shared
+ * panels are added. {@link #unregister} removes a factory from future editor instances.</p>
  */
 public class RegisterFormPanelsEvent
 {

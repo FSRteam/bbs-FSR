@@ -31,7 +31,7 @@ public final class IKMarkerSourceTest
         require(panel.contains("MARKER_CHAIN") && panel.contains("MARKER_TARGET")
                 && panel.contains("MARKER_POLE") && panel.contains("MARKER_JOINT"),
             "IK panel role colors are incomplete");
-        require(panel.contains("ModelIKRuntime.chainBones(model, tip, data.chainLength)"),
+        require(panel.contains("ModelIKRuntime.chainBones(model, tip, bone.ikChainLength.get())"),
             "IK panel markers do not follow the configured chain");
         require(panel.contains("this.bones.markers(this.boneMarkers::get"),
             "IK panel does not bind marker data to the bone list");

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.forms.forms.sound.SoundConeForm;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
@@ -19,7 +20,7 @@ public class UISoundConeFormPanel extends UIAbstractSoundFormPanel<SoundConeForm
     {
         super(editor);
 
-        this.range = new UITrackpad((v) -> this.form.range.set(v.floatValue()));
+        this.range = UIValues.trackpad(() -> this.form.range);
         this.range.tooltip(UIKeys.FORMS_EDITORS_SOUND_RANGE_TOOLTIP);
 
         this.outerAngle = new UITrackpad((v) ->
@@ -50,7 +51,7 @@ public class UISoundConeFormPanel extends UIAbstractSoundFormPanel<SoundConeForm
         });
         this.innerAngle.tooltip(UIKeys.FORMS_EDITORS_SOUND_INNER_ANGLE_TOOLTIP);
 
-        this.outerGain = new UITrackpad((v) -> this.form.outerGain.set(v.floatValue()));
+        this.outerGain = UIValues.trackpad(() -> this.form.outerGain);
         this.outerGain.tooltip(UIKeys.FORMS_EDITORS_SOUND_OUTER_GAIN_TOOLTIP);
 
         this.addSourceOptions();

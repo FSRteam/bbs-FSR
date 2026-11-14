@@ -4,11 +4,13 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.api.client.events.StructureRenderEvents;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.StructureForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import mchorse.bbs_mod.forms.structure.BakedStructure;
 import mchorse.bbs_mod.forms.structure.StructureManager;
 import mchorse.bbs_mod.forms.structure.StructureRenderData;
@@ -17,9 +19,11 @@ import mchorse.bbs_mod.forms.structure.StructureWorld;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.colors.OverlayBlend;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
@@ -30,6 +34,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,14 +53,13 @@ import java.util.Set;
  * structure/biome/resource generation). The naive per-frame path is kept only for editor
  * picking, where the hijacked picker shader is applied per draw.</p>
  *
- * <p>Note: upstream (FS 2.6, 66f8d592a) additionally routes a FormOverlay color-tint second pass
- * through this renderer; FSR has neither the FormOverlay/OverlayBlend classes nor the
- * {@code overlayColor} form value, so the overlay plumbing is deliberately absent here — the
- * form tint goes through FSR's own {@link FormColorBlend} + substitute-consumer path instead.</p>
+ * <p>Form tint and overlays use the shared substitute-consumer path, including deferred
+ * translucent draws.</p>
  */
 public class StructureFormRenderer extends FormRenderer<StructureForm>
 {
     private static final Color COLOR = new Color();
+    private static final Color OVERLAY = new Color();
 
     private String lastStructure;
     private String lastBiome;
@@ -147,6 +151,23 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
             -origin.y,
             -size.getZ() / 2F - origin.z
         );
+    }
+
+    private static void setupOverlay(RenderType layer, Color overlay)
+    {
+        if (layer == BakedStructure.OVERLAY_LAYER)
+        {
+            RenderSystem.enableBlend();
+            RenderSystem.blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA,
+                GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            RenderSystem.enableCull();
+            FormOverlay.bind(OVERLAY.set(overlay.r, overlay.g, overlay.b, 1F));
+        }
+        else
+        {
+            if (layer == BlockFormRenderer.OVERLAY_TRANSLUCENT_LAYER) RenderSystem.enableCull();
+            FormOverlay.bind(overlay);
+        }
     }
 
     /** Drop everything derived from the structure file: it is gone, replaced, or stale. */
@@ -298,11 +319,18 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
         PoseStack matrices = context.batcher.getContext().pose();
         Matrix4f uiMatrix = ModelFormRenderer.getUIMatrix(context, x1, y1, x2, y2);
+        Color overlay = this.form.overlayColor.get();
+        boolean overlayActive = OverlayBlend.isActive(overlay);
 
         matrices.pushPose();
 
         try
         {
+            if (overlayActive)
+            {
+                CustomVertexConsumerProvider.hijackVertexFormat((layer) -> setupOverlay(layer, overlay));
+            }
+
             MatrixStackUtils.multiply(matrices, uiMatrix);
 
             Vec3i size = this.data.size;
@@ -323,6 +351,11 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
 
             consumers.setUI(true);
             this.baked.render(matrices.last(), consumers, LightTexture.FULL_BRIGHT, set.getARGBColor());
+
+            if (overlayActive && !BakedStructure.usesEntityLayers())
+            {
+                this.baked.renderOverlay(matrices.last(), consumers, LightTexture.FULL_BRIGHT, overlay.a * set.a);
+            }
 
             consumers.setSubstitute(BBSRendering.getColorConsumer(set));
             this.renderBlockEntities(matrices, consumers, LightTexture.FULL_BRIGHT, 0);
@@ -375,6 +408,12 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
     {
         this.ensureData();
 
+        if (this.partOffset == null && this.data != null
+            && StructureRenderEvents.RENDER.invoker().render(this, this.form, this.data, context))
+        {
+            return;
+        }
+
         if (this.world == null)
         {
             return;
@@ -382,6 +421,9 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
 
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
         Vector3f offset = this.getOffset();
+        Color overlay = this.form.overlayColor.get();
+        boolean overlayActive = !context.isPicking() && context.overlay == OverlayTexture.NO_OVERLAY
+            && OverlayBlend.isActive(overlay);
 
         context.stack.pushPose();
         if (context.world != null)
@@ -429,6 +471,8 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
                     {
                         RenderSystem.enableBlend();
                     }
+
+                    if (overlayActive) setupOverlay(layer, overlay);
                 });
 
                 if (context.canDeferWorldTranslucency())
@@ -438,6 +482,11 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
                 }
 
                 this.baked.render(context.stack.last(), consumers, context.light, COLOR.getARGBColor());
+
+                if (overlayActive && !BakedStructure.usesEntityLayers())
+                {
+                    this.baked.renderOverlay(context.stack.last(), consumers, context.light, overlay.a * COLOR.a);
+                }
 
                 /* Block entities still go through the consumer interface — tint them via substitute */
                 consumers.setSubstitute(BBSRendering.getColorConsumer(COLOR));

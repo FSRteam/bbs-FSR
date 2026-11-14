@@ -3,6 +3,7 @@ package mchorse.bbs_mod.graphics.texture;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.TextureUtil;
 import mchorse.bbs_mod.utils.resources.Pixels;
+import mchorse.bbs_mod.client.BBSRendering;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
@@ -188,6 +189,8 @@ public class Texture
 
     public void delete()
     {
+        if (this.id == -1) return;
+        BBSRendering.forgetTexture(this);
         GL11.glDeleteTextures(this.id);
         this.id = -1;
     }

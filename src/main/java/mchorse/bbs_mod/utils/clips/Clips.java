@@ -8,6 +8,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.factory.IFactory;
@@ -27,6 +28,7 @@ public class Clips extends ValueGroup
 
     private List<Clip> clips = new ArrayList<>();
     private IFactory<Clip, ClipFactoryData> factory;
+    private int cachedDuration = -1;
 
     public Clips(String id, IFactory<Clip, ClipFactoryData> factory)
     {
@@ -112,14 +114,27 @@ public class Clips extends ValueGroup
      */
     public int calculateDuration()
     {
-        int max = 0;
-
-        for (Clip clip : this.clips)
+        if (this.cachedDuration < 0)
         {
-            max = Math.max(max, clip.tick.get() + clip.duration.get());
+            int max = 0;
+
+            for (Clip clip : this.clips)
+            {
+                max = Math.max(max, clip.tick.get() + clip.duration.get());
+            }
+
+            this.cachedDuration = max;
         }
 
-        return max;
+        return this.cachedDuration;
+    }
+
+    @Override
+    public void postNotify(BaseValue value, int flag)
+    {
+        this.cachedDuration = -1;
+
+        super.postNotify(value, flag);
     }
 
     public Clip get(int index)
@@ -237,6 +252,8 @@ public class Clips extends ValueGroup
 
     public void sync()
     {
+        this.cachedDuration = -1;
+
         this.removeAll();
 
         for (int i = 0, c = this.clips.size(); i < c; i++)

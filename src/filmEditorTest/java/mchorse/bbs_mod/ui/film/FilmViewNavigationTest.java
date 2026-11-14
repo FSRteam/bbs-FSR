@@ -38,6 +38,7 @@ public final class FilmViewNavigationTest
         testNavigationSettingsRoundTrip();
         testOrbitSettingsRoundTrip();
         withInputDefaults(FilmViewNavigationTest::testOrbitAndFlightKeepFsDirectionsAndPivotCentered);
+        withInputDefaults(OrbitViewportControllerTest::runAll);
         withInputDefaults(FilmViewNavigationTest::testFlightGestureMatchesFs);
         ViewportPickIntentTest.runAll();
         testCameraGestureReleaseAndCancellation();
@@ -306,7 +307,7 @@ public final class FilmViewNavigationTest
                     context.setMouse(173, 107, 2);
                     check(orbit.startGesture(context) == 0L, "Film orbit middle pan must keep FS flight restrictions");
                     context.setMouse(173, 107, 0);
-                    check(orbit.startGesture(context) != 0L, "Film orbit flight must accept its left-button route");
+                    check(orbit.startGesture(context) == 0L, "flight mouse-look must remain with the flight camera");
                     orbit.stop();
                 }
             }

@@ -48,4 +48,10 @@ public class ValueStringKeys extends BaseValueBasic<Set<String>>
             if (type.isString()) this.value.add(type.asString());
         }
     }
+
+    @Override
+    protected Set<String> copyValue(Set<String> value)
+    {
+        return value == null ? null : new HashSet<>(value);
+    }
 }

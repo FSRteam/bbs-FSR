@@ -4,6 +4,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/** Legacy exchange/debug adapter; production topology is compiled directly from FormBone values. */
+@Deprecated
 public record ModelIKConfig(List<Chain> chains, Map<String, JointDoF> bones)
 {
     public ModelIKConfig

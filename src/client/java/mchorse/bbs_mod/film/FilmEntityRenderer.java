@@ -10,6 +10,7 @@ import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -21,6 +22,7 @@ import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
+import mchorse.bbs_mod.ui.film.replays.UIReplayPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Gizmo;
@@ -30,11 +32,11 @@ import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.interps.Lerps;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.renderer.MultiBufferSource;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.BlockPos;
@@ -94,9 +96,11 @@ public class FilmEntityRenderer
 
         if (relative)
         {
-            cx = context.replay.keyframes.x.interpolate(0F) + context.replay.relativeOffset.get().x;
-            cy = context.replay.keyframes.y.interpolate(0F) + context.replay.relativeOffset.get().y;
-            cz = context.replay.keyframes.z.interpolate(0F) + context.replay.relativeOffset.get().z;
+            Vector3d origin = context.replay.getRelativeOrigin();
+
+            cx = origin.x;
+            cy = origin.y;
+            cz = origin.z;
         }
 
         Matrix4f target = null;
@@ -172,8 +176,9 @@ public class FilmEntityRenderer
 
             /* Gizmo-only pass: an actor replay renders the world ActorEntity
              * instead of the editor entity, but the gizmo placement still needs
-             * this frame's snapshot, so skip the visible form (and its shadow /
-             * name tag below) while keeping renderAxes / renderAnchorGizmo. */
+             * this frame's snapshot, so skip the visible form and its shadow while
+             * keeping renderAxes / renderAnchorGizmo. The controller draws the replay
+             * label separately at the position of the body-owning world entity. */
             if (!context.gizmoOnly)
             {
                 FormUtilsClient.render(form, formContext);
@@ -191,6 +196,11 @@ public class FilmEntityRenderer
         finally
         {
             stack.popPose();
+        }
+
+        if (UIBaseMenu.shouldRenderAxes() && context.gizmoTarget.is(FilmTarget.Kind.ROOT))
+        {
+            renderReplayGizmo(context, cx, cy, cz);
         }
 
         if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)
@@ -263,7 +273,7 @@ public class FilmEntityRenderer
             try
             {
                 stack.translate(position.x - cx, position.y - cy, position.z - cz);
-                renderNameTag(entity, Component.literal(StringUtils.processColoredText(context.nameTag)), stack, context.consumers, light);
+                renderNameTag(entity, Component.literal(StringUtils.processColoredText(context.nameTag)), stack, light);
             }
             finally
             {
@@ -276,23 +286,6 @@ public class FilmEntityRenderer
 
     private static void renderAxes(String bone, boolean local, TransformSpace space, Matrix4f gizmoView, StencilMap stencilMap, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame)
     {
-        /* A film tool may place the actor's handle itself. The check sits before the pose walk below:
-         * a handled gizmo skips an evaluation it is about to replace, and `stencilMap` distinguishes
-         * the visible capture (null) from the picking pass exactly as the default does.
-         *
-         * NOT SEMANTICALLY EQUIVALENT to upstream. Upstream fires this only from its
-         * `renderReplayGizmo`, i.e. inside the `gizmoTarget.is(Kind.ROOT)` branch. FSR has no
-         * `renderReplayGizmo` and no `FilmTarget`/ROOT branch at all (it is one of the upstream API
-         * gaps tracked in DIVERGENCES.md #3), so the event is posted here instead, when
-         * `context.bone != null`. A listener that keys on a ROOT target will not recognise this
-         * context; a listener that only wants to draw in the actor's frame gets the same
-         * `(context, stencil, stack)` upstream would hand it. This is the closest existing point,
-         * not an equivalent one - do not read it as a completed port of the ROOT branch. */
-        if (FilmGizmoEvents.DRAW.invoker().draw(FilmControllerContext.instance, stencilMap, stack))
-        {
-            return;
-        }
-
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
         MatrixCache map = FormFrameCache.collect(
@@ -376,7 +369,7 @@ public class FilmEntityRenderer
             Vector3f cameraRelative = stack.last().pose().getTranslation(new Vector3f());
             Matrix4f projection = RenderSystem.getProjectionMatrix();
             float fov = projection.m33() == 0 ? (float) (2D * Math.atan(1D / projection.m11())) : BBSSettings.getFov();
-            float distanceScale = BBSSettings.getAxesDistanceScale(cameraRelative.length(), fov);
+            float distanceScale = BBSSettings.getScreenSizeScale(cameraRelative.length(), fov);
 
             stack.scale(distanceScale, distanceScale, distanceScale);
             Draw.coolerAxes(stack, 0.25F, 0.008F, 0.26F, 0.018F);
@@ -434,7 +427,59 @@ public class FilmEntityRenderer
         }
     }
 
-    private static void renderNameTag(IEntity entity, Component text, PoseStack matrices, MultiBufferSource vertexConsumers, int light)
+    private static void renderReplayGizmo(FilmControllerContext context, double cx, double cy, double cz)
+    {
+        PoseStack stack = context.stack;
+        if (FilmGizmoEvents.DRAW.invoker().draw(context, context.map, stack)) return;
+
+        stack.pushPose();
+        try
+        {
+            MatrixStackUtils.multiply(stack, FilmMatrices.getMatrixForRenderWithRotation(context.entity, cx, cy, cz, context.transition));
+            Gizmo.INSTANCE.reorientForSpace(stack, context.gizmoTarget.space(), context.gizmoView, FilmMatrices.getReplayWorldAxes(context.entity, context.transition));
+            if (context.map == null) Gizmo.INSTANCE.captureVisual(stack, UIReplayPropTransform.MASK);
+            else Gizmo.INSTANCE.renderStencil(stack, context.map, UIReplayPropTransform.MASK);
+        }
+        finally
+        {
+            RenderSystem.enableDepthTest();
+            stack.popPose();
+        }
+    }
+
+    static void renderActorNameTag(FilmControllerContext context, Entity actor, float transition)
+    {
+        Form form = context.entity.getForm();
+
+        if (actor == null || actor.isRemoved() || context.relative || context.map != null
+            || context.nameTag.isEmpty() || form == null || !form.visible.get())
+        {
+            return;
+        }
+
+        /* Match vanilla's body interpolation rather than the editor's keyframed stub. */
+        double x = Lerps.lerp(actor.xOld, actor.getX(), transition);
+        double y = Lerps.lerp(actor.yOld, actor.getY(), transition);
+        double z = Lerps.lerp(actor.zOld, actor.getZ(), transition);
+        BlockPos pos = BlockPos.containing(x, y + 0.5D, z);
+        int light = LightTexture.pack(actor.level().getBrightness(LightLayer.BLOCK, pos),
+            actor.level().getBrightness(LightLayer.SKY, pos));
+        PoseStack stack = context.stack;
+
+        stack.pushPose();
+        try
+        {
+            stack.translate(x - context.camera.getPosition().x, y - context.camera.getPosition().y,
+                z - context.camera.getPosition().z);
+            renderNameTag(context.entity, Component.literal(StringUtils.processColoredText(context.nameTag)), stack, light);
+        }
+        finally
+        {
+            stack.popPose();
+        }
+    }
+
+    private static void renderNameTag(IEntity entity, Component text, PoseStack matrices, int light)
     {
         boolean sneaking = !entity.isSneaking();
         float hitboxH = (float) entity.getPickingHitbox().h + 0.5F;
@@ -444,24 +489,30 @@ public class FilmEntityRenderer
         {
             matrices.translate(0F, hitboxH, 0F);
             matrices.mulPose(Minecraft.getInstance().getEntityRenderDispatcher().cameraOrientation());
-            matrices.scale(-0.025F, -0.025F, 0.025F);
+            matrices.scale(0.025F, -0.025F, 0.025F);
 
             Matrix4f matrix4f = matrices.last().pose();
             Font textRenderer = Minecraft.getInstance().font;
+            CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
 
             float opacity = Minecraft.getInstance().options.getBackgroundOpacity(0.25F);
             int background = (int) (opacity * 255F) << 24;
             float h = (float) (-textRenderer.width(text) / 2);
 
-            textRenderer.drawInBatch(text, h, 0, 0x20ffffff, false, matrix4f, vertexConsumers, sneaking ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.NORMAL, background, light);
+            RenderSystem.disableCull();
+
+            textRenderer.drawInBatch(text, h, 0, 0x20ffffff, false, matrix4f, consumers, sneaking ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.NORMAL, background, light);
 
             if (sneaking)
             {
-                textRenderer.drawInBatch(text, h, 0, -1, false, matrix4f, vertexConsumers, Font.DisplayMode.NORMAL, 0, light);
+                textRenderer.drawInBatch(text, h, 0, -1, false, matrix4f, consumers, Font.DisplayMode.NORMAL, 0, light);
             }
+
+            consumers.draw();
         }
         finally
         {
+            RenderSystem.enableCull();
             matrices.popPose();
         }
     }

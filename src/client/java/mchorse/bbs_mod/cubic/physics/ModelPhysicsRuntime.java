@@ -8,10 +8,10 @@ import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
-import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.utils.FormBone;
 import net.minecraft.world.level.Level;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -41,10 +41,28 @@ public final class ModelPhysicsRuntime
         public ModelPhysicsCache.Compiled compiled;
         /** Model asset used to build this form path's mutable chain history. */
         public String modelId;
+
+        public InstanceState copy()
+        {
+            InstanceState copy = new InstanceState();
+
+            copy.modelId = this.modelId;
+            copy.compiled = this.compiled;
+
+            for (Map.Entry<String, ChainState> entry : this.chains.entrySet())
+            {
+                copy.chains.put(entry.getKey(), entry.getValue().copy());
+            }
+
+            return copy;
+        }
     }
 
     /** Weak registry preserves the existing global cache-invalidation API without making histories global. */
     private static final Set<ModelPhysicsRuntime> RUNTIMES = Collections.newSetFromMap(new WeakHashMap<>());
+
+    /** A gesture snapshot retains the renderer and simulation-owner boundaries of the live histories. */
+    private static WeakHashMap<ModelPhysicsRuntime, WeakHashMap<Object, Map<String, InstanceState>>> checkpoint;
 
     private final WeakHashMap<Object, Map<String, InstanceState>> states = new WeakHashMap<>();
 
@@ -62,6 +80,8 @@ public final class ModelPhysicsRuntime
 
         synchronized (RUNTIMES)
         {
+            checkpoint = null;
+
             for (ModelPhysicsRuntime runtime : RUNTIMES)
             {
                 runtime.states.clear();
@@ -69,10 +89,82 @@ public final class ModelPhysicsRuntime
         }
     }
 
-    public static void invalidate(String modelId)
+    /** Saves the simulation so rejecting a live transform gesture also rejects its accumulated velocity. */
+    public static void checkpoint()
     {
         synchronized (RUNTIMES)
         {
+            WeakHashMap<ModelPhysicsRuntime, WeakHashMap<Object, Map<String, InstanceState>>> snapshot = new WeakHashMap<>();
+
+            for (ModelPhysicsRuntime runtime : RUNTIMES)
+            {
+                WeakHashMap<Object, Map<String, InstanceState>> owners = new WeakHashMap<>();
+
+                for (Map.Entry<Object, Map<String, InstanceState>> entry : runtime.states.entrySet())
+                {
+                    Map<String, InstanceState> byForm = new HashMap<>();
+
+                    for (Map.Entry<String, InstanceState> formEntry : entry.getValue().entrySet())
+                    {
+                        byForm.put(formEntry.getKey(), formEntry.getValue().copy());
+                    }
+
+                    owners.put(entry.getKey(), byForm);
+                }
+
+                snapshot.put(runtime, owners);
+            }
+
+            checkpoint = snapshot;
+        }
+    }
+
+    public static void dropCheckpoint()
+    {
+        synchronized (RUNTIMES)
+        {
+            checkpoint = null;
+        }
+    }
+
+    /** Restores pre-gesture history and drops chains created during the rejected gesture. */
+    public static void rewindToCheckpoint()
+    {
+        synchronized (RUNTIMES)
+        {
+            WeakHashMap<ModelPhysicsRuntime, WeakHashMap<Object, Map<String, InstanceState>>> snapshot = checkpoint;
+
+            checkpoint = null;
+
+            if (snapshot == null)
+            {
+                return;
+            }
+
+            for (ModelPhysicsRuntime runtime : RUNTIMES)
+            {
+                runtime.states.clear();
+
+                Map<Object, Map<String, InstanceState>> owners = snapshot.get(runtime);
+
+                if (owners != null)
+                {
+                    runtime.states.putAll(owners);
+                }
+            }
+        }
+    }
+
+    public static void invalidate(String modelId)
+    {
+        /* Rebuilds may keep the same model object while changing its rest skeleton in place. */
+        ModelPhysicsCache.clear();
+
+        synchronized (RUNTIMES)
+        {
+            /* A model reload must not resurrect simulation history built against its old skeleton. */
+            checkpoint = null;
+
             for (ModelPhysicsRuntime runtime : RUNTIMES)
             {
                 for (Map<String, InstanceState> byForm : runtime.states.values())
@@ -101,9 +193,9 @@ public final class ModelPhysicsRuntime
         IModel model = instance.model;
 
         ModelPhysicsCache.Compiled compiled = null;
-        if (instance.form instanceof ModelForm modelForm && modelForm.physics.get() instanceof MapType map)
+        if (instance.form instanceof ModelForm modelForm)
         {
-            compiled = ModelPhysicsCache.getFromData(model, map);
+            compiled = ModelPhysicsCache.compile(model, modelForm);
         }
 
         if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
@@ -132,9 +224,9 @@ public final class ModelPhysicsRuntime
          * physics track layers over the per-chain config. */
         ModelPhysicsConfig.Wind wind = compiled.wind();
 
-        if (instance.form instanceof ModelForm modelForm && modelForm.windControlOverride != null)
+        if (instance.form instanceof ModelForm modelForm)
         {
-            WindControl override = modelForm.windControlOverride;
+            WindControl override = modelForm.windControlOverride == null ? modelForm.wind.get() : modelForm.windControlOverride;
 
             wind = new ModelPhysicsConfig.Wind(override.strength, override.x, override.y, override.z, override.turbulence, override.turbulenceSpeed, override.turbulenceScale, override.local);
         }
@@ -202,9 +294,15 @@ public final class ModelPhysicsRuntime
          * root bone, replacing its dynamic scalars wholesale (mirrors the IK track). */
         PhysicsControl control = null;
 
-        if (instance != null && instance.form instanceof ModelForm modelForm && !modelForm.physicsControlOverrides.isEmpty())
+        if (instance != null && instance.form instanceof ModelForm modelForm)
         {
             control = modelForm.physicsControlOverrides.get(ids.get(0));
+
+            if (control == null)
+            {
+                FormBone bone = modelForm.bones.getBone(ids.get(0));
+                control = bone == null ? null : bone.physics.get();
+            }
         }
 
         if (control != null && !control.enabled)

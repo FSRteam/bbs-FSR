@@ -10,8 +10,8 @@ import org.joml.Vector3f;
 /**
  * The plain left/right additive drag: horizontal cursor travel nudges the
  * edited channel by a per-pixel step, with no 3D ray involved. Serves the
- * hotkey operations when ray dragging is disabled or no rendered gizmo is
- * available, and the uniform (three-axis) scale — whose centre grab reads
+ * operations when no rendered gizmo snapshot is available, and the uniform
+ * (three-axis) scale — whose centre grab reads
  * wildly through a single-axis ray lever but stays gentle here.
  */
 public class AdditiveDrag extends DragStrategy

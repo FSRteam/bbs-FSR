@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.cubic.ik;
 
-import mchorse.bbs_mod.data.IMapSerializable;
+import mchorse.bbs_mod.cubic.chains.ChainControl;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.utils.interps.AutoBezier;
 import mchorse.bbs_mod.utils.interps.IInterp;
@@ -11,7 +11,7 @@ import mchorse.bbs_mod.utils.interps.IInterp;
  * Mirrors {@link mchorse.bbs_mod.utils.pose.PoseTransform} as the element of the
  * {@link IKControls} keyframe container. Floats interpolate; the booleans step.
  */
-public class IKControl implements IMapSerializable
+public class IKControl extends ChainControl<IKControl>
 {
     /* Mirrors ModelIKConfig's defaults; duplicated because that config class lives
      * in the client source set and this keyframe value lives in main. */

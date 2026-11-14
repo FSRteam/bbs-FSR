@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.InverseView;
 import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -11,6 +12,7 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import mchorse.bbs_mod.camera.Camera;
+import mchorse.bbs_mod.camera.OrbitCamera;
 import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
@@ -18,9 +20,9 @@ import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.utils.UIUtils;
-import mchorse.bbs_mod.utils.Factor;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
+import mchorse.bbs_mod.utils.interps.Lerps;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import org.joml.Intersectiond;
@@ -29,6 +31,7 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
+import org.joml.Vector2f;
 import org.lwjgl.opengl.GL11;
 
 /**
@@ -51,8 +54,14 @@ public abstract class UIModelRenderer extends UIElement
     public Camera camera = new Camera();
 
     public Vector3f pos = new Vector3f();
-    public Factor distance = new Factor(0, 0, 100, (x) -> Math.pow(x, 2) / 100D);
     public boolean grid = true;
+
+    private final Vector2f targetRotation = new Vector2f();
+    private final Vector3f targetPos = new Vector3f();
+    private final Vector3f lastSmoothedPos = new Vector3f();
+    private final Vector2f lastSmoothedRotation = new Vector2f();
+    private float distance;
+    private float targetDistance;
 
     private Vector3d cachedPlaneIntersection = new Vector3d();
     private Vector3f cachedPos = new Vector3f();
@@ -118,18 +127,29 @@ public abstract class UIModelRenderer extends UIElement
 
     public void setRotation(float yaw, float pitch)
     {
-        this.camera.rotation.y = MathUtils.toRad(yaw);
-        this.camera.rotation.x = MathUtils.toRad(pitch);
+        this.targetRotation.y = MathUtils.toRad(yaw);
+        this.targetRotation.x = MathUtils.clamp(MathUtils.toRad(pitch), -MathUtils.PI * 0.5F + 0.01F, MathUtils.PI * 0.5F - 0.01F);
+        this.camera.rotation.y = this.targetRotation.y;
+        this.camera.rotation.x = this.targetRotation.x;
+        this.lastSmoothedRotation.set(this.targetRotation);
     }
 
     public void setPosition(float x, float y, float z)
     {
         this.pos.set(x, y, z);
+        this.targetPos.set(x, y, z);
+        this.lastSmoothedPos.set(this.pos);
     }
 
-    public void setDistance(int distanceX)
+    public void focus(float x, float y, float z)
     {
-        this.distance.setX(distanceX);
+        this.targetPos.set(x, y, z);
+    }
+
+    public void setDistance(float distance)
+    {
+        this.distance = MathUtils.clamp(distance, 0.5F, 256F);
+        this.targetDistance = this.distance;
     }
 
     public void setEntity(IEntity entity)
@@ -144,7 +164,7 @@ public abstract class UIModelRenderer extends UIElement
 
     public void reset()
     {
-        this.setDistance(15);
+        this.setDistance(2.25F);
         this.setPosition(0, 1, 0);
         this.setRotation(0, 0);
     }
@@ -179,7 +199,7 @@ public abstract class UIModelRenderer extends UIElement
                 this.lastX = context.mouseX;
                 this.lastY = context.mouseY;
 
-                this.cachedPos.set(this.pos);
+                this.cachedPos.set(this.targetPos);
                 this.cachedCamera.copy(this.camera);
                 this.plane.set(0, 0, 1);
                 this.rotateVector(this.plane);
@@ -204,16 +224,12 @@ public abstract class UIModelRenderer extends UIElement
     @Override
     public boolean subMouseScrolled(UIContext context)
     {
-        if (this.area.isInside(context) && !this.isDragging())
+        if (this.area.isInside(context) && !this.isDragging() && context.mouseWheel != 0D)
         {
-            int x = Integer.compare(-(int) context.mouseWheel, 0);
+            float step = Window.isCtrlPressed() ? 0.22F : 0.1F;
+            float factor = (float) Math.pow(1F - step, context.mouseWheel);
 
-            if (Window.isCtrlPressed())
-            {
-                x *= 8;
-            }
-
-            this.distance.setX(this.distance.getX() + x);
+            this.targetDistance = MathUtils.clamp(this.targetDistance * factor, 0.5F, 256F);
 
             return true;
         }
@@ -262,6 +278,7 @@ public abstract class UIModelRenderer extends UIElement
 
     private void updateLogic(UIContext context)
     {
+        this.applySmoothing(Minecraft.getInstance().getTimer().getRealtimeDeltaTicks());
         long tick = context.getTick();
         long i = tick - this.tick;
 
@@ -277,6 +294,42 @@ public abstract class UIModelRenderer extends UIElement
         }
 
         this.tick = tick;
+    }
+
+    protected void applySmoothing(float dt)
+    {
+        /* Public camera fields remain writable by preview owners and addons. */
+        if (!this.pos.equals(this.lastSmoothedPos))
+        {
+            this.targetPos.set(this.pos);
+        }
+
+        if (this.camera.rotation.x != this.lastSmoothedRotation.x || this.camera.rotation.y != this.lastSmoothedRotation.y)
+        {
+            this.targetRotation.set(this.camera.rotation.x, this.camera.rotation.y);
+        }
+
+        float smoothness = BBSSettings.editorCameraSmoothness == null ? 0F : BBSSettings.editorCameraSmoothness.get();
+
+        if (smoothness <= 0F)
+        {
+            this.camera.rotation.x = this.targetRotation.x;
+            this.camera.rotation.y = this.targetRotation.y;
+            this.pos.set(this.targetPos);
+            this.distance = this.targetDistance;
+            this.lastSmoothedPos.set(this.pos);
+            this.lastSmoothedRotation.set(this.camera.rotation.x, this.camera.rotation.y);
+
+            return;
+        }
+
+        float factor = MathUtils.clamp(1F - (float) Math.pow(Math.min(smoothness, 0.99F), Math.max(0F, dt)), 0F, 1F);
+        this.camera.rotation.x = Lerps.lerp(this.camera.rotation.x, this.targetRotation.x, factor);
+        this.camera.rotation.y = Lerps.lerp(this.camera.rotation.y, this.targetRotation.y, factor);
+        this.pos.lerp(this.targetPos, factor);
+        this.distance = Lerps.lerp(this.distance, this.targetDistance, factor);
+        this.lastSmoothedPos.set(this.pos);
+        this.lastSmoothedRotation.set(this.camera.rotation.x, this.camera.rotation.y);
     }
 
     /**
@@ -296,6 +349,9 @@ public abstract class UIModelRenderer extends UIElement
         RenderSystem.depthFunc(GL11.GL_LEQUAL);
 
         this.setupPosition();
+
+        int[] previousViewport = UIUtils.currentViewport();
+
         this.setupViewport(context);
 
         PoseStack stack = context.render.batcher.getContext().pose();
@@ -333,9 +389,7 @@ public abstract class UIModelRenderer extends UIElement
         stack.popPose();
 
         /* Return back to orthographic projection */
-        Minecraft mc = Minecraft.getInstance();
-
-        RenderSystem.viewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
+        UIUtils.restoreViewport(previousViewport);
         MatrixStackUtils.restoreMatrices();
 
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
@@ -356,9 +410,9 @@ public abstract class UIModelRenderer extends UIElement
                 {
                     Vector3d newPoint = this.calculateOnPlane(context);
 
-                    this.pos.set(this.cachedPos);
-                    this.pos.sub((float) newPoint.x, (float) newPoint.y, (float) newPoint.z);
-                    this.pos.add((float) this.cachedPlaneIntersection.x, (float) this.cachedPlaneIntersection.y, (float) this.cachedPlaneIntersection.z);
+                    this.targetPos.set(this.cachedPos);
+                    this.targetPos.sub((float) newPoint.x, (float) newPoint.y, (float) newPoint.z);
+                    this.targetPos.add((float) this.cachedPlaneIntersection.x, (float) this.cachedPlaneIntersection.y, (float) this.cachedPlaneIntersection.z);
 
                     this.lastX = mouseX;
                     this.lastY = mouseY;
@@ -366,8 +420,10 @@ public abstract class UIModelRenderer extends UIElement
             }
             else
             {
-                this.camera.rotation.y -= MathUtils.toRad(this.lastX - mouseX);
-                this.camera.rotation.x -= MathUtils.toRad(this.lastY - mouseY);
+                float angle = OrbitCamera.dragAngleSpeed() * 4F;
+
+                this.targetRotation.y += (mouseX - this.lastX) * angle;
+                this.targetRotation.x = MathUtils.clamp(this.targetRotation.x + (mouseY - this.lastY) * angle, -MathUtils.PI * 0.5F + 0.01F, MathUtils.PI * 0.5F - 0.01F);
 
                 this.lastX = mouseX;
                 this.lastY = mouseY;
@@ -379,7 +435,7 @@ public abstract class UIModelRenderer extends UIElement
     {
         this.camera.position.set(this.pos);
 
-        vec.set(0, 0, -this.distance.getValue());
+        vec.set(0, 0, -this.distance);
         this.rotateVector(vec);
 
         this.camera.position.x += vec.x;
@@ -391,7 +447,7 @@ public abstract class UIModelRenderer extends UIElement
     {
         Vector3d vector = new Vector3d();
         Vector3d origin = new Vector3d(this.cachedCamera.position).sub(this.cachedPos);
-        Vector3d destination = new Vector3d(this.cachedCamera.getMouseDirection(context.mouseX, context.mouseY, this.area.x, this.area.y, this.area.w, this.area.h)).mul(this.distance.getValue() * 2).add(origin);
+        Vector3d destination = new Vector3d(this.cachedCamera.getMouseDirection(context.mouseX, context.mouseY, this.area.x, this.area.y, this.area.w, this.area.h)).mul(Math.max(0.5F, this.distance) * 2).add(origin);
         Intersectiond.intersectLineSegmentPlane(origin.x, origin.y, origin.z, destination.x, destination.y, destination.z, this.plane.x, this.plane.y, this.plane.z, 0, vector);
 
         return vector;

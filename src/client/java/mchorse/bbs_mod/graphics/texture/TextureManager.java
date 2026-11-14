@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.graphics.texture;
 
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
+
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.client.BBSRendering;
@@ -32,6 +34,7 @@ public class TextureManager implements IWatchDogListener
 
     private Texture error;
     private TextureExtruder extruder = new TextureExtruder();
+    private final Map<Link, Map<String, Texture>> variants = new HashMap<>();
     private int tick;
     private Texture lastBound;
 
@@ -142,6 +145,13 @@ public class TextureManager implements IWatchDogListener
 
     public void delete(Link link)
     {
+        Map<String, Texture> copies = this.variants.remove(link);
+
+        if (copies != null)
+        {
+            copies.values().forEach(Texture::delete);
+        }
+
         this.failed.remove(link);
 
         Texture texture = this.textures.remove(link);
@@ -157,6 +167,64 @@ public class TextureManager implements IWatchDogListener
         {
             animatedTexture.delete();
         }
+    }
+
+    public void deleteVariant(String key)
+    {
+        for (Map<String, Texture> copies : this.variants.values())
+        {
+            Texture texture = copies.remove(key);
+
+            if (texture != null)
+            {
+                texture.delete();
+            }
+        }
+    }
+
+    public Texture getVariant(Link link, String key)
+    {
+        return this.getVariant(link, key, null);
+    }
+
+    public Texture getVariant(Link link, String key, Texture source)
+    {
+        if (this.failed.contains(link))
+        {
+            return this.getError();
+        }
+
+        Map<String, Texture> byKey = this.variants.computeIfAbsent(link, (l) -> new HashMap<>());
+        Texture texture = byKey.get(key);
+
+        if (texture == null)
+        {
+            Pixels pixels;
+
+            try
+            {
+                pixels = source == null ? this.getPixels(link) : Texture.pixelsFromTexture(source);
+            }
+            catch (Exception e)
+            {
+                pixels = null;
+            }
+
+            if (pixels == null)
+            {
+                this.failed.add(link);
+
+                return this.getError();
+            }
+
+            texture = Texture.textureFromPixels(pixels, GL11.GL_NEAREST);
+
+            byKey.put(key, texture);
+
+
+        }
+
+        return texture;
     }
 
     public Texture createTexture(Link link)
@@ -322,6 +390,14 @@ public class TextureManager implements IWatchDogListener
 
     public void delete()
     {
+        FormOverlay.delete();
+        for (Map<String, Texture> copies : this.variants.values())
+        {
+            copies.values().forEach(Texture::delete);
+        }
+
+        this.variants.clear();
+
         for (Texture texture : this.textures.values())
         {
             texture.delete();
@@ -362,21 +438,7 @@ public class TextureManager implements IWatchDogListener
             link = new Link(link.source, StringUtils.removeExtension(link.path));
         }
 
-        this.failed.remove(link);
-
-        Texture texture = this.textures.remove(link);
-
-        if (texture != null)
-        {
-            texture.delete();
-        }
-
-        AnimatedTexture remove = this.animatedTextures.remove(link);
-
-        if (remove != null)
-        {
-            remove.delete();
-        }
+        this.delete(link);
 
         this.extruder.delete(link);
     }

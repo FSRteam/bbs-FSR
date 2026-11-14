@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import net.minecraft.client.renderer.RenderType;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -77,6 +78,8 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
 
     public static void prepareLayer(RenderType layer)
     {
+        if (FormOverlay.active() != null) FormOverlay.bind(FormOverlay.active());
+
         Runnable preparation = captureLayerPreparation(layer);
 
         if (preparation != null)
@@ -133,6 +136,11 @@ public class CustomVertexConsumerProvider extends MultiBufferSource.BufferSource
     public void setUI(boolean ui)
     {
         this.ui = ui;
+    }
+
+    public boolean isUI()
+    {
+        return this.ui;
     }
 
     @Override

@@ -22,6 +22,11 @@ public class ValueTrackStyles extends BaseValueBasic<Map<String, ValueTrackStyle
         return key == null ? null : this.value.get(key);
     }
 
+    public boolean has(String key)
+    {
+        return this.getStyle(key) != null;
+    }
+
     public String name(String key, String fallback)
     {
         Style style = this.getStyle(key);
@@ -155,5 +160,33 @@ public class ValueTrackStyles extends BaseValueBasic<Map<String, ValueTrackStyle
         {
             return this.name.isEmpty() && this.color == null;
         }
+
+        public Style copy()
+        {
+            Style style = new Style();
+
+            style.name = this.name;
+            style.color = this.color;
+
+            return style;
+        }
+    }
+
+    @Override
+    protected Map<String, Style> copyValue(Map<String, Style> value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        Map<String, Style> copy = new LinkedHashMap<>();
+
+        for (Map.Entry<String, Style> entry : value.entrySet())
+        {
+            copy.put(entry.getKey(), entry.getValue().copy());
+        }
+
+        return copy;
     }
 }

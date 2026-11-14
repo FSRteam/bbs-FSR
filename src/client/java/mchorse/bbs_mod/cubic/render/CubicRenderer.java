@@ -26,15 +26,26 @@ public class CubicRenderer
      */
     public static boolean processRenderModel(ICubicRenderer renderProcessor, BufferBuilder builder, PoseStack stack, Model model)
     {
-        for (ModelGroup group : model.topGroups)
+        try
         {
-            if (processRenderRecursively(renderProcessor, builder, stack, model, group))
-            {
-                return true;
-            }
-        }
+            boolean stopped = false;
 
-        return false;
+            for (ModelGroup group : model.topGroups)
+            {
+                if (processRenderRecursively(renderProcessor, builder, stack, model, group))
+                {
+                    stopped = true;
+                    break;
+                }
+            }
+
+            if (renderProcessor instanceof CubicCubeRenderer cubes) cubes.finish(builder);
+            return stopped;
+        }
+        finally
+        {
+            if (renderProcessor instanceof CubicCubeRenderer cubes) cubes.discardPatches();
+        }
     }
 
     /**
@@ -43,31 +54,30 @@ public class CubicRenderer
     private static boolean processRenderRecursively(ICubicRenderer renderProcessor, BufferBuilder builder, PoseStack stack, Model model, ModelGroup group)
     {
         stack.pushPose();
-        renderProcessor.applyGroupTransformations(stack, group);
 
-        if (group.visible)
+        try
         {
-            if (renderProcessor.renderGroup(builder, stack, group, model))
-            {
-                stack.popPose();
+            renderProcessor.applyGroupTransformations(stack, group);
 
+            if (group.isVisible() && renderProcessor.renderGroup(builder, stack, group, model))
+            {
                 return true;
             }
-        }
 
-        for (ModelGroup childGroup : group.children)
-        {
-            if (processRenderRecursively(renderProcessor, builder, stack, model, childGroup))
+            for (ModelGroup childGroup : group.children)
             {
-                stack.popPose();
-
-                return true;
+                if (processRenderRecursively(renderProcessor, builder, stack, model, childGroup))
+                {
+                    return true;
+                }
             }
+
+            return false;
         }
-
-        stack.popPose();
-
-        return false;
+        finally
+        {
+            stack.popPose();
+        }
     }
 
     /**
@@ -271,5 +281,11 @@ public class CubicRenderer
             bone.orient = localRot;
             parentWorld.mul(localRot);
         }
+    }
+
+    /** FS weighted entry point shares FSR's evaluated-pose rotation owner. */
+    public static void applyRotations(Model model, Quaternionf rootParentRotation, List<String> ids, Vector3f[] positions, float weight)
+    {
+        ModelRotationBlender.applyWeightedRotations(model, rootParentRotation, ids, positions, weight);
     }
 }

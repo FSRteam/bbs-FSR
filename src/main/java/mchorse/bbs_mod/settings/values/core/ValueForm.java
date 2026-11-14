@@ -58,4 +58,10 @@ public class ValueForm extends BaseValueBasic<Form>
             this.value = null;
         }
     }
+
+    @Override
+    protected Form copyValue(Form value)
+    {
+        return value == null ? null : FormUtils.copy(value);
+    }
 }

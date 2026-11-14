@@ -5,6 +5,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformGesture;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
 import org.joml.Matrix4f;
@@ -143,6 +144,10 @@ public class GizmoInteraction
     {
         this.promotePendingPick(context);
         this.updateSphereHover(context);
+
+        TransformGesture gesture = Gizmo.INSTANCE.getTrackedGesture();
+
+        if (gesture != null) gesture.pumpIfHidden(context);
     }
 
     /**

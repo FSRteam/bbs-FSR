@@ -2,6 +2,7 @@ package mchorse.bbs_mod.utils.iris;
 
 import joptsimple.internal.Strings;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureManager;
 import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
@@ -23,6 +24,7 @@ import net.irisshaders.iris.shaderpack.option.menu.OptionMenuLinkElement;
 import net.irisshaders.iris.shaderpack.option.menu.OptionMenuOptionElement;
 import net.irisshaders.iris.shaderpack.properties.ShaderProperties;
 import net.irisshaders.iris.pbr.TextureTracker;
+import net.irisshaders.iris.pbr.texture.PBRTextureManager;
 import net.irisshaders.iris.pbr.loader.PBRTextureLoaderRegistry;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.irisshaders.iris.uniforms.custom.cached.FloatCachedUniform;
@@ -44,6 +46,8 @@ import java.util.Set;
 
 public class IrisUtils
 {
+    private static final IrisPbrConstLoader constLoader = new IrisPbrConstLoader();
+    private static final Map<Integer, String> trackedPbrVariants = new HashMap<>();
     private static Set<Texture> textureSet = new HashSet<>();
     private static ShaderProperties properties;
 
@@ -148,6 +152,25 @@ public class IrisUtils
     public static void setup()
     {
         PBRTextureLoaderRegistry.INSTANCE.register(IrisTextureWrapper.class, new IrisTextureWrapperLoader());
+        PBRTextureLoaderRegistry.INSTANCE.register(IrisPbrConstWrapper.class, constLoader);
+    }
+
+    public static void trackPbrVariant(Texture variant, Link albedo, float smoothness, float metallic, float sss, float emission, float relief)
+    {
+        String snapshot = Math.round(smoothness * 255F) + ":" + Math.round(metallic * 255F)
+            + ":" + Math.round(sss * 255F) + ":" + Math.round(emission * 255F) + ":" + Math.round(relief * 255F);
+        String last = trackedPbrVariants.put(variant.id, snapshot);
+
+        if (!snapshot.equals(last))
+        {
+            TextureTracker.INSTANCE.trackTexture(variant.id, new IrisPbrConstWrapper(albedo, variant.id, smoothness, metallic, sss, emission, relief, variant));
+
+            if (last != null)
+            {
+                PBRTextureManager.INSTANCE.onDeleteTexture(variant.id);
+                PBRTextureManager.notifyPBRTexturesChanged();
+            }
+        }
     }
 
     public static void trackTexture(Texture texture)
@@ -178,6 +201,14 @@ public class IrisUtils
 
             textureSet.add(texture);
         }
+    }
+
+    public static void forgetTexture(Texture texture)
+    {
+        textureSet.remove(texture);
+        trackedPbrVariants.remove(texture.id);
+        PBRTextureManager.INSTANCE.onDeleteTexture(texture.id);
+        constLoader.forgetAlbedo(texture.id);
     }
 
     public static boolean isShaderPackEnabled()
@@ -399,6 +430,8 @@ public class IrisUtils
 
     public static void addUniforms(List<CachedUniform> list, Map<String, ShaderCurves.ShaderVariable> variableMap)
     {
+        list.add(new FloatCachedUniform(ShaderSunRotation.UNIFORM, UniformUpdateFrequency.PER_FRAME, BBSRendering::getSunHorizontalRotation));
+
         for (ShaderCurves.ShaderVariable value : variableMap.values())
         {
             if (value.integer)

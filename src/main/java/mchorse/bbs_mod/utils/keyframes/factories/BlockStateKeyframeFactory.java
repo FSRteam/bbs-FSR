@@ -3,9 +3,9 @@ package mchorse.bbs_mod.utils.keyframes.factories;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.DataResult;
 import mchorse.bbs_mod.data.DataStorageUtils;
+import mchorse.bbs_mod.data.GameRegistries;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.utils.interps.IInterp;
-import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -23,7 +23,7 @@ public class BlockStateKeyframeFactory implements IKeyframeFactory<BlockState>
     @Override
     public BlockState fromData(BaseType data)
     {
-        DataResult<Pair<BlockState, Tag>> decode = BlockState.CODEC.decode(NbtOps.INSTANCE, DataStorageUtils.toNbt(data));
+        DataResult<Pair<BlockState, Tag>> decode = BlockState.CODEC.decode(GameRegistries.nbtOps(), DataStorageUtils.toNbt(data));
         Optional<Pair<BlockState, Tag>> result = decode.result();
 
         return result.map(Pair::getFirst).orElse(null);
@@ -32,7 +32,7 @@ public class BlockStateKeyframeFactory implements IKeyframeFactory<BlockState>
     @Override
     public BaseType toData(BlockState value)
     {
-        Optional<Tag> result = BlockState.CODEC.encodeStart(NbtOps.INSTANCE, value).result();
+        Optional<Tag> result = BlockState.CODEC.encodeStart(GameRegistries.nbtOps(), value).result();
 
         return result.map(DataStorageUtils::fromNbt).orElse(null);
     }

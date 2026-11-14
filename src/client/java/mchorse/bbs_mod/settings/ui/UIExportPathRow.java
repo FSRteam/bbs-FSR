@@ -2,69 +2,89 @@ package mchorse.bbs_mod.settings.ui;
 
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.l10n.L10n;
-import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.framework.elements.IUITreeEventListener;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
-import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UIFileDialogs;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 
-import java.util.Collections;
-import java.util.List;
-
-public class UIExportPathRow implements UISettingsLayout.IValueRow
+public class UIExportPathRow extends UIPathRow
 {
-    private final ValueString path;
-
     public UIExportPathRow(ValueString path)
     {
-        this.path = path;
+        super(path);
     }
 
     @Override
-    public List<BaseValue> getValues()
+    protected UIElement createControls(UIElement ui)
     {
-        return Collections.singletonList(this.path);
+        return new ExportControls();
     }
 
     @Override
-    public List<UIElement> create(UIElement ui)
-    {
-        UITextbox textbox = UIValueFactory.stringUI(this.path, null);
-        UIIcon folder = new UIIcon(Icons.FOLDER, (b) -> UIFileDialogs.pickFolder(
-            UIKeys.GENERAL_DIALOG_EXPORT_FOLDER, BBSRendering.getVideoFolder(), (file) ->
-        {
-            String value = file.getAbsolutePath();
-            this.path.set(value);
-            textbox.setText(value);
-        }));
-
-        textbox.tooltip(L10n.lang(UIValueFactory.getValueCommentKey(this.path)));
-        folder.tooltip(UIKeys.CAMERA_TOOLTIPS_PICK_EXPORT_FOLDER);
-        folder.wh(Icons.FOLDER.w, UIConstants.CONTROL_HEIGHT);
-
-        UIElement row = new UIElement();
-        row.row(4).height(UIConstants.CONTROL_HEIGHT);
-        row.add(textbox, folder);
-
-        UILabel label = UIValueFactory.label(this.path);
-        label.h(10);
-        UIElement column = new UIElement();
-        column.column(1).vertical().stretch();
-        column.add(label, row);
-        column.context((menu) -> this.context(menu));
-
-        return Collections.singletonList(UIValueFactory.commetTooltip(column, this.path));
-    }
-
-    private void context(ContextMenuManager menu)
+    protected void context(ContextMenuManager menu, UIElement controls)
     {
         menu.action(Icons.FOLDER, UIKeys.CAMERA_TOOLTIPS_OPEN_VIDEOS, () -> UIUtils.openFolder(BBSRendering.getVideoFolder()));
+    }
+
+    private class ExportControls extends UIElement implements IUITreeEventListener
+    {
+        private long requestGeneration;
+        private final UITextbox textbox;
+
+        private ExportControls()
+        {
+            this.textbox = UIValueFactory.stringUI(UIExportPathRow.this.path, (text) -> this.requestGeneration += 1L);
+            UIIcon folder = new UIIcon(Icons.FOLDER, (button) -> this.pickFolder());
+
+            this.textbox.tooltip(L10n.lang(UIValueFactory.getValueCommentKey(UIExportPathRow.this.path)));
+            folder.tooltip(UIKeys.CAMERA_TOOLTIPS_PICK_EXPORT_FOLDER);
+            folder.wh(Icons.FOLDER.w, UIConstants.CONTROL_HEIGHT);
+            this.row(4).height(UIConstants.CONTROL_HEIGHT);
+            this.add(this.textbox, folder);
+        }
+
+        private void pickFolder()
+        {
+            PathRequest request = captureRequest(this, UIExportPathRow.this.path, ++this.requestGeneration);
+
+            if (request == null)
+            {
+                return;
+            }
+
+            UIFileDialogs.pickFolder(UIKeys.GENERAL_DIALOG_EXPORT_FOLDER, BBSRendering.getVideoFolder(), (file) ->
+            {
+                if (request.isCurrent(this, UIExportPathRow.this.path, this.requestGeneration))
+                {
+                    String value = file.getAbsolutePath();
+                    UIExportPathRow.this.path.set(value);
+                    this.textbox.setText(value);
+                }
+            });
+        }
+
+        @Override
+        protected void onRemove(UIElement parent)
+        {
+            this.requestGeneration += 1L;
+            super.onRemove(parent);
+        }
+
+        @Override
+        public void onAddedToTree(UIElement element)
+        {}
+
+        @Override
+        public void onRemovedFromTree(UIElement element)
+        {
+            this.requestGeneration += 1L;
+        }
     }
 }

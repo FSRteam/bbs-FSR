@@ -8,7 +8,7 @@ import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
 import mchorse.bbs_mod.forms.forms.sound.SoundKeyframeValue;
-import mchorse.bbs_mod.forms.forms.PoseForm;
+import mchorse.bbs_mod.forms.forms.IPosedForm;
 import mchorse.bbs_mod.settings.values.base.BaseKeyframeFactoryValue;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
@@ -23,11 +23,25 @@ import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.film.replays.tracks.MaterialTracks;
+import mchorse.bbs_mod.film.replays.tracks.ConstraintTracks;
+import mchorse.bbs_mod.api.FormPropertyAliases;
+import mchorse.bbs_mod.film.replays.tracks.TrackId;
+import mchorse.bbs_mod.film.replays.tracks.TrackBehaviour;
+import mchorse.bbs_mod.film.replays.tracks.TrackBehaviours;
+import mchorse.bbs_mod.film.replays.tracks.TrackContext;
+import mchorse.bbs_mod.film.replays.tracks.TrackKind;
+import mchorse.bbs_mod.data.types.ListType;
+import mchorse.bbs_mod.settings.values.core.ValueBoneConstraint;
+import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
 
+import java.util.AbstractMap;
+import java.util.AbstractSet;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,9 +53,96 @@ import java.util.Set;
 
 public class FormProperties extends ValueGroup
 {
-    private static final String POSE_PROPERTY = "pose";
+    public static final String POSE_PROPERTY = "pose";
 
-    public final Map<String, KeyframeChannel> properties = new HashMap<>();
+    /** Canonical track addresses, shared by runtime and all timeline consumers. */
+    public final Map<TrackId, KeyframeChannel> tracks = new LinkedHashMap<>();
+
+    /** Live compatibility view retained for FSR addons compiled against textual track keys. */
+    public final Map<String, KeyframeChannel> properties = new AbstractMap<>()
+    {
+        @Override
+        public KeyframeChannel get(Object key)
+        {
+            return key instanceof String id ? FormProperties.this.get(TrackId.parse(id)) : null;
+        }
+
+        @Override
+        public boolean containsKey(Object key)
+        {
+            return key instanceof String id && FormProperties.this.has(TrackId.parse(id));
+        }
+
+        @Override
+        public KeyframeChannel put(String key, KeyframeChannel channel)
+        {
+            TrackId track = TrackId.parse(key);
+            KeyframeChannel previous = FormProperties.this.get(track);
+            FormProperties.this.put(track, channel);
+            return previous;
+        }
+
+        @Override
+        public KeyframeChannel remove(Object key)
+        {
+            TrackId track = key instanceof String id ? TrackId.parse(id) : null;
+            KeyframeChannel previous = FormProperties.this.get(track);
+            FormProperties.this.remove(track);
+            return previous;
+        }
+
+        @Override
+        public void clear()
+        {
+            for (KeyframeChannel channel : FormProperties.this.tracks.values())
+            {
+                FormProperties.this.remove(channel);
+            }
+            FormProperties.this.tracks.clear();
+        }
+
+        @Override
+        public Set<Entry<String, KeyframeChannel>> entrySet()
+        {
+            return new AbstractSet<>()
+            {
+                @Override
+                public int size() { return FormProperties.this.tracks.size(); }
+
+                @Override
+                public Iterator<Entry<String, KeyframeChannel>> iterator()
+                {
+                    Iterator<Entry<TrackId, KeyframeChannel>> iterator = FormProperties.this.tracks.entrySet().iterator();
+                    return new Iterator<>()
+                    {
+                        private KeyframeChannel current;
+                        public boolean hasNext() { return iterator.hasNext(); }
+                        public Entry<String, KeyframeChannel> next()
+                        {
+                            Entry<TrackId, KeyframeChannel> entry = iterator.next();
+                            this.current = entry.getValue();
+                            return new SimpleEntry<>(entry.getKey().toKey(), entry.getValue())
+                            {
+                                @Override
+                                public KeyframeChannel setValue(KeyframeChannel value)
+                                {
+                                    KeyframeChannel previous = FormProperties.this.properties.put(this.getKey(), value);
+                                    current = value;
+                                    super.setValue(value);
+                                    return previous;
+                                }
+                            };
+                        }
+                        public void remove()
+                        {
+                            iterator.remove();
+                            FormProperties.this.remove(this.current);
+                        }
+                    };
+                }
+            };
+        }
+    };
 
     /**
      * Channels that were read but could not be understood — the value factory
@@ -49,6 +150,8 @@ public class FormProperties extends ValueGroup
      * verbatim and written back out on save.
      */
     private final Map<String, MapType> foreignChannels = new LinkedHashMap<>();
+    private final Map<String, MapType> typedTemplates = new LinkedHashMap<>();
+    private final List<MapType> foreignTracks = new ArrayList<>();
 
     public FormProperties(String id)
     {
@@ -66,87 +169,83 @@ public class FormProperties extends ValueGroup
         }
     }
 
-    public KeyframeChannel getOrCreate(Form form, String key)
+    public KeyframeChannel get(TrackId track)
     {
-        BaseValue value = this.get(key);
-        BaseValue property = FormUtils.getProperty(form, key);
+        return track == null ? null : this.tracks.get(track);
+    }
 
-        if (value instanceof KeyframeChannel channel)
-        {
-            return channel;
-        }
+    public boolean has(TrackId track)
+    {
+        return track != null && this.tracks.containsKey(track);
+    }
 
-        SoundKeyframeValue.Group soundGroup = SoundKeyframeValue.groupFromChannel(key);
+    public KeyframeChannel getOrCreate(Form root, String key)
+    {
+        return this.getOrCreate(root, TrackId.parse(key));
+    }
 
-        if (soundGroup != null && SoundKeyframeValue.formFromChannel(form, key) != null)
-        {
-            return this.registerChannel(key, soundFactory(soundGroup));
-        }
+    public KeyframeChannel getOrCreate(TrackId track)
+    {
+        return this.getOrCreate(null, track);
+    }
 
-        if (property != null)
-        {
-            return this.create(property);
-        }
+    public KeyframeChannel getOrCreate(Form root, TrackId track)
+    {
+        track = FormPropertyAliases.resolve(track);
+        if (track == null) return null;
+        KeyframeChannel channel = this.get(track);
+        if (channel != null) return channel;
 
-        if (FormControlKeys.isGlintControlChannel(key))
-        {
-            return this.registerChannel(key, KeyframeFactories.GLINT);
-        }
+        IKeyframeFactory factory = TrackBehaviours.factory(track);
+        if (factory != null) return this.register(track, factory);
 
-        if (FormControlKeys.isIKControlChannel(key))
-        {
-            return this.registerChannel(key, KeyframeFactories.IK);
-        }
-
-        if (PerLimbService.isPoseBoneChannel(key))
-        {
-            return this.registerChannel(key, KeyframeFactories.POSE_TRANSFORM);
-        }
-
-        if (PerLimbService.isMaterialTextureChannel(key))
-        {
-            return this.registerChannel(key, KeyframeFactories.LINK);
-        }
-
-        return null;
+        BaseValue property = FormUtils.getProperty(root, track.toKey());
+        return property == null ? null : this.create(property);
     }
 
     public KeyframeChannel create(BaseValue property)
     {
-        if (property.isVisible() && property instanceof BaseKeyframeFactoryValue<?> keyframeFactoryValue)
+        if (property.isVisible() && property instanceof BaseKeyframeFactoryValue<?> value)
         {
-            String key = FormUtils.getPropertyPath(property);
-            IKeyframeFactory factory = keyframeFactoryValue.getFactory();
-
-            if (factory == KeyframeFactories.TRANSFORM && PerLimbService.isPoseBoneChannel(key))
-            {
-                factory = KeyframeFactories.POSE_TRANSFORM;
-            }
-
-            KeyframeChannel channel = new KeyframeChannel(key, factory);
-
-            this.properties.put(key, channel);
-            this.add(channel);
-
-            return channel;
+            TrackId track = TrackId.parse(FormUtils.getPropertyPath(property));
+            IKeyframeFactory factory = track != null && track.is(TrackKind.BONE)
+                ? KeyframeFactories.POSE_TRANSFORM : value.getFactory();
+            return this.register(track, factory);
         }
-
         return null;
     }
 
     public KeyframeChannel registerChannel(String key, IKeyframeFactory factory)
     {
-        KeyframeChannel channel = this.properties.get(key);
+        return this.register(TrackId.parse(key), factory);
+    }
 
+    public KeyframeChannel register(TrackId track, IKeyframeFactory factory)
+    {
+        track = FormPropertyAliases.resolve(track);
+        if (track == null || factory == null) return null;
+        KeyframeChannel channel = this.get(track);
         if (channel == null)
         {
-            channel = new KeyframeChannel(key, factory);
-
-            this.properties.put(key, channel);
-            this.add(channel);
+            channel = new KeyframeChannel(track.toKey(), factory);
+            this.put(track, channel);
         }
-
         return channel;
+    }
+
+    public void put(TrackId track, KeyframeChannel channel)
+    {
+        if (track == null || channel == null) return;
+        KeyframeChannel previous = this.tracks.put(track, channel);
+        if (previous != null) this.remove(previous);
+        channel.setId(track.toKey());
+        this.add(channel);
+    }
+
+    public void remove(TrackId track)
+    {
+        KeyframeChannel channel = this.tracks.remove(track);
+        if (channel != null) this.remove(channel);
     }
 
     public void applyProperties(Form form, float tick)
@@ -156,407 +255,109 @@ public class FormProperties extends ValueGroup
 
     public void applyProperties(Form form, float tick, float blend)
     {
-        if (form == null)
+        this.apply(TrackContext.of(form), tick, blend);
+    }
+
+    /** Properties first, bone contributions next, FSR glint and grouped sound last. */
+    public void apply(TrackContext context, float tick, float blend)
+    {
+        if (context.root() == null) return;
+        float amount = MathUtils.clamp(blend, 0F, 1F);
+        Map<TrackId, KeyframeChannel> bones = new LinkedHashMap<>();
+        Map<TrackId, KeyframeChannel> glint = new LinkedHashMap<>();
+        Map<TrackId, KeyframeChannel> sound = new LinkedHashMap<>();
+
+        /* An empty grouped sound sheet must not mask an older independent property track. */
+        for (Map.Entry<TrackId, KeyframeChannel> entry : this.tracks.entrySet())
         {
-            return;
-        }
-
-        float clampedBlend = MathUtils.clamp(blend, 0F, 1F);
-        List<KeyframeChannel> poseBoneChannels = new ArrayList<>();
-        List<KeyframeChannel> soundChannels = new ArrayList<>();
-        List<KeyframeChannel> glintChannels = new ArrayList<>();
-
-        for (KeyframeChannel value : this.properties.values())
-        {
-            SoundKeyframeValue.Group soundGroup = SoundKeyframeValue.groupFromChannel(value.getId());
-
-            if (soundGroup != null)
+            String key = entry.getKey().toKey();
+            SoundKeyframeValue.Group group = SoundKeyframeValue.groupFromChannel(key);
+            if (group != null)
             {
-                soundChannels.add(value);
-
-                AbstractSoundForm sound = SoundKeyframeValue.formFromChannel(form, value.getId());
-
-                if (sound != null)
-                {
-                    /* Retire the previous grouped snapshot before legacy
-                     * channels run. An empty grouped sheet is registered as
-                     * soon as the editor opens; it must not erase an older
-                     * independent track, while deleting the last grouped
-                     * keyframe must still clear its stale runtime values. */
-                    SoundKeyframeValue.clearRuntime(sound, soundGroup);
-                }
-            }
-            else if (FormControlKeys.isGlintControlChannel(value.getId()))
-            {
-                glintChannels.add(value);
-            }
-            else if (PerLimbService.isPoseBoneChannel(value.getId()))
-            {
-                poseBoneChannels.add(value);
+                sound.put(entry.getKey(), entry.getValue());
+                AbstractSoundForm target = SoundKeyframeValue.formFromChannel(context.root(), key);
+                if (target != null) SoundKeyframeValue.clearRuntime(target, group);
             }
         }
 
-        for (KeyframeChannel value : this.properties.values())
+        for (Map.Entry<TrackId, KeyframeChannel> entry : this.tracks.entrySet())
         {
-            if (SoundKeyframeValue.groupFromChannel(value.getId()) == null
-                && !FormControlKeys.isGlintControlChannel(value.getId())
-                && !PerLimbService.isPoseBoneChannel(value.getId()))
+            if (sound.containsKey(entry.getKey())) continue;
+            if (entry.getKey().is(TrackKind.BONE)) bones.put(entry.getKey(), entry.getValue());
+            else if (FormControlKeys.isGlintControlChannel(entry.getKey().toKey())) glint.put(entry.getKey(), entry.getValue());
+            else apply(context, entry.getKey(), entry.getValue(), tick, amount);
+        }
+
+        Set<String> reset = new HashSet<>();
+        for (TrackId track : bones.keySet())
+        {
+            if (reset.add(track.formPath()) && !this.has(TrackId.property(track.formPath(), POSE_PROPERTY))
+                && FormUtils.getForm(context.root(), track.formPath()) instanceof IPosedForm posed)
             {
-                this.applyProperty(tick, form, value, clampedBlend);
+                posed.getPose().setRuntimeValue(null);
             }
         }
+        for (Map.Entry<TrackId, KeyframeChannel> entry : bones.entrySet())
+            apply(context, entry.getKey(), entry.getValue(), tick, amount);
 
-        Set<String> processedForms = new HashSet<>();
-
-        for (KeyframeChannel value : poseBoneChannels)
+        for (Map.Entry<TrackId, KeyframeChannel> entry : glint.entrySet())
         {
-            PerLimbService.PoseBonePath poseBonePath = PerLimbService.parsePoseBonePath(value.getId());
+            String path = entry.getKey().formPath();
+            boolean posed = this.has(TrackId.property(path, POSE_PROPERTY))
+                || bones.keySet().stream().anyMatch(track -> track.formPath().equals(path));
+            if (!posed && FormUtils.getForm(context.root(), path) instanceof IPosedForm form)
+                form.getPose().setRuntimeValue(null);
+            apply(context, entry.getKey(), entry.getValue(), tick, amount);
+        }
+        for (Map.Entry<TrackId, KeyframeChannel> entry : sound.entrySet())
+            if (!entry.getValue().isEmpty()) apply(context, entry.getKey(), entry.getValue(), tick, amount);
+        notifyPoseChanges(context.root(), this.tracks.keySet());
+    }
 
-            if (poseBonePath != null)
+    /** Apply just one phase without resampling another replay's not-yet-updated anchor. */
+    public void apply(TrackContext context, float tick, float blend, java.util.function.Predicate<TrackId> filter)
+    {
+        Set<TrackId> applied = new HashSet<>();
+        for (Map.Entry<TrackId, KeyframeChannel> entry : this.tracks.entrySet())
+        {
+            if (filter.test(entry.getKey()))
             {
-                String formPath = poseBonePath.formPath();
-
-                if (!processedForms.contains(formPath))
-                {
-                    processedForms.add(formPath);
-
-                    String poseKey = this.toPosePropertyKey(formPath);
-
-                    if (!this.properties.containsKey(poseKey))
-                    {
-                        Form targetForm = FormUtils.getForm(form, formPath);
-
-                        if (targetForm instanceof PoseForm poseForm)
-                        {
-                            poseForm.getPose().setRuntimeValue(null);
-                        }
-                    }
-                }
+                apply(context, entry.getKey(), entry.getValue(), tick, blend);
+                applied.add(entry.getKey());
             }
         }
+        notifyPoseChanges(context.root(), applied);
+    }
 
-        for (KeyframeChannel value : poseBoneChannels)
+    private static void notifyPoseChanges(Form root, Iterable<TrackId> tracks)
+    {
+        if (root == null) return;
+        Set<String> paths = new HashSet<>();
+        for (TrackId track : tracks) paths.add(track.formPath());
+        if (paths.isEmpty()) return;
+        paths.add("");
+        for (String path : paths)
         {
-            this.applyProperty(tick, form, value, clampedBlend);
-        }
-
-        /* The dedicated enchantment layer overlays either pose representation and
-         * replaces only the four glint fields. */
-        for (KeyframeChannel value : glintChannels)
-        {
-            this.applyProperty(tick, form, value, clampedBlend);
-        }
-
-        /* Grouped sound channels intentionally run last, so they win
-         * deterministically when an older Film still contains legacy tracks. */
-        for (KeyframeChannel value : soundChannels)
-        {
-            if (!value.isEmpty())
-            {
-                this.applyProperty(tick, form, value, clampedBlend);
-            }
+            Form form = FormUtils.getForm(root, path);
+            if (form != null) form.bumpPoseVersion();
         }
     }
 
-    private void applyProperty(float tick, Form form, KeyframeChannel value, float blend)
+    private static void apply(TrackContext context, TrackId track, KeyframeChannel channel, float tick, float blend)
     {
-        if (FormControlKeys.isGlintControlChannel(value.getId()))
-        {
-            this.applyGlintProperty(tick, form, value, blend);
-
-            return;
-        }
-
-        SoundKeyframeValue.Group soundGroup = SoundKeyframeValue.groupFromChannel(value.getId());
-
-        if (soundGroup != null)
-        {
-            this.applySoundProperty(tick, form, value, soundGroup, blend);
-
-            return;
-        }
-
-        PerLimbService.PoseBonePath poseBonePath = PerLimbService.parsePoseBonePath(value.getId());
-
-        if (poseBonePath != null)
-        {
-            String formPath = poseBonePath.formPath();
-            String bone = poseBonePath.bone();
-            Form targetForm = FormUtils.getForm(form, formPath);
-
-            if (targetForm instanceof PoseForm poseForm)
-            {
-                KeyframeSegment segment = value.find(tick);
-
-                if (segment != null)
-                {
-                    /* Copy on write */
-                    ValuePose pose = poseForm.getPose();
-
-                    if (pose.getRuntimeValue() == null)
-                    {
-                        pose.setRuntimeValue(pose.getOriginalValue().copy());
-                    }
-
-                    PoseTransform transform = pose.get().get(bone);
-
-                    Transform interpolated = (Transform) this.interpolateValue(value, new PoseTransform(), segment, blend);
-
-                    transform.add(interpolated);
-                }
-            }
-
-            return;
-        }
-
-        PerLimbService.MaterialTexturePath materialPath = PerLimbService.parseMaterialTexturePath(value.getId());
-
-        if (materialPath != null)
-        {
-            Form targetForm = FormUtils.getForm(form, materialPath.formPath());
-
-            if (targetForm instanceof ModelForm modelForm)
-            {
-                KeyframeSegment segment = value.find(tick);
-
-                if (segment != null)
-                {
-                    modelForm.materialTextureOverrides.put(materialPath.material(), (Link) segment.createInterpolated());
-                }
-                else if (blend >= 1F)
-                {
-                    modelForm.materialTextureOverrides.remove(materialPath.material());
-                }
-            }
-
-            return;
-        }
-
-        BaseValueBasic property = FormUtils.getProperty(form, value.getId());
-
-        if (property == null)
-        {
-            return;
-        }
-
-        KeyframeSegment segment = value.find(tick);
-
-        if (segment != null)
-        {
-            Object interpolated = this.interpolateValue(value, property.get(), segment, blend);
-            property.setRuntimeValue(interpolated);
-        }
-        else if (blend >= 1F)
-        {
-            property.setRuntimeValue(null);
-        }
-    }
-
-    private void applyGlintProperty(float tick, Form root, KeyframeChannel value, float blend)
-    {
-        String formPath = FormControlKeys.parseGlintControlFormPath(value.getId());
-        Form target = FormUtils.getForm(root, formPath);
-
-        if (!(target instanceof PoseForm poseForm))
-        {
-            return;
-        }
-
-        ValuePose pose = poseForm.getPose();
-        KeyframeSegment segment = value.find(tick);
-        boolean otherPoseTracks = this.hasPoseTracks(formPath);
-
-        if (segment == null)
-        {
-            if (blend >= 1F && !otherPoseTracks)
-            {
-                pose.setRuntimeValue(null);
-            }
-
-            return;
-        }
-
-        /* Without an ordinary pose track there is no earlier stage rebuilding the
-         * runtime pose, so start from the static pose on every sample. */
-        if (!otherPoseTracks || pose.getRuntimeValue() == null)
-        {
-            pose.setRuntimeValue(pose.getOriginalValue().copy());
-        }
-
-        GlintControls current = this.captureGlintControls(pose.get(), value);
-        GlintControls controls = (GlintControls) this.interpolateValue(value, current, segment, blend);
-
-        for (Map.Entry<String, GlintControl> entry : controls.controls.entrySet())
-        {
-            entry.getValue().apply(pose.get().get(entry.getKey()));
-        }
-    }
-
-    private GlintControls captureGlintControls(Pose pose, KeyframeChannel value)
-    {
-        Set<String> bones = new HashSet<>();
-
-        for (Object object : value.getKeyframes())
-        {
-            Keyframe keyframe = (Keyframe) object;
-
-            if (keyframe.getValue() instanceof GlintControls controls)
-            {
-                bones.addAll(controls.controls.keySet());
-            }
-        }
-
-        GlintControls current = new GlintControls();
-
-        for (String bone : bones)
-        {
-            current.get(bone).copy(pose.get(bone));
-        }
-
-        return current;
-    }
-
-    private boolean hasPoseTracks(String formPath)
-    {
-        if (this.properties.containsKey(this.toPosePropertyKey(formPath)))
-        {
-            return true;
-        }
-
-        for (String id : this.properties.keySet())
-        {
-            PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(id);
-
-            if (path != null && path.formPath().equals(formPath))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void applySoundProperty(float tick, Form root, KeyframeChannel value,
-        SoundKeyframeValue.Group group, float blend)
-    {
-        AbstractSoundForm form = SoundKeyframeValue.formFromChannel(root, value.getId());
-
-        if (form == null)
-        {
-            return;
-        }
-
-        KeyframeSegment<SoundKeyframeValue> segment = value.find(tick);
-
-        if (segment != null)
-        {
-            SoundKeyframeValue current = SoundKeyframeValue.capture(form, group);
-            SoundKeyframeValue interpolated = (SoundKeyframeValue) this.interpolateValue(value, current, segment, blend);
-
-            interpolated.applyRuntime(form, group);
-        }
-        else if (blend >= 1F)
-        {
-            SoundKeyframeValue.clearRuntime(form, group);
-        }
-    }
-
-    private Object interpolateValue(KeyframeChannel value, Object current, KeyframeSegment segment, float blend)
-    {
-        if (blend < 1F)
-        {
-            IKeyframeFactory factory = value.getFactory();
-            Object v = factory.copy(current);
-            Object a = factory.copy(segment.createInterpolated());
-            Object interpolated = factory.interpolate(v, v, a, a, Interpolations.LINEAR, blend);
-
-            return factory.copy(interpolated);
-        }
-
-        return segment.createInterpolated();
-    }
-
-    private String toPosePropertyKey(String formPath)
-    {
-        if (formPath == null || formPath.isEmpty())
-        {
-            return POSE_PROPERTY;
-        }
-
-        return formPath + FormUtils.PATH_SEPARATOR + POSE_PROPERTY;
+        TrackBehaviour behaviour = TrackBehaviours.of(track);
+        if (behaviour != null) behaviour.apply(context, track, channel, tick, blend);
     }
 
     public void resetProperties(Form form)
     {
-        if (form == null)
+        if (form == null) return;
+        for (TrackId track : this.tracks.keySet())
         {
-            return;
+            TrackBehaviour behaviour = TrackBehaviours.of(track);
+            if (behaviour != null) behaviour.reset(form, track);
         }
-
-        for (KeyframeChannel value : this.properties.values())
-        {
-            if (FormControlKeys.isGlintControlChannel(value.getId()))
-            {
-                Form target = FormUtils.getForm(form, FormControlKeys.parseGlintControlFormPath(value.getId()));
-
-                if (target instanceof PoseForm poseForm)
-                {
-                    poseForm.getPose().setRuntimeValue(null);
-                }
-
-                continue;
-            }
-
-            SoundKeyframeValue.Group group = SoundKeyframeValue.groupFromChannel(value.getId());
-
-            if (group != null)
-            {
-                AbstractSoundForm sound = SoundKeyframeValue.formFromChannel(form, value.getId());
-
-                if (sound != null)
-                {
-                    SoundKeyframeValue.clearRuntime(sound, group);
-                }
-
-                continue;
-            }
-
-            PerLimbService.PoseBonePath poseBonePath = PerLimbService.parsePoseBonePath(value.getId());
-
-            if (poseBonePath != null)
-            {
-                Form targetForm = FormUtils.getForm(form, poseBonePath.formPath());
-
-                if (targetForm instanceof PoseForm poseForm)
-                {
-                    poseForm.getPose().setRuntimeValue(null);
-                }
-
-                continue;
-            }
-
-            BaseValueBasic property = FormUtils.getProperty(form, value.getId());
-
-            if (property == null)
-            {
-                continue;
-            }
-
-            property.setRuntimeValue(null);
-        }
-    }
-
-    private static IKeyframeFactory<SoundKeyframeValue> soundFactory(SoundKeyframeValue.Group group)
-    {
-        return switch (group)
-        {
-            case SOUND -> KeyframeFactories.SOUND;
-            case SHAPE -> KeyframeFactories.SOUND_SHAPE;
-            case VISUALIZATION -> KeyframeFactories.SOUND_VISUALIZATION;
-            case FALLOFF -> KeyframeFactories.SOUND_FALLOFF;
-            case REFLECTIONS -> KeyframeFactories.SOUND_REFLECTIONS;
-        };
+        notifyPoseChanges(form, this.tracks.keySet());
     }
 
     public void cleanUp()
@@ -578,11 +379,11 @@ public class FormProperties extends ValueGroup
     @Override
     public void fromData(BaseType data)
     {
-        super.fromData(data);
-
         this.removeAll();
         this.properties.clear();
         this.foreignChannels.clear();
+        this.typedTemplates.clear();
+        this.foreignTracks.clear();
 
         if (!data.isMap())
         {
@@ -591,9 +392,18 @@ public class FormProperties extends ValueGroup
 
         MapType map = data.asMap();
 
-        for (String key : map.keys())
+        if (map.has("tracks", BaseType.TYPE_LIST))
         {
-            MapType mapType = map.getMap(key);
+            map = this.readTypedTracks(map.getList("tracks"));
+        }
+
+        for (String sourceKey : map.keys())
+        {
+            TrackId track = FormPropertyAliases.resolve(TrackId.parse(sourceKey));
+            if (track == null) continue;
+            String key = track.toKey();
+            if (!key.equals(sourceKey) && map.has(key)) continue;
+            MapType mapType = map.getMap(sourceKey);
 
             if (mapType.isEmpty())
             {
@@ -649,7 +459,6 @@ public class FormProperties extends ValueGroup
             if (property.getFactory() != null)
             {
                 this.properties.put(key, property);
-                this.add(property);
             }
             else
             {
@@ -665,22 +474,71 @@ public class FormProperties extends ValueGroup
     @Override
     public BaseType toData()
     {
-        BaseType data = super.toData();
-
-        if (data.isMap() && !this.foreignChannels.isEmpty())
+        ListType records = new ListType();
+        for (Map.Entry<TrackId, KeyframeChannel> entry : this.tracks.entrySet())
         {
-            MapType map = data.asMap();
-
-            for (Map.Entry<String, MapType> entry : this.foreignChannels.entrySet())
-            {
-                if (!map.has(entry.getKey()))
-                {
-                    map.put(entry.getKey(), entry.getValue().copy());
-                }
-            }
+            if (entry.getValue().isEmpty()) continue;
+            records.add(this.trackData(entry.getKey(), entry.getValue().toData()));
         }
-
+        for (Map.Entry<String, MapType> entry : this.foreignChannels.entrySet())
+        {
+            TrackId track = TrackId.parse(entry.getKey());
+            if (track != null && !this.has(track)) records.add(this.trackData(track, entry.getValue()));
+        }
+        for (MapType foreign : this.foreignTracks) records.add(foreign.copy());
+        MapType data = new MapType();
+        data.put("tracks", records);
         return data;
+    }
+
+    private MapType trackData(TrackId track, BaseType channel)
+    {
+        MapType template = this.typedTemplates.get(track.toKey());
+        MapType data = template == null ? new MapType() : (MapType) template.copy();
+        data.putString("kind", track.kind().key);
+        data.putString("form", track.formPath());
+        data.putString("subject", track.subject());
+        data.putString("prop", track.property());
+        data.put("channel", channel.copy());
+        return data;
+    }
+
+    private MapType readTypedTracks(ListType tracks)
+    {
+        MapType channels = new MapType();
+        for (BaseType item : tracks)
+        {
+            if (!item.isMap()) continue;
+            MapType record = item.asMap();
+            TrackKind kind = TrackKind.byKey(record.getString("kind"));
+            if (kind == null || !record.has("channel", BaseType.TYPE_MAP))
+            {
+                this.foreignTracks.add((MapType) record.copy());
+                continue;
+            }
+            TrackId original = new TrackId(kind, record.getString("form"), record.getString("subject"), record.getString("prop"));
+            TrackId address = FormPropertyAliases.resolve(original);
+            String key = address.toKey();
+            if (!address.equals(original) && hasCanonicalTrack(tracks, address)) continue;
+            MapType template = (MapType) record.copy();
+            template.putString("subject", address.subject());
+            this.typedTemplates.put(key, template);
+            channels.put(key, record.getMap("channel").copy());
+        }
+        return channels;
+    }
+
+    private static boolean hasCanonicalTrack(ListType records, TrackId track)
+    {
+        for (BaseType item : records)
+        {
+            if (!item.isMap()) continue;
+            MapType data = item.asMap();
+            if (track.kind().key.equals(data.getString("kind")) && track.formPath().equals(data.getString("form"))
+                && track.subject().equals(data.getString("subject")) && track.property().equals(data.getString("prop")))
+                return true;
+        }
+        return false;
     }
 
     @Override

@@ -2,7 +2,6 @@ package mchorse.bbs_mod.ui.framework.elements.overlay;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.AudioCacheManager;
 import mchorse.bbs_mod.audio.AudioReader;
 import mchorse.bbs_mod.audio.AudioDecodeException;
@@ -24,11 +23,12 @@ import mchorse.bbs_mod.ui.framework.elements.input.list.UILikedSoundList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIVanillaSoundList;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.Direction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -115,8 +115,10 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
             UIConfirmOverlayPanel confirmPanel = new UIConfirmOverlayPanel(
                 UIKeys.GENERAL_REMOVE,
                 UIKeys.GENERAL_REMOVE,
-                (confirmed) -> {
-                    if (confirmed) {
+                (confirmed) ->
+                {
+                    if (confirmed)
+                    {
                         this.deleteAudio(soundName);
                     }
                 }
@@ -182,12 +184,15 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
 
         this.folderButton = new UIIcon(Icons.FOLDER, (b) -> this.switchToMode(ViewMode.FOLDER));
         this.folderButton.tooltip(UIKeys.OVERLAYS_SOUNDS_FOLDER_MODE);
+        this.folderButton.highlight(() -> this.currentMode == ViewMode.FOLDER, Direction.LEFT);
 
         this.addButton = new UIIcon(Icons.ADD, (b) -> this.switchToMode(ViewMode.ADD));
         this.addButton.tooltip(UIKeys.OVERLAYS_SOUNDS_ADD_MODE);
+        this.addButton.highlight(() -> this.currentMode == ViewMode.ADD, Direction.LEFT);
 
         this.likeButton = new UIIcon(Icons.HEART_ALT, (b) -> this.switchToMode(ViewMode.LIKE));
         this.likeButton.tooltip(UIKeys.OVERLAYS_SOUNDS_LIKE_MODE);
+        this.likeButton.highlight(() -> this.currentMode == ViewMode.LIKE, Direction.LEFT);
 
         this.icons.add(this.folderButton, this.addButton, this.likeButton);
 
@@ -199,7 +204,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         this.switchToMode(ViewMode.FOLDER);
     }
 
-    private static Set<String> getSoundEvents()
+    public static Set<String> getSoundEvents()
     {
         Set<String> locations = new HashSet<>();
 
@@ -227,8 +232,6 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
         this.stopCurrentPlayback();
 
         this.currentMode = mode;
-
-        this.updateButtonStates();
 
         switch (mode)
         {
@@ -300,13 +303,6 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
 
         this.refreshLikedList();
         list.update();
-    }
-
-    private void updateButtonStates()
-    {
-        this.folderButton.active(this.currentMode == ViewMode.FOLDER);
-        this.addButton.active(this.currentMode == ViewMode.ADD);
-        this.likeButton.active(this.currentMode == ViewMode.LIKE);
     }
 
     private void refreshVanillaSoundList()
@@ -400,7 +396,7 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
 
                 if (tempFile != null && tempFile.exists())
                 {
-                    try (java.io.FileInputStream fis = new java.io.FileInputStream(tempFile))
+                    try (FileInputStream fis = new FileInputStream(tempFile))
                     {
                         String pathLower = tempFile.getName().toLowerCase();
                         
@@ -597,27 +593,6 @@ public class UISoundOverlayPanel extends UIStringOverlayPanel
 
     private void renderLikeEmptyState(UIContext context)
     {}
-
-    @Override
-    protected void renderBackground(UIContext context)
-    {
-        super.renderBackground(context);
-
-        if (this.folderButton.isActive())
-        {
-            this.folderButton.area.render(context.batcher, BBSSettings.primaryColor(Colors.A100));
-        }
-
-        if (this.addButton.isActive())
-        {
-            this.addButton.area.render(context.batcher, BBSSettings.primaryColor(Colors.A100));
-        }
-
-        if (this.likeButton.isActive())
-        {
-            this.likeButton.area.render(context.batcher, BBSSettings.primaryColor(Colors.A100));
-        }
-    }
 
     private void renameAudio(String oldName, String newName)
     {

@@ -18,6 +18,7 @@ import mchorse.bbs_mod.utils.keyframes.KeyframeSegment;
 import mchorse.bbs_mod.utils.keyframes.factories.IKeyframeFactory;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.MeshData;
 import net.minecraft.client.renderer.GameRenderer;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -113,7 +114,12 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
         
         RenderSystem.enableBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+        MeshData mesh = builder.build();
+
+        if (mesh != null)
+        {
+            BufferUploader.drawWithShader(mesh);
+        }
     }
 
     private void renderGraphLine(UIContext context, int axis, KeyframeSegment segment)

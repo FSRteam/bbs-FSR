@@ -6,7 +6,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformGesture;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.AdditiveDrag;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformOp;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
@@ -183,14 +183,14 @@ public final class GizmoInteractionGenerationTest
 
             context.setMouse(5, 5, GLFW.GLFW_MOUSE_BUTTON_LEFT);
 
-            TrackingTransform releasedTransform = allocate(TrackingTransform.class);
+            TrackingGesture releasedTransform = new TrackingGesture();
             GizmoInteraction releasedInteraction = new GizmoInteraction(noOpViewport());
             MouseGestureOwnership releasedOwnership = ownership(releasedInteraction);
             long releasedGeneration = releasedOwnership.acquireToken(GLFW.GLFW_MOUSE_BUTTON_LEFT);
 
             setLong(releasedInteraction, "gestureGeneration", releasedGeneration);
             setBoolean(releasedInteraction, "gizmoActive", true);
-            setObject(Gizmo.INSTANCE, "currentTransform", releasedTransform);
+            setObject(Gizmo.INSTANCE, "currentGesture", releasedTransform);
 
             check(releasedInteraction.mouseReleased(context), "physical Gizmo release was not handled");
             check(releasedTransform.accepted && !releasedTransform.rejected,
@@ -198,14 +198,14 @@ public final class GizmoInteractionGenerationTest
             check(!releasedOwnership.isOwnedBy(GLFW.GLFW_MOUSE_BUTTON_LEFT, releasedGeneration),
                 "physical Gizmo release retained its gesture owner");
 
-            TrackingTransform canceledTransform = allocate(TrackingTransform.class);
+            TrackingGesture canceledTransform = new TrackingGesture();
             GizmoInteraction canceledInteraction = new GizmoInteraction(noOpViewport());
             MouseGestureOwnership canceledOwnership = ownership(canceledInteraction);
             long canceledGeneration = canceledOwnership.acquireToken(GLFW.GLFW_MOUSE_BUTTON_LEFT);
 
             setLong(canceledInteraction, "gestureGeneration", canceledGeneration);
             setBoolean(canceledInteraction, "gizmoActive", true);
-            setObject(Gizmo.INSTANCE, "currentTransform", canceledTransform);
+            setObject(Gizmo.INSTANCE, "currentGesture", canceledTransform);
             canceledInteraction.cancel();
 
             check(canceledTransform.rejected && !canceledTransform.accepted,
@@ -217,7 +217,7 @@ public final class GizmoInteractionGenerationTest
         }
         finally
         {
-            setObject(Gizmo.INSTANCE, "currentTransform", null);
+            setObject(Gizmo.INSTANCE, "currentGesture", null);
             BBSSettings.defaultLocalTransform = previousDefaultLocal;
         }
     }
@@ -233,11 +233,11 @@ public final class GizmoInteractionGenerationTest
             GizmoInteraction interaction = new GizmoInteraction(noOpViewport());
             MouseGestureOwnership ownership = ownership(interaction);
             long generation = ownership.acquireToken(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-            TrackingTransform transform = allocate(TrackingTransform.class);
+            TrackingGesture transform = new TrackingGesture();
 
             setLong(interaction, "gestureGeneration", generation);
             setBoolean(interaction, "gizmoActive", true);
-            setObject(Gizmo.INSTANCE, "currentTransform", transform);
+            setObject(Gizmo.INSTANCE, "currentGesture", transform);
 
             check(!interaction.cancel(GLFW.GLFW_MOUSE_BUTTON_RIGHT, generation),
                 "foreign-button Gizmo cancellation was reported as handled");
@@ -254,11 +254,11 @@ public final class GizmoInteractionGenerationTest
                 "matching-button Gizmo cancellation retained its owner or active state");
 
             long replacement = ownership.acquireToken(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-            TrackingTransform replacementTransform = allocate(TrackingTransform.class);
+            TrackingGesture replacementTransform = new TrackingGesture();
 
             setLong(interaction, "gestureGeneration", replacement);
             setBoolean(interaction, "gizmoActive", true);
-            setObject(Gizmo.INSTANCE, "currentTransform", replacementTransform);
+            setObject(Gizmo.INSTANCE, "currentGesture", replacementTransform);
 
             check(!interaction.cancel(GLFW.GLFW_MOUSE_BUTTON_LEFT, generation),
                 "stale-generation Gizmo cancellation was reported as handled");
@@ -272,7 +272,7 @@ public final class GizmoInteractionGenerationTest
         }
         finally
         {
-            setObject(Gizmo.INSTANCE, "currentTransform", null);
+            setObject(Gizmo.INSTANCE, "currentGesture", null);
             BBSSettings.defaultLocalTransform = previousDefaultLocal;
         }
     }
@@ -287,7 +287,7 @@ public final class GizmoInteractionGenerationTest
             BBSSettings.defaultLocalTransform = new ValueBoolean("default_local", false);
             BBSSettings.hideInactiveHandles = new ValueBoolean("hide_inactive_handles", true);
 
-            UIPropTransform transform = allocate(UIPropTransform.class);
+            TransformGesture transform = new TransformGesture(null);
 
             setBoolean(transform, "editing", true);
             setObject(transform, "strategy", new AdditiveDrag(null, TransformOp.SCALE, Axis.X, null, true));
@@ -466,19 +466,24 @@ public final class GizmoInteractionGenerationTest
         }
     }
 
-    private static class TrackingTransform extends UIPropTransform
+    private static class TrackingGesture extends TransformGesture
     {
         private boolean accepted;
         private boolean rejected;
 
+        TrackingGesture()
+        {
+            super(null);
+        }
+
         @Override
-        public void acceptChanges()
+        public void accept()
         {
             this.accepted = true;
         }
 
         @Override
-        public void rejectChanges()
+        public void reject()
         {
             this.rejected = true;
         }

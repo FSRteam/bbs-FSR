@@ -29,12 +29,17 @@ public class Draw
 
     public static void renderBox(PoseStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a)
     {
+        renderBox(stack, x, y, z, w, h, d, r, g, b, a, 1 / 96F + (float) (Math.sqrt(w * w + h + h + d + d) / 2000));
+    }
+
+    /** Draw an outline with an explicit half-thickness in model units. */
+    public static void renderBox(PoseStack stack, double x, double y, double z, double w, double h, double d, float r, float g, float b, float a, float t)
+    {
         stack.pushPose();
         stack.translate(x, y, z);
         float fw = (float) w;
         float fh = (float) h;
         float fd = (float) d;
-        float t = 1 / 96F + (float) (Math.sqrt(w * w + h + h + d + d) / 2000);
 
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
@@ -181,6 +186,11 @@ public class Draw
         coolerAxes(stack, axisSize, axisOffset, axisSize + 0.01F, axisOffset + 0.01F);
     }
 
+    public static void arc3D(BufferBuilder builder, PoseStack stack, Axis axis, float radius, float thickness, int color)
+    {
+        arc3D(builder, stack, axis, radius, thickness, Colors.getR(color), Colors.getG(color), Colors.getB(color), 0F, 360F);
+    }
+
     public static void arc3D(BufferBuilder builder, PoseStack stack, Axis axis, float radius, float thickness, float r, float g, float b)
     {
         arc3D(builder, stack, axis, radius, thickness, r, g, b, 0F, 360F);
@@ -191,8 +201,22 @@ public class Draw
      */
     public static void arc3D(BufferBuilder builder, PoseStack stack, Axis axis, float radius, float thickness, float r, float g, float b, float startDeg, float sweepDeg)
     {
-        int segU = 96;
-        int segV = 24;
+        arc3D(builder, stack, axis, radius, thickness, r, g, b, startDeg, sweepDeg, 64, 12);
+    }
+
+    /**
+     * Tessellate an arc of a torus. The tube's cross-section circle is precomputed once and the
+     * ring-angle trig lives outside the inner loop — the old shape recomputed both per quad,
+     * which put ~18k trig calls into a single ring.
+     */
+    public static void arc3D(BufferBuilder builder, PoseStack stack, Axis axis, float radius, float thickness, float r, float g, float b, float startDeg, float sweepDeg, int segU, int segV)
+    {
+        arc3D(builder, stack, axis, radius, thickness, r, g, b, startDeg, sweepDeg, segU, segV, 0F);
+    }
+
+    /** Tessellates an arc with its tube tapering to a point over taperDeg at either end. */
+    public static void arc3D(BufferBuilder builder, PoseStack stack, Axis axis, float radius, float thickness, float r, float g, float b, float startDeg, float sweepDeg, int segU, int segV, float taperDeg)
+    {
         double u0 = Math.toRadians(startDeg);
         double uStep = Math.toRadians(sweepDeg / (double) segU);
         double vStep = Math.PI * 2D / (double) segV;
@@ -205,41 +229,69 @@ public class Draw
         float tubeR = thickness * 0.5F;
         Matrix4f mat = stack.last().pose();
 
+        /* The tube cross-section: ring-of-the-tube radii and heights, shared by every u step. */
+        double[] ringR = new double[segV + 1];
+        float[] ringY = new float[segV + 1];
+
+        for (int iv = 0; iv <= segV; iv++)
+        {
+            double v = vStep * iv;
+
+            ringR[iv] = radius + tubeR * Math.cos(v);
+            ringY[iv] = (float) (tubeR * Math.sin(v));
+        }
+
+        float taper = Math.min(taperDeg, Math.abs(sweepDeg) * 0.5F);
+        float width2 = taper > 0F ? 0F : 1F;
+        double cosU2 = Math.cos(u0);
+        double sinU2 = Math.sin(u0);
+
         for (int iu = 0; iu < segU; iu++)
         {
-            double u1 = u0 + uStep * iu;
+            float width1 = width2;
+            float endDistance = Math.abs(sweepDeg) * Math.min(iu + 1, segU - iu - 1) / segU;
+            float t = taper > 0F ? Math.min(endDistance / taper, 1F) : 1F;
+
+            width2 = t * t * (3F - 2F * t);
+
+            double cosU1 = cosU2;
+            double sinU1 = sinU2;
             double u2 = u0 + uStep * (iu + 1);
+
+            cosU2 = Math.cos(u2);
+            sinU2 = Math.sin(u2);
 
             for (int iv = 0; iv < segV; iv++)
             {
-                double v1 = vStep * iv;
-                double v2 = vStep * (iv + 1);
-                double cos1 = radius + tubeR * Math.cos(v1);
-                double cos2 = radius + tubeR * Math.cos(v2);
+                double r1 = ringR[iv];
+                double r2 = ringR[iv + 1];
+                float y1 = ringY[iv];
+                float y2 = ringY[iv + 1];
 
-                float x11 = (float) (cos1 * Math.cos(u1));
-                float z11 = (float) (cos1 * Math.sin(u1));
-                float y11 = (float) (tubeR * Math.sin(v1));
+                double r11 = radius + (r1 - radius) * width1;
+                double r12 = radius + (r2 - radius) * width1;
+                double r21 = radius + (r1 - radius) * width2;
+                double r22 = radius + (r2 - radius) * width2;
 
-                float x12 = (float) (cos2 * Math.cos(u1));
-                float z12 = (float) (cos2 * Math.sin(u1));
-                float y12 = (float) (tubeR * Math.sin(v2));
+                float x11 = (float) (r11 * cosU1);
+                float z11 = (float) (r11 * sinU1);
 
-                float x21 = (float) (cos1 * Math.cos(u2));
-                float z21 = (float) (cos1 * Math.sin(u2));
-                float y21 = (float) (tubeR * Math.sin(v1));
+                float x12 = (float) (r12 * cosU1);
+                float z12 = (float) (r12 * sinU1);
 
-                float x22 = (float) (cos2 * Math.cos(u2));
-                float z22 = (float) (cos2 * Math.sin(u2));
-                float y22 = (float) (tubeR * Math.sin(v2));
+                float x21 = (float) (r21 * cosU2);
+                float z21 = (float) (r21 * sinU2);
 
-                builder.addVertex(mat, x11, y11, z11).setColor(r, g, b, 1F);
-                builder.addVertex(mat, x12, y12, z12).setColor(r, g, b, 1F);
-                builder.addVertex(mat, x22, y22, z22).setColor(r, g, b, 1F);
+                float x22 = (float) (r22 * cosU2);
+                float z22 = (float) (r22 * sinU2);
 
-                builder.addVertex(mat, x11, y11, z11).setColor(r, g, b, 1F);
-                builder.addVertex(mat, x22, y22, z22).setColor(r, g, b, 1F);
-                builder.addVertex(mat, x21, y21, z21).setColor(r, g, b, 1F);
+                builder.addVertex(mat, x11, y1 * width1, z11).setColor(r, g, b, 1F);
+                builder.addVertex(mat, x12, y2 * width1, z12).setColor(r, g, b, 1F);
+                builder.addVertex(mat, x22, y2 * width2, z22).setColor(r, g, b, 1F);
+
+                builder.addVertex(mat, x11, y1 * width1, z11).setColor(r, g, b, 1F);
+                builder.addVertex(mat, x22, y2 * width2, z22).setColor(r, g, b, 1F);
+                builder.addVertex(mat, x21, y1 * width2, z21).setColor(r, g, b, 1F);
             }
         }
 

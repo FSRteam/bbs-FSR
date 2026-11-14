@@ -56,6 +56,10 @@ final class ChainSolver
      */
     private static final int MAX_TICK_CATCHUP = 4;
 
+    private static final int SETTLE_MAX_SUBSTEPS = 180;
+    private static final float SETTLE_EPS = 1.0e-4F;
+    private static final float SETTLE_DAMPING = 0.5F;
+
     private ChainSolver()
     {
     }
@@ -218,17 +222,10 @@ final class ChainSolver
             return;
         }
 
-        if (state.lastAge == Integer.MIN_VALUE)
-        {
-            seedFromPose(state, chainFrames, lengths, newAnchor, newAnchorRotation);
-            state.lastAge = age;
-            state.renderAlpha = 0F;
-            return;
-        }
+        boolean firstSight = state.lastAge == Integer.MIN_VALUE;
+        int delta = firstSight ? 0 : age - state.lastAge;
 
-        int delta = age - state.lastAge;
-
-        if (delta == 0)
+        if (!firstSight && delta == 0)
         {
             /* Same film tick, a later render within it — no new simulation; the render just interpolates
              * the two latest tick states by the sub-tick transition (and re-roots them to the live anchor). */
@@ -236,19 +233,16 @@ final class ChainSolver
             return;
         }
 
-        if (delta < 0 || delta > MAX_TICK_CATCHUP)
+        /* Scrubs and first sight seed the current pose, then settle on this tick before rendering. */
+        boolean settle = firstSight || delta < 0 || delta > MAX_TICK_CATCHUP;
+
+        if (settle)
         {
-            /* Scrubbed backwards or jumped a long way: without the intermediate poses the sim can't be
-             * replayed here, so re-seed at the current animated pose. Deterministic re-simulation from a
-             * window is the runtime's job. */
             seedFromPose(state, chainFrames, lengths, newAnchor, newAnchorRotation);
-            state.lastAge = age;
-            state.renderAlpha = clamp01(transition);
-            return;
         }
 
         float gravity = BASE_GRAVITY * gravityMul;
-        float damping = clamp01(dampingValue);
+        float damping = settle ? Math.max(clamp01(dampingValue), SETTLE_DAMPING) : clamp01(dampingValue);
         int iterations = chain.iterations();
         boolean collisions = chain.collisions() && world != null && chain.radius() > 0F;
         float radius = chain.radius();
@@ -260,9 +254,9 @@ final class ChainSolver
          * every playback and in export), not on the render frame rate. A skipped tick (frame hitch)
          * advances several ticks at once, capped. The sub-tick transition interpolates the two latest
          * tick states in renderInterpolate. */
-        int steps = delta * SUBSTEPS_PER_TICK;
+        int steps = settle ? SETTLE_MAX_SUBSTEPS : delta * SUBSTEPS_PER_TICK;
 
-        if (steps > PHYSICS_MAX_STEPS)
+        if (!settle && steps > PHYSICS_MAX_STEPS)
         {
             steps = PHYSICS_MAX_STEPS;
         }
@@ -288,7 +282,7 @@ final class ChainSolver
         float windMagnitude = PhysicsForces.prepareWind(wind, BASE_GRAVITY, windDir);
         boolean hasWind = windMagnitude > 0F;
         Vector3f windVec = hasWind ? state.windForce : null;
-        int startAge = state.lastAge;
+        int startAge = settle ? age : state.lastAge;
 
         /* Per-point spring-back fraction toward the animated pose for one sub-step, falling off toward the
          * floppier tip. Applied as an angular pull in solveSpring, not a positional one. */
@@ -319,7 +313,7 @@ final class ChainSolver
             /* Slide the anchor from where the simulation left it toward the live anchor across the
              * sub-steps of this frame, so the chain sees a smooth anchor trajectory. */
             float progress = (s + 1) / (float) steps;
-            float filmTime = startAge + (s + 1) * h;
+            float filmTime = settle ? age : startAge + (s + 1) * h;
             stepAnchor.set(startAnchor).lerp(newAnchor, progress);
             stepAnchorRotation.set(startAnchorRotation).slerp(newAnchorRotation, progress);
 
@@ -407,10 +401,34 @@ final class ChainSolver
                 lengthForward(state.pos, lengths, state.lengthDirection);
                 pinEnds(state.pos, state.anchor, targetPosition, last);
             }
+
+            if (settle && stopped(state.pos, state.prev))
+            {
+                break;
+            }
         }
 
         snapshotLocal(state.pos, state.anchor, state.anchorRotation, state.settledLocal, state);
+
+        if (settle)
+        {
+            copyPositions(state.settledLocal, state.settledPrevLocal);
+        }
+
         state.lastAge = age;
+    }
+
+    private static boolean stopped(Vector3f[] pos, Vector3f[] prev)
+    {
+        for (int i = 1; i < pos.length; i++)
+        {
+            if (pos[i].distanceSquared(prev[i]) > SETTLE_EPS * SETTLE_EPS)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

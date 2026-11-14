@@ -1,15 +1,13 @@
 package mchorse.bbs_mod.cubic.constraints;
 
-import mchorse.bbs_mod.bobj.BOBJBone;
+import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.cubic.RigBone;
 import mchorse.bbs_mod.cubic.ModelInstance;
-import mchorse.bbs_mod.cubic.data.model.Model;
-import mchorse.bbs_mod.cubic.data.model.ModelGroup;
-import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.utils.FormBone;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.joml.Matrices;
 import org.joml.Vector3f;
 
 import java.util.Collections;
@@ -18,6 +16,13 @@ import java.util.Map;
 
 public final class ModelConstraintsRuntime
 {
+    private static ModelInstance lastInstance;
+    private static ModelForm lastForm;
+    private static long lastEpoch;
+    private static long lastRevision;
+    private static long lastPoseVersion;
+    private static Map<String, BoneConstraint> lastBones;
+
     private ModelConstraintsRuntime()
     {
     }
@@ -36,24 +41,15 @@ public final class ModelConstraintsRuntime
             return;
         }
 
-        if (instance.model instanceof Model model)
-        {
-            applyToModel(model, bones);
-        }
-        else if (instance.model instanceof BOBJModel bobj)
-        {
-            applyToBobj(bobj, bones);
-        }
+        applyToBones(instance.model, bones);
     }
 
     /**
      * The form's active constraints by bone name, read from the bone properties themselves.
      *
-     * <p>Read, not cached: the values are live — a track's runtime override on a bone's constraint
-     * is already what {@code get()} returns — so there is nothing to invalidate and no window in
-     * which the editor shows one limit while the solver applies another. That is also why the
-     * caches this class used to keep for the parsed {@code constraints} blob are gone rather than
-     * rewritten: the blob no longer exists.</p>
+     * <p>A one-slot frame memo shares the walk between physics and the constraints stage.
+     * The existing bone revision and form pose version also invalidate same-frame edits and
+     * track applications; no parsed exchange blob or cross-frame solver state is retained.</p>
      */
     public static Map<String, BoneConstraint> getBones(ModelInstance instance)
     {
@@ -62,6 +58,30 @@ public final class ModelConstraintsRuntime
             return Collections.emptyMap();
         }
 
+        long poseVersion = form.getPoseVersion();
+        long revision = form.bones.getRevision();
+        long epoch = RenderFrame.getEpoch();
+
+        if (RenderFrame.isEnabled() && lastInstance == instance && lastForm == form && lastEpoch == epoch
+            && lastRevision == revision && lastPoseVersion == poseVersion)
+        {
+            return lastBones;
+        }
+
+        Map<String, BoneConstraint> bones = collectBones(form);
+
+        lastInstance = instance;
+        lastForm = form;
+        lastEpoch = epoch;
+        lastRevision = revision;
+        lastPoseVersion = poseVersion;
+        lastBones = bones;
+
+        return bones;
+    }
+
+    private static Map<String, BoneConstraint> collectBones(ModelForm form)
+    {
         Map<String, BoneConstraint> bones = null;
 
         for (BaseValue value : form.bones.getAll())
@@ -94,52 +114,27 @@ public final class ModelConstraintsRuntime
      * null {@code orient}, visually destroying the solve on a constrained chain bone). Works on
      * quaternion-mode bones too — the clamp reads the evaluated rotation, never a stale euler.
      */
-    private static void applyToModel(Model model, Map<String, BoneConstraint> bones)
+    private static void applyToBones(IModel model, Map<String, BoneConstraint> bones)
     {
-        for (ModelGroup group : model.getAllGroups())
-        {
-            if (group == null)
-            {
-                continue;
-            }
-
-            BoneConstraint c = bones.get(group.id);
-
-            if (c == null || !c.isActive())
-            {
-                continue;
-            }
-
-            Vector3f euler = Matrices.toCompatibleEulerZYXDegrees(group.evaluatedRotation(), group.current.rotate, new Vector3f());
-
-            clamp(euler, c, 1F);
-
-            group.orient = Matrices.toLocalRotationZYXDegrees(euler);
-        }
-    }
-
-    /** See {@link #applyToModel}; BOBJ channels are radians, the constraint limits are degrees. */
-    private static void applyToBobj(BOBJModel model, Map<String, BoneConstraint> bones)
-    {
-        for (BOBJBone bone : model.getArmature().orderedBones)
+        for (RigBone bone : model.getRigBones())
         {
             if (bone == null)
             {
                 continue;
             }
 
-            BoneConstraint c = bones.get(bone.name);
+            BoneConstraint c = bones.get(bone.getBoneName());
 
             if (c == null || !c.isActive())
             {
                 continue;
             }
 
-            Vector3f euler = Matrices.toCompatibleEulerZYXRadians(bone.evaluatedRotation(), bone.transform.rotate, new Vector3f());
+            Vector3f euler = bone.toCompatibleEuler(new Vector3f());
 
-            clamp(euler, c, MathUtils.PI / 180F);
+            clamp(euler, c, bone.fromDegrees());
 
-            bone.orient = Matrices.toLocalRotationZYXRadians(euler);
+            bone.setOrient(bone.orientFromEuler(euler));
         }
     }
 

@@ -107,7 +107,10 @@ public class InputRenderer
             return;
         }
 
-        this.renderMouse(menu.context.batcher, mouseX, mouseY);
+        if (!menu.isPointerHidden())
+        {
+            this.renderMouse(menu.context.batcher, mouseX, mouseY);
+        }
 
         if (BBSSettings.enableKeystrokeRendering.get())
         {

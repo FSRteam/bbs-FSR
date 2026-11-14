@@ -20,6 +20,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIStrip;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.Direction;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -82,6 +83,7 @@ public class UIFramesPanel extends UIElement
 
         this.onion = new UIIcon(Icons.ONION_SKIN, (b) -> this.toggleOnionSkin());
         this.onion.tooltip(UIKeys.TEXTURES_FRAMES_ONION);
+        this.onion.highlight(() -> this.onionSkin, Direction.BOTTOM);
 
         UIStrip bar = new UIStrip(BAR_HEIGHT);
 
@@ -519,9 +521,6 @@ public class UIFramesPanel extends UIElement
 
             this.counter.label = IKey.raw((this.shown() + 1) + "/" + animation.frames.size());
         }
-
-        /* FSR's icon has an active backdrop instead of upstream's edge highlight */
-        this.onion.active(this.onionSkin);
 
         super.render(context);
     }

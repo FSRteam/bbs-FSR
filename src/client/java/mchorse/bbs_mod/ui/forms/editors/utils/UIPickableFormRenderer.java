@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
@@ -25,6 +26,7 @@ import mchorse.bbs_mod.ui.utils.GizmoInteraction;
 import mchorse.bbs_mod.ui.utils.GizmoViewport;
 
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
+import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -218,7 +220,12 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
         if (this.renderForm == null || this.renderForm.get())
         {
-            FormUtilsClient.render(this.form, formContext);
+            /* Draw deferred translucent geometry before the preview camera is restored. */
+            try (FormTranslucentQueue.PreviewScope preview = FormTranslucentQueue.openPreview())
+            {
+                FormUtilsClient.render(this.form, formContext);
+                preview.flush();
+            }
 
             if (this.form.hitbox.get())
             {
@@ -239,6 +246,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
             GlStateManager._disableScissorTest();
 
+            int[] previousViewport = UIUtils.currentViewport();
             boolean applied = false;
 
             try
@@ -287,7 +295,9 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
                     this.stencil.unbind(this.stencilMap);
                 }
 
-                Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+                /* Film rendering can replace the main target with a video-sized one. */
+                Minecraft.getInstance().getMainRenderTarget().bindWrite(false);
+                UIUtils.restoreViewport(previousViewport);
 
                 GlStateManager._enableScissorTest();
             }

@@ -33,8 +33,8 @@ public final class PoseFormRegressionSourceTest
     private static final String STATE_EDITOR = "src/client/java/mchorse/bbs_mod/ui/forms/editors/states/keyframes/UIAnimationStateEditor.java";
     private static final String FILM_EDITOR = "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplaysEditorUtils.java";
     private static final String GIZMO = "src/client/java/mchorse/bbs_mod/ui/utils/Gizmo.java";
-    private static final String TRANSFORM_SPACE = "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/drag/TransformSpace.java";
     private static final String FILM_CONTROLLER = "src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java";
+    private static final String FILM_PICKER = "src/client/java/mchorse/bbs_mod/ui/film/controller/FilmStencilPicker.java";
     private static final String FILM_BASE = "src/client/java/mchorse/bbs_mod/film/BaseFilmController.java";
     private static final String FILM_ENTITY_RENDERER = "src/client/java/mchorse/bbs_mod/film/FilmEntityRenderer.java";
     private static final String FILM_MATRICES = "src/client/java/mchorse/bbs_mod/film/FilmMatrices.java";
@@ -63,13 +63,15 @@ public final class PoseFormRegressionSourceTest
         String form = read(root.resolve(FORM));
         String transform = read(root.resolve(TRANSFORM));
         String formProperties = read(root.resolve(FORM_PROPERTIES));
+        String glintTrack = read(root.resolve("src/main/java/mchorse/bbs_mod/film/replays/tracks/behaviours/GlintTrack.java"));
         String formEditor = read(root.resolve(FORM_EDITOR));
         String mobFormEditor = read(root.resolve(MOB_FORM_EDITOR));
         String stateEditor = read(root.resolve(STATE_EDITOR));
         String filmEditor = read(root.resolve(FILM_EDITOR));
+        String trackCatalog = read(root.resolve("src/client/java/mchorse/bbs_mod/film/replays/tracks/TrackCatalog.java"));
         String gizmo = read(root.resolve(GIZMO));
-        String transformSpace = read(root.resolve(TRANSFORM_SPACE));
         String filmController = read(root.resolve(FILM_CONTROLLER));
+        String filmPicker = read(root.resolve(FILM_PICKER));
         String filmBase = read(root.resolve(FILM_BASE));
         String filmEntityRenderer = read(root.resolve(FILM_ENTITY_RENDERER));
         String filmMatrices = read(root.resolve(FILM_MATRICES));
@@ -77,8 +79,8 @@ public final class PoseFormRegressionSourceTest
         String uiScreen = read(root.resolve(UI_SCREEN));
         String formRenderer = read(root.resolve(FORM_RENDERER));
 
-        gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmEntityRenderer);
-        viewSpaceGizmoFacesCamera(gizmo, gizmoDrag, transformSpace);
+        gizmoPlacementIsIndependentOfCursorPosition(gizmo, filmController, filmPicker, filmEntityRenderer);
+        viewSpaceGizmoFacesCamera(gizmo);
         hiddenAxesStillRefreshGizmoPlacement(formRenderer);
         filmBoneConsumersShareOnePlacementSample(filmMatrices, filmEditor);
         proceduralPanelGizmoKeepsPoseSelection(editor, poseFormEditor, modelFormEditor);
@@ -88,7 +90,7 @@ public final class PoseFormRegressionSourceTest
         pausedPreviewsKeepInterpolating(uiScreen);
         mirrorEditingUsesSelectionDeltas(editor, transform);
         filmPoseEditingUsesSelectionDeltas(poseKeyframe);
-        glintUsesDedicatedKeyframeTrack(editor, poseKeyframe, glintKeyframe, generalFormPanel, form, formProperties, filmEditor, stateEditor);
+        glintUsesDedicatedKeyframeTrack(editor, poseKeyframe, glintKeyframe, generalFormPanel, form, formProperties, glintTrack, trackCatalog, stateEditor);
         deferredLayersCapturePreparation(provider, queue);
         matrixSamplingPreservesFeaturePreparation(renderer);
         translationSamplingUsesLivePose(gizmoDrag, translateDrag);
@@ -133,7 +135,7 @@ public final class PoseFormRegressionSourceTest
             "public String getTransformBone()"
         );
 
-        check(overrideSetter.contains("this.transform.setTransform(this.pose.get(target))"),
+        check(overrideSetter.contains("this.transform.setTransform(this.pose.getOrCreate(target))"),
             "the procedural-panel Gizmo no longer binds its transform to the panel-owned bone");
         check(!overrideSetter.contains("groups.list.setCurrent")
                 && !overrideSetter.contains("groups.list.setCurrentScroll")
@@ -201,7 +203,12 @@ public final class PoseFormRegressionSourceTest
      * pass alone, otherwise a MobForm whose equipment layers make the two passes disagree drags
      * against a bone frame at the wrong depth.
      */
-    private static void gizmoPlacementIsIndependentOfCursorPosition(String gizmo, String filmController, String filmEntityRenderer)
+    private static void gizmoPlacementIsIndependentOfCursorPosition(
+        String gizmo,
+        String filmController,
+        String filmPicker,
+        String filmEntityRenderer
+    )
     {
         check(filmEntityRenderer.contains("renderPreviewAxes(context.bone2, context.local2, form, formContext, stack, gizmoFrame)"),
             "the replay axes preview draws through renderAxes, so it snapshots gizmo placement over "
@@ -220,20 +227,24 @@ public final class PoseFormRegressionSourceTest
         check(section(gizmo, "public void captureVisual(PoseStack stack)", "public void renderInterface")
                 .contains("this.captureRenderMatrix(stack)"),
             "the gizmo visual pass no longer captures placement, leaving nothing to drag against");
-        String filmStencil = section(filmController, "private boolean renderStencil(", "private void ensureStencilFramebuffer()");
+        String filmStencil = section(filmPicker, "boolean renderStencil(", "void ensureStencilFramebuffer()");
+
+        check(filmController.contains("return this.picker.renderStencil(renderContext, context, altPressed);")
+                && filmController.contains("this.picker.renderPickingPreview(context, area);"),
+            "the per-view Film controller no longer routes picking through its stencil owner");
 
         assertOrdered(filmStencil,
-            "Area viewport = this.getViewArea();",
-            "if (!viewport.isInside(mouseX, mouseY) || this.isControlling())",
+            "Area viewport = this.controller.getViewArea();",
+            "if (!viewport.isInside(mouseX, mouseY) || this.controller.isControlling())",
             "this.stencil.clearPicking();",
             "return false;",
             "this.stencil.apply();");
 
-        String pickingPreview = section(filmController, "private void renderPickingPreview(", "public void startRenderFrame(");
+        String pickingPreview = section(filmPicker, "void renderPickingPreview(", "void updateViewStencil(");
 
         assertOrdered(pickingPreview,
-            "!this.isViewActive()",
-            "!this.preview.isInsideFrame(context)",
+            "!this.controller.isViewActive()",
+            "!this.controller.preview.isInsideFrame(context)",
             "return;",
             "this.updateViewStencil(context, altPressed);");
 
@@ -280,11 +291,12 @@ public final class PoseFormRegressionSourceTest
         check(!section(filmMatrices, "public static Vector3f getGizmoBoneRotationOffset", "private static Matrix4f absoluteSemanticMatrix")
                 .contains("collectMatrices(entity, transition)"),
             "the film bone rotation offset samples through the ownerless collectMatrices overload again");
-        check(filmEditor.contains("sampleFilmBoneRotationOffset(panel, camera, entity, replay, transition, bone.a)"),
-            "the film gizmo drag samples the bone rotation offset outside the shared placement path");
-        check(section(filmEditor, "private static Vector3f sampleFilmBoneRotationOffset", "private static void buildAnchorGizmoDrag")
+        check(filmEditor.contains("sampleFilmBoneEvaluatedRotation(panel, camera, entity, replay, transition, bonePath)")
+                && filmEditor.contains("FormUtils.additivePoseRotationBase(valuePose, StringUtils.fileName(bonePath), evaluated)"),
+            "the film gizmo drag samples its additive rotation outside the shared placement path");
+        check(section(filmEditor, "private static Vector3f sampleFilmBoneEvaluatedRotation", "private static void buildAnchorGizmoDrag")
                 .contains("applyReplayProperties(panel, entity, replay, transition)"),
-            "the film bone rotation offset samples without the replay's animated properties applied");
+            "the film bone rotation samples without the replay's animated properties applied");
     }
 
     /**
@@ -319,7 +331,7 @@ public final class PoseFormRegressionSourceTest
      */
     private static void disabledReplayHidesGizmo(String filmController)
     {
-        String canShow = section(filmController, "private boolean canShowGizmo()", "private boolean renderStencil(");
+        String canShow = section(filmController, "boolean canShowGizmo()", "private boolean renderStencil(");
 
         check(canShow.contains("(replay == null || replay.enabled.get())"),
             "a disabled replay no longer hides the gizmo, so it lingers on a stale matrix");
@@ -412,6 +424,7 @@ public final class PoseFormRegressionSourceTest
         String generalFormPanel,
         String form,
         String formProperties,
+        String glintTrack,
         String filmEditor,
         String stateEditor
     )
@@ -436,12 +449,15 @@ public final class PoseFormRegressionSourceTest
                 && glintKeyframe.contains("UIKeys.POSE_CONTEXT_GLINT_LAYER")
                 && glintKeyframe.contains("GlintControls"),
             "the dedicated enchantment-layer keyframe editor is missing");
-        check(formProperties.contains("for (KeyframeChannel value : glintChannels)")
-                && formProperties.contains("entry.getValue().apply(pose.get().get(entry.getKey()))"),
+        assertOrdered(formProperties,
+            "for (Map.Entry<TrackId, KeyframeChannel> entry : bones.entrySet())",
+            "for (Map.Entry<TrackId, KeyframeChannel> entry : glint.entrySet())");
+        check(formProperties.contains("FormControlKeys.isGlintControlChannel(entry.getKey().toKey())")
+                && glintTrack.contains("entry.getValue().apply(pose.get().getOrCreate(entry.getKey()))"),
             "the dedicated enchantment layer no longer overlays the evaluated pose");
-        check(filmEditor.contains("addGlintControlSheet(form, properties, sheets)"),
+        check(filmEditor.contains("TrackId.property(path, FormControlKeys.GLINT_CONTROLS)"),
             "the Film editor no longer contributes the enchantment-layer sheet");
-        check(stateEditor.contains("addGlintControlSheet(form, this.state.properties, orderedFormSheets)"),
+        check(stateEditor.contains("TrackCatalog.forPart("),
             "animation states no longer contribute the enchantment-layer sheet");
     }
 
@@ -476,7 +492,7 @@ public final class PoseFormRegressionSourceTest
             "ray translation no longer routes its basis through the shared degenerate-Jacobian fallback");
     }
 
-    private static void viewSpaceGizmoFacesCamera(String gizmo, String gizmoDrag, String transformSpace)
+    private static void viewSpaceGizmoFacesCamera(String gizmo)
     {
         String draw = compact(section(
             gizmo,
@@ -520,9 +536,6 @@ public final class PoseFormRegressionSourceTest
         assertOrdered(reorient,
             "this.lastSpace = cameraView == null ? null : space;",
             "if (space == null || space == TransformSpace.LOCAL || space == TransformSpace.PARENT || cameraView == null)");
-        check(transformSpace.contains("Handles are drawn facing the eye, while drag math keeps the camera basis."),
-            "TransformSpace no longer documents the VIEW draw/drag split");
-
         Matrix4f view = new Matrix4f().rotateXYZ(0.31F, -0.47F, 0.19F);
         GizmoDrag drag = new GizmoDrag();
 
@@ -534,9 +547,8 @@ public final class PoseFormRegressionSourceTest
             "VIEW drag basis changed with the drawing-only shear");
         check(GizmoDrag.stackBasisForSpace(TransformSpace.VIEW, view, null).equals(new Matrix3f(), 1.0E-6F),
             "VIEW placement basis is no longer the unsheared camera-frame identity");
-        check(gizmoDrag.contains("draw passes may shear that VIEW frame toward")
-                && gizmoDrag.contains("the eye, but this method and the drag basis remain orthonormal"),
-            "GizmoDrag no longer records that VIEW shear is drawing-only");
+        check(!TransformSpace.VIEW.placesOnOwnFrame(),
+            "VIEW placement incorrectly follows the edited bone's local frame");
     }
 
     private static void mobTranslationUsesStableModelPartBasis(
@@ -559,7 +571,7 @@ public final class PoseFormRegressionSourceTest
         check(formEditor.contains("modelPartTranslate"),
             "form gizmos no longer mark MobForm bone translation as model-pixel scaled");
         check(stateEditor.contains("poseBone") && stateEditor.contains("form instanceof MobForm")
-                && stateEditor.contains("computeModelPartTranslateJacobian(origin)")
+                && stateEditor.contains("computeModelPartTranslateJacobian(this.editor.renderer.toSceneMatrix(origin))")
                 && stateEditor.contains("modelPartTranslate"),
             "animation-state MobForm bone tracks no longer isolate translation from equipment rendering");
         check(filmEditor.contains("poseBone") && filmEditor.contains("editedForm instanceof MobForm")

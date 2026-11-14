@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+/** @deprecated Use {@link mchorse.bbs_mod.data.DataStorageUtils} byte helpers for new code. */
+@Deprecated
 public class DataBytesStorage extends DataStorage
 {
     protected byte[] input;

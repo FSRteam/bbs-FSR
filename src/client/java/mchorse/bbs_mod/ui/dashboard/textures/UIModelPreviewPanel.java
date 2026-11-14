@@ -6,6 +6,7 @@ import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.graphics.texture.AnimatedTexture;
 import mchorse.bbs_mod.graphics.texture.Texture;
+import mchorse.bbs_mod.graphics.texture.TextureManager;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
 import mchorse.bbs_mod.ui.dashboard.textures.data.TextureAnimation;
@@ -57,6 +58,12 @@ public class UIModelPreviewPanel extends UIElement
         this.form.model.set(model);
     }
 
+    /** The model on show, so the picker can open at it. */
+    public String getModel()
+    {
+        return this.form.model.get();
+    }
+
     @Override
     public void render(UIContext context)
     {
@@ -64,6 +71,7 @@ public class UIModelPreviewPanel extends UIElement
 
         UITextureEditor editor = this.painter.getCurrentEditor();
         Document document = editor == null ? null : editor.getDocument();
+        TextureManager textures = BBSModClient.getTextures();
 
         /* The model shows the frame the canvas shows — the editor's clock, not the game's: click
          * a frame and the model wears it; play, and the two run together */
@@ -73,7 +81,7 @@ public class UIModelPreviewPanel extends UIElement
 
         if (frame != null)
         {
-            BBSModClient.getTextures().textures.put(this.fakeLink, frame);
+            textures.textures.put(this.fakeLink, frame);
         }
         else
         {
@@ -83,11 +91,11 @@ public class UIModelPreviewPanel extends UIElement
 
             if (temporary != null)
             {
-                BBSModClient.getTextures().textures.put(this.fakeLink, temporary);
+                textures.textures.put(this.fakeLink, temporary);
             }
             else
             {
-                BBSModClient.getTextures().textures.remove(this.fakeLink);
+                textures.textures.remove(this.fakeLink);
             }
         }
 

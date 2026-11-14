@@ -10,6 +10,9 @@ import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITimelinePanel;
+import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIAnchorKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
@@ -31,10 +34,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-public class UIKeyframeEditor extends UIElement
+public class UIKeyframeEditor extends UITimelinePanel
 {
     public static final int[] COLORS = {Colors.RED, Colors.GREEN, Colors.BLUE, Colors.CYAN, Colors.MAGENTA, Colors.YELLOW, Colors.LIGHTEST_GRAY & 0xffffff, Colors.DEEP_PINK};
-    private static final int EDIT_PANEL_TOP_OFFSET_PX = 20;
 
     private static final int DEFAULT_PROPERTIES_WIDTH = 140;
     private static final int MIN_PROPERTIES_WIDTH = 80;
@@ -45,13 +47,9 @@ public class UIKeyframeEditor extends UIElement
     public UIKeyframes view;
     public UIKeyframeFactory editor;
 
-    private UIElement target;
     private UIDraggable splitter;
     private int propertiesWidth = DEFAULT_PROPERTIES_WIDTH;
-    private Supplier<Integer> editPanelTopOffsetPx;
     private long editorGeneration;
-    private boolean timelineVisible = true;
-    private boolean propertiesVisible = true;
 
     public UIKeyframeEditor(Function<Consumer<Keyframe>, UIKeyframes> factory)
     {
@@ -73,25 +71,18 @@ public class UIKeyframeEditor extends UIElement
         this.add(this.splitter);
     }
 
-    /**
-     * The parameters panel is parented to {@link #target}, not to this editor, so nothing would take
-     * it down when this editor is dropped &mdash; it would stay in the edit area, clickable, and the
-     * next editor would stack its own panel on top of it.
-     */
     @Override
     public void removeFromParent()
     {
+        /* A queued replacement may still be waiting for the current input dispatch to finish. */
+        this.editorGeneration++;
         super.removeFromParent();
-
-        if (this.editor != null)
-        {
-            this.editor.removeFromParent();
-        }
     }
 
     public UIKeyframeEditor target(UIElement target)
     {
-        this.target = target;
+        this.setTarget(target);
+        this.setEmptyState(this::getEmptyLabel);
 
         this.view.resetFlex().full(this).w(1F);
         this.updateSplitterState();
@@ -99,23 +90,38 @@ public class UIKeyframeEditor extends UIElement
         return this;
     }
 
+    /** Compatibility adapter: the dock slot now reserves the drag strip above this target. */
     public UIKeyframeEditor editPanelTopOffset(Supplier<Integer> supplier)
     {
-        this.editPanelTopOffsetPx = supplier;
-
         return this;
     }
 
-    private int getEditPanelTopOffsetPx()
+    @Override
+    protected UIElement getPropertiesPanel()
     {
-        return this.editPanelTopOffsetPx == null ? EDIT_PANEL_TOP_OFFSET_PX : this.editPanelTopOffsetPx.get();
+        return this.editor;
+    }
+
+    @Override
+    protected UIElement getTimeline()
+    {
+        return this.view;
+    }
+
+    private IKey getEmptyLabel()
+    {
+        for (UIKeyframeSheet sheet : this.view.getGraph().getSheets())
+        {
+            if (!sheet.channel.isEmpty()) return UIKeys.KEYFRAMES_EMPTY_PICK;
+        }
+        return UIKeys.KEYFRAMES_EMPTY_ADD;
     }
 
     private void pickKeyframe(Keyframe keyframe)
     {
         UIKeyframeFactory previous = this.editor;
 
-        if (previous != null && previous.getParent() == this)
+        if (previous != null)
         {
             UIKeyframeFactory.saveScroll(previous);
         }
@@ -136,9 +142,7 @@ public class UIKeyframeEditor extends UIElement
 
             if (replacement != null && this.target != null)
             {
-                int top = this.getEditPanelTopOffsetPx();
-
-                replacement.relative(this.target).x(0).y(0, top).w(1F).h(1F, -top);
+                replacement.relative(this.target).x(0).y(0).w(1F).h(1F);
             }
             else if (replacement != null)
             {
@@ -161,9 +165,9 @@ public class UIKeyframeEditor extends UIElement
     {
         Runnable mutation = () ->
         {
-            if (previous != null && previous.getParent() == this)
+            if (previous != null)
             {
-                this.remove(previous);
+                previous.removeFromParent();
             }
 
             if (generation != this.editorGeneration || this.editor != replacement)
@@ -179,9 +183,9 @@ public class UIKeyframeEditor extends UIElement
                 }
             }
 
-            if (replacement != null && replacement.getParent() != this)
+            if (replacement != null && replacement.getParent() != (this.target == null ? this : this.target))
             {
-                this.add(replacement);
+                this.attachPropertiesPanel(replacement, this.propertiesWidth);
                 this.moveToFront(this.splitter);
             }
 
@@ -192,6 +196,7 @@ public class UIKeyframeEditor extends UIElement
                 if (this.target != null)
                 {
                     this.target.resize();
+                    replacement.resize();
                 }
             }
 
@@ -221,21 +226,12 @@ public class UIKeyframeEditor extends UIElement
         }
     }
 
-    public void setTimelineVisible(boolean visible)
-    {
-        this.timelineVisible = visible;
-        this.view.setVisible(visible);
-    }
 
+
+    @Override
     public void setPropertiesVisible(boolean visible)
     {
-        this.propertiesVisible = visible;
-
-        if (this.editor != null)
-        {
-            this.editor.setVisible(visible);
-        }
-
+        super.setPropertiesVisible(visible);
         this.updateSplitterState();
     }
 
@@ -296,9 +292,7 @@ public class UIKeyframeEditor extends UIElement
     {
         if (this.editor != null && this.target != null)
         {
-            int top = this.getEditPanelTopOffsetPx();
-
-            this.editor.relative(this.target).x(0).y(0, top).w(1F).h(1F, -top);
+            this.editor.relative(this.target).x(0).y(0).w(1F).h(1F);
             this.target.resize();
             this.resize();
         }
@@ -307,7 +301,7 @@ public class UIKeyframeEditor extends UIElement
     public void setChannel(KeyframeChannel channel, int color)
     {
         this.view.removeAllSheets();
-        this.view.addSheet(new UIKeyframeSheet(color, false, channel, null));
+        this.view.addSheet(new UIKeyframeSheet(color, channel, null));
 
         this.pickKeyframe(null);
     }
@@ -320,7 +314,7 @@ public class UIKeyframeEditor extends UIElement
         {
             KeyframeChannel channel = clip.channels[i];
 
-            this.view.addSheet(new UIKeyframeSheet(COLORS[i], false, channel, null));
+            this.view.addSheet(new UIKeyframeSheet(COLORS[i], channel, null));
         }
 
         this.pickKeyframe(null);
@@ -449,16 +443,33 @@ public class UIKeyframeEditor extends UIElement
         return TransformSpace.LOCAL;
     }
 
-    /**
-     * Whether the active editor is the form's "anchor" property track — the one
-     * that re-parents the whole form to another replay's attachment and carries
-     * a {@link mchorse.bbs_mod.utils.pose.Transform} offset the gizmo can edit.
-     * The IK/pole/physics target tracks reuse the {@code Anchor} value type but
-     * are created without a backing property, so the {@code property != null}
-     * test excludes them; the {@code "anchor"} id keeps it to the root form's
-     * track, whose placement {@link mchorse.bbs_mod.film.BaseFilmController}
-     * resolves from the entity's own {@code form.anchor}.
-     */
+    /** Pose tracks name the picked bone; other targets use the timeline title, including user renames. */
+    public String getTargetLabel()
+    {
+        if (this.editor instanceof UIPoseKeyframeFactory pose)
+        {
+            String bone = pose.poseEditor.groups.list.getCurrentFirst();
+
+            if (bone != null && !bone.isEmpty())
+            {
+                return bone;
+            }
+        }
+
+        UIKeyframeSheet sheet = this.editor == null ? null : this.getSheet(this.editor.getKeyframe());
+
+        return sheet == null || sheet.title == null ? null : sheet.title.get();
+    }
+
+    /** Preserve the complete reference frame for the anchor's gizmo and drag. */
+    public TransformSpace getAnchorSpace()
+    {
+        return this.editor instanceof UIAnchorKeyframeFactory anchor
+            ? anchor.transform.getSpace()
+            : TransformSpace.LOCAL;
+    }
+
+    /** Property-less IK/pole/physics targets share the Anchor value type but are not form anchors. */
     public boolean isFormAnchorTrack()
     {
         if (!(this.editor instanceof UIAnchorKeyframeFactory))

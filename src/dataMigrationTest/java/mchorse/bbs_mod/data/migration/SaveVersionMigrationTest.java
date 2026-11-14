@@ -50,6 +50,7 @@ public final class SaveVersionMigrationTest
         savingStampsTheDocumentOnDisk();
         theUnknownKeyframeFactorySpeaksUpOnBothEnds();
         FilmStableIdsMigrationTest.runAll();
+        StableIdsMigrationTest.runAll();
 
         System.out.println("SaveVersionMigrationTest: all tests passed");
     }

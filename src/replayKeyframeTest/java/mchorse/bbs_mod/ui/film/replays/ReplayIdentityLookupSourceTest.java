@@ -81,12 +81,14 @@ public final class ReplayIdentityLookupSourceTest
                 + "stable-id rewrite left it: something was inserted into, removed from, or reordered inside "
                 + "the deletion transaction (the index remapper belongs there again)");
 
-        check(replayList.contains(START_HANDLE_SWAP + END_HANDLE_SWAP),
-            "UIReplayList.handleSwap no longer swaps the two replays and closes the edit as the stable-id "
-                + "rewrite left it: something was inserted into, removed from, or reordered inside the swap "
-                + "transaction (the index remapper belongs there again)");
+        String reorder = section(replayList, "protectedvoidhandleSwap(intfrom,intto){", "privatevoidpasteToReplays(");
+        check(!reorder.contains("remapReplayReferences(") && !reorder.contains(".sync()") && !reorder.contains(".setId("),
+            "Replay reorder rewrites stable identities or positional references");
+        check(reorder.contains("film.preNotify(IValueListener.FLAG_UNMERGEABLE);")
+            && reorder.contains("film.postNotify(IValueListener.FLAG_UNMERGEABLE);"),
+            "Replay reorder no longer records a complete undo transaction");
 
-        check(occurrences(replayList, START_REMOVE_REPLAY) == 1 && occurrences(replayList, START_HANDLE_SWAP) == 1,
+        check(occurrences(replayList, START_REMOVE_REPLAY) == 1 && occurrences(replayList, "protectedvoidhandleSwap(intfrom,intto){") == 1,
             "UIReplayList declares removeReplay or handleSwap more than once, so the pins above may not "
                 + "describe the live implementation");
     }
@@ -121,30 +123,13 @@ public final class ReplayIdentityLookupSourceTest
         String curated = section(
             replayEditor,
             "privatevoidcollectCuratedSheets(",
-            "privatevoidcollectFormPropertySheets("
+            "privatevoidupdateCategoryButtons("
         );
-        String properties = section(
-            replayEditor,
-            "privatevoidcollectFormPropertySheets(",
-            "/**IKtracksliveintheirowncategory"
-        );
-        String ik = section(
-            replayEditor,
-            "privatevoidcollectIKSheets(List<UIKeyframeSheet>sheets){",
-            "/**Physicstracksliveintheirowncategory"
-        );
-        String physics = section(
-            replayEditor,
-            "privatevoidcollectPhysicsSheets(List<UIKeyframeSheet>sheets){",
-            "/**ShowtheIKtab"
-        );
-        String flush = section(
-            replayEditor,
-            "privatevoidflushForm(",
-            "privatevoidsavePoseTabState("
-        );
+        String catalog = compact(read(project.resolve(
+            "src/client/java/mchorse/bbs_mod/film/replays/tracks/TrackCatalog.java"
+        )));
 
-        for (String collector : List.of(curated, properties, ik, physics, flush))
+        for (String collector : List.of(curated, catalog))
         {
             check(!collector.contains("showAllTracks()") && !collector.contains("this.category"),
                 "a replay track collector filters by category before the all-tracks view can see it");
@@ -158,9 +143,8 @@ public final class ReplayIdentityLookupSourceTest
 
         assertOrdered(update,
             "this.collectCuratedSheets(sheets)",
-            "this.collectFormPropertySheets(sheets,poseTabs,poseTabDepths)",
-            "this.collectIKSheets(sheets)",
-            "this.collectPhysicsSheets(sheets)",
+            "TrackCatalog.forPart(this.replay.form.get(),this.replay.properties,this.selectedPart)",
+            "UIReplaysEditorUtils.buildSheets(catalog,sheets)",
             "sheets.removeIf",
             "shouldShowTrack(v,this.category,this.showAllTracks())");
         check(replayEditor.contains("returnallTracks||categoryOf(sheet)==category;"),

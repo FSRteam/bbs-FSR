@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.forms.forms.BlockForm;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.forms.editors.panels.widgets.UIBlockStateEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
@@ -16,7 +17,7 @@ public class UIBlockFormPanel extends UIFormPanel<BlockForm>
     {
         super(editor);
 
-        this.color = new UIColor((c) -> this.form.color.set(Color.rgba(c))).withAlpha();
+        this.color = UIValues.color(() -> this.form.color).withAlpha();
         this.stateEditor = new UIBlockStateEditor((blockState) -> this.form.blockState.set(blockState));
 
         this.options.add(this.color, this.stateEditor);

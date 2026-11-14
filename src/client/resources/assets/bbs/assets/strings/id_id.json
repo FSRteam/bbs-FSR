@@ -65,7 +65,7 @@
     "bbs.config.timeline.seconds-comment": "Jika diaktifkan, opsi ini akan menggunakan detik, bukan tick, untuk menampilkan dan mengedit di editor kamera",
     "bbs.config.editor.title": "Editor kamera",
     "bbs.config.editor.tooltip": "Opsi konfigurasi yang digunakan dalam editor kamera",
-    "bbs.config.misc.multiskin_multithreaded": "Pemrosesan multi-threaded",
+    "bbs.config.misc.multiskin_multithreaded": "Multi-skin: Pemrosesan multi-threaded",
     "bbs.config.misc.multiskin_multithreaded-comment": "Memungkinkan Anda untuk mengaktifkan pemrosesan multi-threaded dari multi-skin, yang harus memperbaiki lag dengan biaya pemrosesan yang lebih lama",
     "bbs.config.multiskin.title": "Multi-skin",
     "bbs.config.multiskin.tooltip": "Opsi terkait fitur Multi-skin",
@@ -73,7 +73,7 @@
     "bbs.config.recording.countdown-comment": "Hitung mundur perekaman (dalam detik)",
     "bbs.config.recording.title": "Perekaman",
     "bbs.config.recording.tooltip": "Semua yang terkait dengan sistem perekaman pemain",
-    "bbs.config.misc.damage_control": "Diaktifkan",
+    "bbs.config.misc.damage_control": "Kontrol kerusakan",
     "bbs.config.misc.damage_control-comment": "Apakah kontrol kerusakan diaktifkan",
     "bbs.config.dc.title": "Kontrol kerusakan",
     "bbs.config.dc.tooltip": "Opsi terkait kontrol kerusakan",
@@ -828,7 +828,7 @@
     "studio.ui.utility.resize": "Ubah ukuran jendela",
     "studio.ui.utility.title": "Panel utilitas",
     "bbs.config.personalization.title": "Personalization",
-    "bbs.config.personalization.tooltip": "Theme, colors and editor appearance settings",
+    "bbs.config.personalization.tooltip": "Colors and editor appearance settings",
     "bbs.config.personalization.theme": "Gaya tooltip",
     "bbs.config.personalization.theme-comment": "Opsi ini memungkinkan untuk mengubah gaya tooltip GUI",
     "bbs.config.personalization.primary_color": "Warna utama",
@@ -850,5 +850,7 @@
     "bbs.config.workspace.title": "Ruang kerja",
     "bbs.config.workspace.tooltip": "Tata letak editor dan perilaku penyimpanan",
     "bbs.config.misc.title": "Lainnya",
-    "bbs.config.misc.tooltip": "Sakelar fitur tambahan"
+    "bbs.config.misc.tooltip": "Sakelar fitur tambahan",
+	"bbs.config.personalization.secondary_color": "Secondary color",
+	"bbs.config.personalization.secondary_color-comment": "The color of the interface's background surfaces — panels, editors and everything behind them. Every shade of the interface is derived from it."
 }

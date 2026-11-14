@@ -118,4 +118,10 @@ public class ValueOrder extends BaseValueBasic<List<String>>
 
         this.value = order;
     }
+
+    @Override
+    protected List<String> copyValue(List<String> value)
+    {
+        return value == null ? null : new ArrayList<>(value);
+    }
 }

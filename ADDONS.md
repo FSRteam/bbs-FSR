@@ -3,12 +3,13 @@
 FSR (the NeoForge 1.21.1 branch) keeps the addon API 2.0 that this repository has always had,
 and adds the contract gate described below. The recipes live in
 [`docs/addon-api-2.md`](docs/addon-api-2.md) — start there. This file is the short version: what
-is a contract, how to refuse to load on the wrong BBS, and what is not ported yet.
+is a contract, how to refuse to load on the wrong BBS, and where extensions run.
 
 ## What is and isn't a contract
 
-`mchorse.bbs_mod.api` and its sub-packages are a contract. A signature in there does not change
-without `BBSApi.VERSION` changing with it.
+`mchorse.bbs_mod.api` and its sub-packages are a contract. Stable signatures do not change
+without `BBSApi.VERSION` changing with them. An API marked `@Experimental` may change without
+a version bump; check its documentation before depending on it.
 
 Everything outside that package is BBS's own business and moves without notice. An addon
 reaching into it is on its own, and the breakage shows up in the game rather than on the build.
@@ -63,7 +64,7 @@ overrides what it actually changes.
 
 ## Subscribing to events
 
-Alongside the callbacks above, BBS has an event channel for addons, taken from FS 2.6 verbatim.
+Alongside the callbacks above, BBS has the FS 2.6 event family for addons.
 An addon hands over an object whose `@Subscribe` methods take exactly one event parameter, and
 BBS keeps it:
 
@@ -77,6 +78,19 @@ public final class MyAddon implements BBSAddonMod
     }
 }
 ```
+
+On NeoForge, register this marker subscriber from the addon's mod constructor or bootstrap,
+before BBS common setup:
+
+```java
+EventBus.INSTANCE.register(new MyAddon());
+```
+
+Register subscribers mentioning client events from a client-only bootstrap. FSR's API2
+`context.events().register(subscriber)` also registers the object on this channel, but that
+callback runs after the early source-pack, keyframe-factory, form and clip events have already
+been posted. Use constructor/bootstrap registration for those events. API2's resource, form and
+clip facades remain available in its registration callback.
 
 Two things are worth knowing about it:
 
@@ -92,44 +106,78 @@ class. The most specific declaration wins: an override replaces the method it ov
 override that drops `@Subscribe` unsubscribes it. A subscriber that throws is logged and the
 other subscribers still run.
 
-## Not ported yet
+## Registration and assets
 
-The registration events are in (`mchorse.bbs_mod.api.events` and
-`mchorse.bbs_mod.api.client.events`): the `Register*` family, plus `BBSReadyEvent` and
-`BBSClientReadyEvent`. Everything under `api` and its sub-packages is a contract, so those do not
-move without a version bump.
+Common initialization posts `RegisterSourcePacksEvent`, `RegisterKeyframeFactoriesEvent`,
+`RegisterFormsEvent`, `RegisterFormModifiersEvent`, both clip registration events, and
+`RegisterSettingsEvent` before `BBSReadyEvent`. Client initialization posts the client
+registration events before `BBSClientReadyEvent`. `RegisterDashboardPanelsEvent` is posted when
+a dashboard is constructed, so its panel instances belong to that dashboard.
 
-These are also in: `FilmEvents`, `StructureRenderEvents`, and the runtime events `FilmEditEvents`,
-`FormPoseEvents`, `TimelineEvents`, `FormPreviewEvents`, `FilmGizmoEvents`.
+```java
+@Subscribe
+public void onSources(RegisterSourcePacksEvent event)
+{
+    event.registerAddon("my_addon", MyAddon.class);
+}
 
-Still absent from FSR, and **absent rather than stubbed** — code importing them will not resolve:
+@Subscribe
+public void onSettings(RegisterSettingsEvent event)
+{
+    event.register(Icons.GEAR, "my_addon", builder ->
+    {
+        builder.category("general");
+        builder.getBoolean("enabled", true);
+    });
+}
+```
 
-- `RegisterFilmToolsEvent` — its signature names `FilmEditorTool`, which does not exist. Upstream's
-  tool extends an element and is handed a `FilmTarget` per actor; neither the tool nor the target
-  has been designed here yet, so writing the signature now would freeze a shape before there is
-  anything to shape it to. It lands with the editor-tool work, not before.
-- `FormPoseEvents.CLAIM_CHAIN` — deliberately undefined. Its signature hands a `FormBone` to each
-  listener, and FSR has no per-bone group on a model form: a bone's physics settings live in the
-  form's `physics` blob instead of in a bone. A chain claim is addressed *by bone*, so a stand-in
-  signature would be a fake contract that changes the day the bone model arrives. It lands with
-  `ValueBones`/`FormBone` (P1, upstream `4339b076a`), and B9·B1b preserves a file's `bones` data
-  in the meantime so nothing is lost while it waits.
+The source pack reads `assets/my_addon/assets` from the jar containing `MyAddon.class` and
+exposes its files under the `my_addon:` resource namespace. Register language files through
+`RegisterL10nEvent` before the first language load. `RegisterSettingsEvent` and
+`RegisterClientSettingsEvent` are siblings; subscribe to `BaseRegisterSettingsEvent` when one
+handler should handle both sides' settings events.
 
-Note that everything else listed as ported above is real: it compiles, and it is declared. Read
-that second word carefully for the runtime events named two paragraphs up — on `HEAD` all seven of
-them (`FilmEvents`, `FilmEditEvents`, `FilmGizmoEvents`, `FormPoseEvents`, `FormPreviewEvents`,
-`StructureRenderEvents`, `TimelineEvents`) compile and can be subscribed to, and **nothing
-dispatches them yet**: their `invoker()` call sites exist only in the in-flight `task-21` work (a
-`HEAD` count finds zero reachable dispatch points; the working tree has them). An addon that
-subscribes today is collected and never called — the same shape as the three registrations below,
-and the reason "it compiles" is not offered here as "it works". What is missing is named here one
-item at a time rather than dismissed by section, because an addon can
-afford to miss a feature and cannot afford to be told a class exists when it does not. An addon
-that registers into `RegisterFormPanelsEvent`, `RegisterPreviewOverlaysEvent` or
-`RegisterReplayActionsEvent` gets a factory it can read back from that event class
-(`getPanels()`/`getOverlays()`/`getActions()`); the wiring that turns those factories into panels
-and controls arrives with the editor work, and until it does the factories stay inert.
+## Editor extensions
 
-They are being ported batch by batch; see the migration task's `research/fs26-api-addon.md` for
-the inventory and order. Do not write against the two items above from an addon and expect them to
-appear.
+- `RegisterFormPanelsEvent`: create and register a fresh panel for each editor. Factories run
+  before the shared general/material panels and before a form is assigned; panels receive
+  `startEdit` and `finishEdit` normally.
+- `RegisterPreviewOverlaysEvent`: return a new UI element for each preview, including auxiliary
+  views. The element is attached to that preview and receives its layout and input lifecycle.
+- `RegisterReplayActionsEvent`: return an actor-properties control. Its replay supplier follows
+  the displayed selection and returns null when no actor is selected; resolve it when acting.
+- `RegisterFilmToolsEvent`: supply a `FilmEditorTool` for each scene-owning film controller.
+  Tool targeting uses `FilmTarget`, including stable replay identities and nested form paths.
+- `RegisterTrackCategoriesEvent`: register categories and their inclusion predicates during
+  startup. Registration finishes before keybind settings load, so category shortcuts are
+  configurable and restored from disk. Late registrations and duplicate ids are rejected.
+
+Form renderers and editors use superclass fallback. Clip panels use the actual runtime clip
+class. Keyframe editors can be registered by factory or by property; widgets and track styles
+are registered through their corresponding events before editors are opened.
+
+## Runtime hooks
+
+`FilmEvents` dispatches after scene creation, before and after entity ticks, after each scene
+render, and on controller shutdown. The render callback receives the current FSR
+`BBSWorldRenderContext`, with camera, pose stack, consumers, tick delta, matrices and per-pass
+frustum. Different viewports have different pass contexts; retain no frustum across renders.
+
+`FilmEditEvents` reports committed, undone and redone edit batches. `FormPoseEvents` participates
+in the pose/matrix pipeline, including typed `FormBone` chain ownership through `CLAIM_CHAIN`.
+`FormRenderEvents` surrounds real form draws; `FormPreviewEvents` runs after preview rendering.
+`FilmGizmoEvents` extends actor gizmos, and `TimelineEvents` extends clip and replay timelines.
+`StructureRenderEvents` lets the first listener accepting a render own it; structure parts own
+copies of their positions and block-entity NBT. Frame overlays run on the finished frame in
+registration order.
+
+Functional runtime events expose `register` and `unregister`. Remove listeners when their owner
+is unloaded. The annotation event bus keeps FSR's existing shared subscriber table, so
+`EventBus.INSTANCE` and another `EventBus` instance reach the same subscriptions. FSR's internal
+event bus remains a separate channel with its own lifecycle rules.
+
+The external fixture in `src/replayKeyframeTest/java/sample/fs26addon` exercises public addon
+consumers, lifecycle ordering, render-context forwarding, editor factories, aliases and
+category shortcuts. Minecraft mixin access and visible rendering still require client smoke
+checks.

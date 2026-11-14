@@ -41,6 +41,12 @@ public final class FormRenderLastTest
         Path.of("src/main/java/mchorse/bbs_mod/forms/forms/Form.java");
     private static final Path GENERAL_FORM_PANEL =
         Path.of("src/client/java/mchorse/bbs_mod/ui/forms/editors/panels/UIGeneralFormPanel.java");
+    private static final Path MATERIAL_FORM_PANEL =
+        Path.of("src/client/java/mchorse/bbs_mod/ui/forms/editors/panels/UIMaterialFormPanel.java");
+    private static final Path UI_FORM =
+        Path.of("src/client/java/mchorse/bbs_mod/ui/forms/editors/forms/UIForm.java");
+    private static final Path UI_VALUES =
+        Path.of("src/client/java/mchorse/bbs_mod/ui/utils/values/UIValues.java");
     private static final Path UI_KEYS =
         Path.of("src/client/java/mchorse/bbs_mod/ui/UIKeys.java");
     private static final Path NEO_EVENTS =
@@ -267,15 +273,33 @@ public final class FormRenderLastTest
     private static void theSwitchIsReachableFromTheFormEditor()
     {
         String panel = compact(read(GENERAL_FORM_PANEL));
+        String material = compact(read(MATERIAL_FORM_PANEL));
+        String editor = compact(read(UI_FORM));
+        String values = compact(read(UI_VALUES));
         String keys = compact(read(UI_KEYS));
 
-        require(panel.contains("this.renderLast=newUIToggle(UIKeys.FORMS_EDITORS_GENERAL_RENDER_LAST,"
-                + "(b)->this.form.renderLast.set(b.getValue()));"),
+        require(panel.contains("this.renderLast=UIValues.toggle(UIKeys.FORMS_EDITORS_GENERAL_RENDER_LAST,()->this.form.renderLast);"),
             "the form editor has no toggle bound to the form's render_last property");
+        require(material.contains("this.renderLast=UIValues.toggle(UIKeys.FORMS_EDITORS_MATERIAL_RENDER_LAST,()->this.form.renderLast);"),
+            "the shared material panel has no toggle bound to the form's render_last property");
+        require(values.contains("UIToggletoggle=newUIToggle(label,false,(b)->value.get().set(b.getValue()));")
+                && values.contains("element.valueBinding(read);")
+                && values.contains("toggle.setValue(current.get());"),
+            "the shared toggle factory no longer writes and refreshes its bound value");
         require(panel.contains("this.renderLast.setValue(form.renderLast.get());"),
             "the editor never loads the form's stored value into the toggle");
+        require(material.contains("this.renderLast.setValue(this.form.renderLast.get());"),
+            "the material panel never loads the form's stored value into the toggle");
         require(panel.contains("this.lighting,this.shaderShadow,this.additiveColor,this.renderLast,"),
             "the toggle exists but is not placed in the form editor's display section");
+        require(material.contains("this.renderSection.fields.add(this.layerRow,this.shaderShadow,this.renderLast);")
+                && material.contains("this.options.add(this.renderSection);")
+                && material.contains("this.material=null;this.fill();"),
+            "the material panel does not mount render-last at the initial whole-form level");
+        require(editor.contains("this.registerPanel(panel,UIKeys.FORMS_EDITORS_GENERAL,Icons.GEAR);")
+                && editor.contains("this.registerPanel(newUIMaterialFormPanel(this),UIKeys.FORMS_EDITORS_MATERIAL,Icons.MATERIAL);")
+                && editor.contains("for(UIFormPanel<T>panel:this.panels){panel.startEdit(form);}"),
+            "the form editor no longer registers and initializes the panels that own render-last");
         require(keys.contains("FORMS_EDITORS_GENERAL_RENDER_LAST=L10n.lang(\"" + LABEL_KEY + "\");"),
             "the toggle's label key is not declared");
 

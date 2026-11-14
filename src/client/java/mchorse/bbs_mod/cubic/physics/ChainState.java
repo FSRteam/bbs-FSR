@@ -61,4 +61,42 @@ class ChainState
     public final BlockPos.MutableBlockPos collisionBlock = new BlockPos.MutableBlockPos();
     public float[] stiffnessSteps = new float[0];
     public float stiffnessBase = Float.NaN;
+
+    /** Captures persistent simulation history; solver scratch remains local to the new state. */
+    public ChainState copy()
+    {
+        ChainState copy = new ChainState();
+
+        copy.lastAge = this.lastAge;
+        copy.anchor.set(this.anchor);
+        copy.anchorRotation.set(this.anchorRotation);
+        copy.renderAlpha = this.renderAlpha;
+        copy.pos = copyPoints(this.pos);
+        copy.prev = copyPoints(this.prev);
+        copy.settledLocal = copyPoints(this.settledLocal);
+        copy.settledPrevLocal = copyPoints(this.settledPrevLocal);
+        copy.render = copyPoints(this.render);
+        copy.poseLocal = copyPoints(this.poseLocal);
+        copy.stiffnessSteps = this.stiffnessSteps.clone();
+        copy.stiffnessBase = this.stiffnessBase;
+
+        return copy;
+    }
+
+    private static Vector3f[] copyPoints(Vector3f[] points)
+    {
+        if (points == null)
+        {
+            return null;
+        }
+
+        Vector3f[] copy = new Vector3f[points.length];
+
+        for (int i = 0; i < points.length; i++)
+        {
+            copy[i] = new Vector3f(points[i]);
+        }
+
+        return copy;
+    }
 }

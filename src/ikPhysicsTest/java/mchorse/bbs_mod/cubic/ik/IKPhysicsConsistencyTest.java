@@ -1,16 +1,26 @@
 package mchorse.bbs_mod.cubic.ik;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJBone;
+import mchorse.bbs_mod.api.client.events.FormPoseEvents;
+import mchorse.bbs_mod.cubic.data.model.ModelCube;
 import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
+import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
 import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.data.model.Model;
 import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.cubic.ik.solver.IKTree;
 import mchorse.bbs_mod.cubic.ik.solver.IKTreeSolver;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
+import mchorse.bbs_mod.cubic.model.ModelManager;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsRuntime;
+import mchorse.bbs_mod.cubic.physics.ModelPhysicsCacheTest;
+import mchorse.bbs_mod.cubic.physics.PhysicsControl;
+import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.cubic.render.CubicRenderer;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
@@ -19,13 +29,18 @@ import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.utils.FormBone;
 import mchorse.bbs_mod.forms.renderers.FormRenderSpace;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
 import mchorse.bbs_mod.forms.renderers.FormRenderer;
 import mchorse.bbs_mod.forms.renderers.FormRenderingContext;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.math.molang.MolangParser;
+import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import net.minecraft.world.item.ItemDisplayContext;
 import org.joml.Matrix4f;
@@ -34,6 +49,7 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -47,6 +63,8 @@ public final class IKPhysicsConsistencyTest
 
     public static void main(String[] args)
     {
+        RenderSystem.initRenderThread();
+
         try
         {
             IKMarkerSourceTest.runAll();
@@ -65,6 +83,17 @@ public final class IKPhysicsConsistencyTest
         testSingleBoneChainPole();
         testPoleBindingLifecycle();
         testIKRotationOwnership();
+        testCanonicalBoneControlProjection();
+        testTypedTopologyAndConstraintFrameMemo();
+        testUnifiedRigPicking();
+        testWeightedCubicRotationEntryPoint();
+        ModelPhysicsCacheTest.runAll(createFormWithSettings(ModelForm::new), cubicFixture().model);
+        testTypedIKControlsReachProductionSolver();
+        testTypedPhysicsControlsAndWindReachProductionSolver();
+        testPhysicsCheckpointRestoresRejectedGesture();
+        testModelManagerReloadRetiresPhysics();
+        testPhysicsSeedsAreSettledAndClaimsStayLive();
+        testCurrentFrameIKAndRootOnlyStretch();
         testRealPoleDelta();
         testCubicShortChainTipLimit();
         testBobjShortChainTipLimit();
@@ -642,6 +671,551 @@ public final class IKPhysicsConsistencyTest
         require(ModelIKRuntime.isRotationConstrained(fixture.model, form, "tip"),
             "tipRotation must transfer tip rotation ownership to IK");
     }
+
+    private static void testCanonicalBoneControlProjection()
+    {
+        ModelForm form = createFormWithSettings(ModelForm::new);
+        FormBone tip = form.bones.getOrCreate("tip");
+        FormBone root = form.bones.getOrCreate("root");
+
+        tip.ikTarget.set("target");
+        root.physicsEnd.set("tip");
+        BoneConstraint limit = limit(-30F, 30F);
+        root.constraints.set(limit);
+        BaseType ikProjection = form.ik.get();
+        BaseType physicsProjection = form.physics.get();
+        BaseType authoredBones = form.bones.toData();
+
+        IKControl runtimeIK = new IKControl();
+        runtimeIK.enabled = false;
+        tip.ik.setRuntimeValue(runtimeIK);
+        PhysicsControl runtimePhysics = new PhysicsControl();
+        runtimePhysics.gravity = 0F;
+        root.physics.setRuntimeValue(runtimePhysics);
+        WindControl runtimeWind = new WindControl();
+        runtimeWind.strength = 3F;
+        form.wind.setRuntimeValue(runtimeWind);
+
+        require(form.ik.get() == ikProjection && form.physics.get() == physicsProjection,
+            "live scalar tracks rebuilt the static topology projection");
+        require(authoredBones.equals(form.bones.toData()), "runtime controls leaked into bone persistence");
+        require(form.wind.toData().asMap().getDouble("strength") == 0D, "runtime wind leaked into persistence");
+
+        tip.ik.setRuntimeValue(null);
+        root.physics.setRuntimeValue(null);
+        form.wind.setRuntimeValue(null);
+        tip.ikChainLength.set(2);
+        require(form.ik.get() != ikProjection, "a topology edit did not invalidate its compiled projection");
+
+        int[] pre = {0};
+        int[] post = {0};
+        form.preCallback((value, flag) -> pre[0]++);
+        form.postCallback((value, flag) -> post[0]++);
+        MapType flat = new MapType();
+        MapType chain = new MapType();
+        chain.putString("target", "other_target");
+        chain.putDouble("weight", 0.6D);
+        flat.put("tip", chain);
+        form.ik.set(flat);
+
+        require(pre[0] == 1 && post[0] == 1, "one legacy panel edit became multiple form mutations");
+        require(tip.ikTarget.get().equals("other_target") && tip.ikClassic.get(),
+            "legacy flat chain migration did not populate canonical fields/classic mode");
+        require(close(tip.ik.get().weight, 0.6F) && close(tip.ik.get().softness, 0F),
+            "legacy scalar migration changed weight or the FSR hard-reach default");
+        require(root.constraints.get().equals(limit) && root.physicsEnd.get().equals("tip"),
+            "an IK edit erased constraints or the physics chain");
+
+        MapType wrapped = new MapType();
+        wrapped.put("chains", flat);
+        form.ik.set(wrapped);
+        require(!tip.ikClassic.get(), "wrapped redesigned chains were migrated as classic");
+        form.ik.set(null);
+        require(tip.ikTarget.get().isEmpty() && root.physicsEnd.get().equals("tip"),
+            "clearing the IK projection did not preserve the other subsystem");
+    }
+
+    private static void testTypedTopologyAndConstraintFrameMemo()
+    {
+        ValueBoolean previous = BBSSettings.framePoseCache;
+        BBSSettings.framePoseCache = new ValueBoolean("test_frame_pose_cache", true);
+
+        try
+        {
+            CubicFixture fixture = cubicFixture();
+            ModelForm form = createFormWithSettings(ModelForm::new);
+            FormBone tip = form.bones.getOrCreate("tip");
+            FormBone root = form.bones.getOrCreate("root");
+            tip.ikTarget.set("target");
+            tip.ikPoleTarget.set("root");
+            tip.ikStretch.set(true);
+            tip.ikSquash.set(true);
+            tip.ikClassic.set(false);
+            ModelIKCache.Compiled first = ModelIKCache.compile(fixture.model, form);
+
+            require(first == ModelIKCache.compile(fixture.model, form), "same-frame IK compilation did not reuse topology");
+            ModelIKCache.CompiledChain chain = first.chains().get(0);
+            require(chain.stretch() && chain.squash() && !chain.classic(), "typed compilation swapped chain mode flags");
+            require(chain.poleTarget().isEmpty(), "a chain bone was accepted as its own pole controller");
+            require(chain.wantedBones().containsAll(List.of("root", "tip", "target")), "typed compilation lost precomputed frame requirements");
+
+            tip.ikTarget.set("pole");
+            ModelIKCache.Compiled edited = ModelIKCache.compile(fixture.model, form);
+            require(edited != first && edited.chains().get(0).target().equals("pole"),
+                "same-frame target editing retained stale IK topology");
+            tip.ikTarget.set("tip");
+            require(ModelIKCache.compile(fixture.model, form).chains().isEmpty(), "a self-targeting chain survived typed validation");
+            tip.ikTarget.set("target");
+            first = ModelIKCache.compile(fixture.model, form);
+            RenderFrame.nextFrame();
+            require(ModelIKCache.compile(fixture.model, form) != first, "IK memo crossed its render-frame epoch");
+
+            JointDoF locked = new JointDoF();
+            locked.lockX = locked.lockY = locked.lockZ = true;
+            root.joint.setRuntimeValue(locked);
+            form.bumpPoseVersion();
+            require(ModelIKCache.compile(fixture.model, form).bones().get("root") == locked,
+                "same-frame track pose version did not refresh joint constraints");
+
+            ModelInstance instance = new ModelInstance("frame_memo", fixture.model, null, null);
+            instance.form = form;
+            tip.ikPoleTarget.set("pole");
+            IKControl noPole = new IKControl();
+            noPole.pole = false;
+            tip.ik.set(noPole);
+            require(ModelIKRuntime.getControllers(instance).equals(List.of("target"))
+                && ModelIKRuntime.getPoleControllers(instance).equals(List.of("pole")),
+                "an inactive pole control hid its configured anchor track");
+            root.constraints.set(limit(-10F, 10F));
+            Map<String, BoneConstraint> limits = ModelConstraintsRuntime.getBones(instance);
+            require(limits == ModelConstraintsRuntime.getBones(instance), "same-frame limits were collected repeatedly");
+            root.constraints.set(limit(-20F, 20F));
+            require(ModelConstraintsRuntime.getBones(instance) != limits
+                && close(ModelConstraintsRuntime.getBones(instance).get("root").maxX, 20F),
+                "same-frame constraint edit retained old limits");
+
+            BoneConstraint runtime = limit(-5F, 5F);
+            root.constraints.setRuntimeValue(runtime);
+            form.bumpPoseVersion();
+            require(ModelConstraintsRuntime.getBones(instance).get("root") == runtime,
+                "runtime constraint replacement was hidden by the frame memo");
+            fixture.root.setOrient(Matrices.toQuaternionZYXDegrees(45F, 0F, 0F));
+            ModelConstraintsRuntime.apply(instance);
+            assertWithin(fixture.root.orient, 5F, "same-frame runtime constraint stage");
+
+            limits = ModelConstraintsRuntime.getBones(instance);
+            RenderFrame.nextFrame();
+            require(ModelConstraintsRuntime.getBones(instance) != limits, "constraint memo crossed its render-frame epoch");
+            BBSSettings.framePoseCache.set(false);
+            require(ModelIKCache.compile(fixture.model, form) != ModelIKCache.compile(fixture.model, form),
+                "disabled pose cache still memoized IK");
+            require(ModelConstraintsRuntime.getBones(instance) != ModelConstraintsRuntime.getBones(instance),
+                "disabled pose cache still memoized limits");
+            BBSSettings.framePoseCache.set(true);
+            ModelIKCache.clear();
+            first = ModelIKCache.compile(fixture.model, form);
+            ModelIKCache.clear();
+            require(ModelIKCache.compile(fixture.model, form) != first, "model reload did not clear the IK frame memo");
+        }
+        finally
+        {
+            BBSSettings.framePoseCache = previous;
+            ModelIKCache.clear();
+        }
+    }
+
+    private static void testTypedIKControlsReachProductionSolver()
+    {
+        CubicFixture fixture = cubicFixture();
+        ModelForm form = createFormWithSettings(ModelForm::new);
+        FormBone tip = form.bones.getOrCreate("tip");
+        tip.ikTarget.set("target");
+        IKControl authored = new IKControl();
+        authored.enabled = false;
+        authored.pole = false;
+        tip.ik.set(authored);
+        ModelInstance instance = new ModelInstance("typed_ik", fixture.model, null, null);
+        instance.form = form;
+        Map<String, Vector3f> targets = Map.of("target", new Vector3f(0.7F, 0.7F, 0F));
+        BaseType projection = form.ik.get();
+
+        ModelIKRuntime.apply(instance, targets, null);
+        require(sameRotation(worldRotationOf(fixture.model, "root"), new Quaternionf()),
+            "an authored disabled IK chain moved the pose");
+
+        IKControl enabled = authored.copy();
+        enabled.enabled = true;
+        tip.ik.setRuntimeValue(enabled);
+        fixture.model.resetPose();
+        ModelIKRuntime.apply(instance, targets, null);
+        require(angleBetweenDegrees(worldRotationOf(fixture.model, "root"), new Quaternionf()) > 5F,
+            "a typed runtime enable did not activate the compiled disabled chain");
+        require(form.ik.get() == projection, "a runtime enable rebuilt topology");
+
+        IKControl zeroWeight = enabled.copy();
+        zeroWeight.weight = 0F;
+        tip.ik.setRuntimeValue(zeroWeight);
+        fixture.model.resetPose();
+        ModelIKRuntime.apply(instance, targets, null);
+        require(sameRotation(worldRotationOf(fixture.model, "root"), new Quaternionf()),
+            "typed runtime zero weight did not release the pose");
+
+        tip.ik.setRuntimeValue(enabled);
+        JointDoF locked = new JointDoF();
+        locked.lockX = locked.lockY = locked.lockZ = true;
+        form.bones.getOrCreate("root").joint.set(locked);
+        fixture.model.resetPose();
+        ModelIKRuntime.apply(instance, targets, null);
+        require(sameRotation(worldRotationOf(fixture.model, "root"), new Quaternionf()),
+            "canonical joint locks never reached the production solver");
+
+        form.bones.getBone("root").joint.set(new JointDoF());
+        form.ikControlOverrides.put("tip", authored);
+        fixture.model.resetPose();
+        ModelIKRuntime.apply(instance, targets, null);
+        require(sameRotation(worldRotationOf(fixture.model, "root"), new Quaternionf()),
+            "legacy FSR aggregate tracks lost control precedence");
+    }
+
+    private static void testTypedPhysicsControlsAndWindReachProductionSolver()
+    {
+        PhysicsControl neutral = new PhysicsControl();
+        neutral.gravity = 0F;
+        WindControl calm = new WindControl();
+        Quaternionf stationary = simulateTypedPhysics(neutral, calm, null);
+        require(sameRotation(stationary, new Quaternionf()), "force-free physics moved a stationary chain");
+
+        PhysicsControl gravity = neutral.copy();
+        gravity.gravity = 1F;
+        Quaternionf falling = simulateTypedPhysics(gravity, calm, null);
+        require(angleBetweenDegrees(falling, stationary) > 1F,
+            "typed runtime gravity did not reach physics integration");
+
+        WindControl wind = new WindControl();
+        wind.strength = 4F;
+        wind.x = 0F;
+        wind.z = 1F;
+        wind.turbulence = 0F;
+        Quaternionf blowing = simulateTypedPhysics(neutral, wind, null);
+        require(angleBetweenDegrees(blowing, stationary) > 1F,
+            "typed runtime wind did not reach physics integration");
+
+        PhysicsControl disabled = neutral.copy();
+        disabled.enabled = false;
+        require(sameRotation(simulateTypedPhysics(disabled, wind, null), stationary),
+            "typed disabled physics still changed the pose");
+        PhysicsControl zeroWeight = neutral.copy();
+        zeroWeight.weight = 0F;
+        require(sameRotation(simulateTypedPhysics(zeroWeight, wind, null), stationary),
+            "typed zero-weight physics still changed the pose");
+        require(sameRotation(simulateTypedPhysics(neutral, wind, disabled), stationary),
+            "legacy FSR physics tracks lost control precedence");
+    }
+
+    private static Quaternionf simulateTypedPhysics(PhysicsControl control, WindControl wind, PhysicsControl legacy)
+    {
+        Model model = new Model(new MolangParser());
+        ModelGroup root = group("root", 0F, 0F, 0F);
+        ModelGroup tip = group("tip", 16F, 0F, 0F);
+        root.children.add(tip);
+        model.topGroups.add(root);
+        model.initialize();
+        model.resetPose();
+        ModelForm form = createFormWithSettings(ModelForm::new);
+        FormBone bone = form.bones.getOrCreate("root");
+        bone.physicsEnd.set("tip");
+        PhysicsControl authored = new PhysicsControl();
+        authored.enabled = false;
+        bone.physics.set(authored);
+        BaseType projection = form.physics.get();
+        bone.physics.setRuntimeValue(control);
+        form.wind.setRuntimeValue(wind);
+        if (legacy != null) form.physicsControlOverrides.put("root", legacy);
+        ModelInstance instance = new ModelInstance("typed_physics", model, null, null);
+        instance.form = form;
+        StubEntity entity = new StubEntity((net.minecraft.world.level.Level) null);
+        ModelPhysicsRuntime runtime = new ModelPhysicsRuntime();
+        Object owner = new Object();
+
+        for (int age = 0; age <= 12; age++)
+        {
+            entity.setAge(age);
+            model.resetPose();
+            runtime.apply(entity, owner, instance, 1F, new Matrix4f(), false, false);
+        }
+
+        require(form.physics.get() == projection, "runtime physics/wind rebuilt the static projection");
+
+        return worldRotationOf(model, "root");
+    }
+
+    private static void testPhysicsCheckpointRestoresRejectedGesture()
+    {
+        Object owner = new Object();
+        PhysicsFixture edited = physicsFixture();
+        PhysicsFixture untouched = physicsFixture();
+        Matrix4f rest = new Matrix4f();
+
+        for (int age = 0; age <= 8; age++)
+        {
+            physicsStep(edited, owner, age, rest);
+            physicsStep(untouched, owner, age, rest);
+        }
+
+        ModelPhysicsRuntime.checkpoint();
+
+        for (int age = 9; age <= 14; age++)
+        {
+            physicsStep(edited, owner, age, new Matrix4f().translation(0F, age, 1F).rotateZ(age * 0.2F));
+        }
+
+        Object lateOwner = new Object();
+        PhysicsFixture lateRuntime = physicsFixture();
+        physicsStep(edited, lateOwner, 14, new Matrix4f().translation(4F, 5F, 6F));
+        physicsStep(lateRuntime, owner, 14, new Matrix4f().translation(7F, 8F, 9F));
+        ModelPhysicsRuntime.rewindToCheckpoint();
+
+        for (int age = 9; age <= 13; age++)
+        {
+            Quaternionf expected = physicsStep(untouched, owner, age, rest);
+            Quaternionf actual = physicsStep(edited, owner, age, rest);
+            require(actual.equals(expected, 1E-5F), "rejected gesture retained physics displacement or velocity at age " + age);
+        }
+
+        PhysicsFixture fresh = physicsFixture();
+        Quaternionf seeded = physicsStep(fresh, owner, 14, rest);
+        require(physicsStep(edited, lateOwner, 14, rest).equals(seeded, 1E-5F),
+            "rewind retained an owner first simulated during the gesture");
+        require(physicsStep(lateRuntime, owner, 14, rest).equals(seeded, 1E-5F),
+            "rewind retained a renderer first simulated during the gesture");
+
+        ModelPhysicsRuntime.checkpoint();
+        Matrix4f accepted = new Matrix4f().translation(1F, 2F, 3F).rotateZ(0.5F);
+        physicsStep(edited, owner, 14, accepted);
+        physicsStep(untouched, owner, 14, accepted);
+        ModelPhysicsRuntime.dropCheckpoint();
+        ModelPhysicsRuntime.rewindToCheckpoint();
+        require(physicsStep(edited, owner, 15, rest).equals(physicsStep(untouched, owner, 15, rest), 1E-5F),
+            "accepting a gesture left a checkpoint that rewound accepted simulation");
+
+        ModelPhysicsRuntime.checkpoint();
+        ModelPhysicsRuntime.invalidate("checkpoint_physics");
+        ModelPhysicsRuntime.rewindToCheckpoint();
+        PhysicsFixture reloaded = physicsFixture();
+        require(physicsStep(edited, owner, 16, rest).equals(physicsStep(reloaded, owner, 16, rest), 1E-5F),
+            "model invalidation resurrected an obsolete skeleton's physics checkpoint");
+    }
+
+    private static void testModelManagerReloadRetiresPhysics()
+    {
+        PhysicsFixture fixture = physicsFixture();
+        Object owner = new Object();
+
+        for (int age = 0; age <= 8; age++)
+        {
+            physicsStep(fixture, owner, age, new Matrix4f().translation(0F, age, 0F).rotateZ(age * 0.3F));
+        }
+
+        ModelManager manager = new ModelManager(new AssetProvider());
+        manager.models.put(fixture.instance.id, fixture.instance);
+        ModelPhysicsRuntime.checkpoint();
+        manager.forgetFolder("checkpoint_");
+        ModelPhysicsRuntime.rewindToCheckpoint();
+        PhysicsFixture fresh = physicsFixture();
+        require(physicsStep(fixture, owner, 9, new Matrix4f()).equals(physicsStep(fresh, owner, 9, new Matrix4f()), 1E-5F),
+            "asset folder invalidation retained physics history or its old-skeleton checkpoint");
+
+        for (int age = 10; age <= 13; age++)
+        {
+            physicsStep(fixture, owner, age, new Matrix4f().translation(age, 0F, 0F).rotateZ(age * 0.3F));
+        }
+
+        manager.models.put(fixture.instance.id, fixture.instance);
+        manager.reload();
+        fresh = physicsFixture();
+        require(physicsStep(fixture, owner, 14, new Matrix4f()).equals(physicsStep(fresh, owner, 14, new Matrix4f()), 1E-5F),
+            "full model reload retained old-skeleton physics history");
+
+        for (int age = 15; age <= 19; age++)
+        {
+            physicsStep(fixture, owner, age, new Matrix4f().translation(age, age, 0F).rotateZ(age * 0.2F));
+        }
+
+        ModelPhysicsRuntime.checkpoint();
+        fixture.instance.config.onCpu.set(true);
+        fixture.instance.setup();
+        ModelPhysicsRuntime.rewindToCheckpoint();
+        fresh = physicsFixture();
+        require(physicsStep(fixture, owner, 20, new Matrix4f()).equals(physicsStep(fresh, owner, 20, new Matrix4f()), 1E-5F),
+            "same-model instance rebuild retained old physics history or checkpoint");
+    }
+
+    private static void testUnifiedRigPicking()
+    {
+        ModelGroup bone = new ModelGroup("addon_bone");
+        Model model = new Model(new MolangParser())
+        {
+            @Override
+            public Collection<ModelGroup> getRigBones()
+            {
+                return List.of(bone);
+            }
+        };
+        ModelInstance instance = new ModelInstance("addon_rig", model, null, null);
+        ModelForm form = createFormWithSettings(ModelForm::new);
+        instance.config.pickingOverrides.get().put("addon_bone", "config_bone");
+        MapType picking = new MapType();
+        picking.putString("addon_bone", "form_bone");
+        form.pickingOverrides.set(picking);
+        StencilMap stencil = new StencilMap();
+        instance.fillStencilMap(stencil, form);
+        require(stencil.indexMap.size() == 1 && "form_bone".equals(stencil.indexMap.get(0).b),
+            "unified rig picking omitted an addon bone or its form override");
+        form.pickingOverrides.set(new MapType());
+        instance.fillStencilMap(stencil, form);
+        require("config_bone".equals(stencil.indexMap.get(1).b),
+            "unified rig picking lost model-config overrides");
+    }
+
+    private static void testWeightedCubicRotationEntryPoint()
+    {
+        CubicFixture fixture = cubicFixture();
+        List<String> ids = List.of("root", "tip");
+        Vector3f[] positions = {new Vector3f(), new Vector3f(1F, 0F, 0F), new Vector3f(2F, 0F, 0F)};
+        Quaternionf initial = fixture.root.evaluatedRotation();
+        CubicRenderer.applyRotations(fixture.model, new Quaternionf(), ids, positions, 0F);
+        require(angleBetweenDegrees(initial, fixture.root.evaluatedRotation()) < 0.1F,
+            "zero weighted cubic entry point changed the FK orientation");
+        fixture.model.resetPose();
+        CubicRenderer.applyRotations(fixture.model, new Quaternionf(), ids, positions, 1F);
+        Quaternionf solved = fixture.root.evaluatedRotation();
+        float fullAngle = angleBetweenDegrees(initial, solved);
+        require(fullAngle > 80F, "full weighted cubic entry point did not reconstruct the chain");
+        fixture.model.resetPose();
+        CubicRenderer.applyRotations(fixture.model, new Quaternionf(), ids, positions, 0.5F);
+        require(Math.abs(angleBetweenDegrees(initial, fixture.root.evaluatedRotation()) - fullAngle / 2F) < 0.1F,
+            "weighted cubic entry point did not blend the evaluated pose");
+    }
+
+    private static void testPhysicsSeedsAreSettledAndClaimsStayLive()
+    {
+        PhysicsFixture fixture = physicsFixture();
+        Object owner = new Object();
+        Matrix4f rest = new Matrix4f();
+        Quaternionf seeded = physicsStep(fixture, owner, 0, rest);
+        require(angleBetweenDegrees(seeded, new Quaternionf()) > 45F,
+            "a freshly visible physics chain stayed in FK instead of settling under gravity");
+        fixture.instance.model.resetPose();
+        fixture.runtime.apply(fixture.entity, owner, fixture.instance, 0F, rest, false, false);
+        require(sameRotation(worldRotationOf(fixture.instance.model, "root"), seeded),
+            "transition zero displayed the un-settled seed");
+        for (int age = 1; age <= 6; age++)
+        {
+            physicsStep(fixture, owner, age, new Matrix4f().translation(age, age, 0F).rotateZ(0.3F));
+        }
+        require(physicsStep(fixture, owner, 0, rest).equals(seeded, 1E-5F),
+            "backward history jump did not settle the same current-frame seed");
+        require(physicsStep(fixture, owner, 100, rest).equals(seeded, 1E-5F),
+            "large forward history jump retained an unsettled seed");
+
+        ModelForm form = (ModelForm) fixture.instance.form;
+        boolean[] claim = {true};
+        int[] calls = {0};
+        FormPoseEvents.ChainClaim listener = (candidate, model, bone) ->
+        {
+            if (candidate == form)
+            {
+                calls[0]++;
+                require(bone == form.bones.getBone("root"), "claim callback did not receive the canonical chain root");
+                return claim[0];
+            }
+            return false;
+        };
+        FormPoseEvents.CLAIM_CHAIN.register(listener);
+        try
+        {
+            require(sameRotation(physicsStep(fixture, new Object(), 0, rest), new Quaternionf()),
+                "an addon-claimed chain was also solved by built-in physics");
+            claim[0] = false;
+            require(angleBetweenDegrees(physicsStep(fixture, new Object(), 0, rest), new Quaternionf()) > 45F,
+                "live addon ownership change was hidden by the topology cache");
+            claim[0] = true;
+            require(sameRotation(physicsStep(fixture, new Object(), 0, rest), new Quaternionf()) && calls[0] >= 3,
+                "claim ownership was not re-evaluated on the next solve");
+        }
+        finally
+        {
+            FormPoseEvents.CLAIM_CHAIN.unregister(listener);
+        }
+        require(angleBetweenDegrees(physicsStep(fixture, new Object(), 0, rest), new Quaternionf()) > 45F,
+            "unregistering a claim listener left the chain permanently excluded");
+    }
+
+    private static void testCurrentFrameIKAndRootOnlyStretch()
+    {
+        CubicFixture fixture = cubicFixture();
+        fixture.root.cubes.add(new ModelCube());
+        ModelForm form = createFormWithSettings(ModelForm::new);
+        FormBone tip = form.bones.getOrCreate("tip");
+        tip.ikTarget.set("target");
+        tip.ikStretch.set(true);
+        IKControl control = new IKControl();
+        control.pole = false;
+        tip.ik.set(control);
+        ModelInstance instance = new ModelInstance("root_stretch", fixture.model, null, null);
+        instance.form = form;
+        Map<String, Vector3f> far = Map.of("target", new Vector3f(0F, -2F, 0F));
+        ModelIKRuntime.apply(instance, far, null);
+        Map<String, CubicRenderer.PivotFrame> stretched = new HashMap<>();
+        ModelPivotFrames.collect(fixture.model, Set.of("root", "tip"), stretched, null, true);
+        require(stretched.get("tip").position().distance(far.get("target")) < 1E-3F,
+            "single-geometry-bone stretch did not slide its root joint onto the goal");
+        require(fixture.root.offset != null && fixture.root.offset.length() > 0.5F
+            && fixture.root.current.scale.equals(new Vector3f(1F)),
+            "root-only stretch scaled geometry or omitted the root offset");
+        Quaternionf first = new Quaternionf(fixture.root.evaluatedRotation());
+        Vector3f firstOffset = new Vector3f(fixture.root.offset);
+        fixture.model.resetPose();
+        ModelIKRuntime.apply(instance, Map.of("target", new Vector3f(1F, -1F, 0F)), null);
+        fixture.model.resetPose();
+        ModelIKRuntime.apply(instance, far, null);
+        require(fixture.root.evaluatedRotation().equals(first, 1E-5F) && fixture.root.offset.equals(firstOffset, 1E-5F),
+            "returning to a restored frame depended on prior controller calibration");
+        tip.ikStretch.set(false);
+        fixture.model.resetPose();
+        ModelIKRuntime.apply(instance, far, null);
+        require(fixture.root.offset == null, "a same-frame topology edit reused a stretched chain");
+    }
+
+    private static PhysicsFixture physicsFixture()
+    {
+        Model model = new Model(new MolangParser());
+        ModelGroup root = group("root", 0F, 0F, 0F);
+        root.children.add(group("tip", 16F, 0F, 0F));
+        model.topGroups.add(root);
+        model.initialize();
+        ModelForm form = createFormWithSettings(ModelForm::new);
+        form.bones.getOrCreate("root").physicsEnd.set("tip");
+        PhysicsControl control = new PhysicsControl();
+        control.gravity = 1F;
+        form.bones.getBone("root").physics.set(control);
+        ModelInstance instance = new ModelInstance("checkpoint_physics", model, null, null);
+        instance.form = form;
+
+        return new PhysicsFixture(instance, new StubEntity((net.minecraft.world.level.Level) null), new ModelPhysicsRuntime());
+    }
+
+    private static Quaternionf physicsStep(PhysicsFixture fixture, Object owner, int age, Matrix4f base)
+    {
+        fixture.entity.setAge(age);
+        fixture.instance.model.resetPose();
+        fixture.runtime.apply(fixture.entity, owner, fixture.instance, 1F, base, false, false);
+
+        return worldRotationOf(fixture.instance.model, "root");
+    }
+
+    private record PhysicsFixture(ModelInstance instance, StubEntity entity, ModelPhysicsRuntime runtime)
+    {}
 
     private static <T> T createFormWithSettings(java.util.function.Supplier<T> factory)
     {

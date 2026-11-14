@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 /**
@@ -21,9 +22,7 @@ public class CellPainter
     public static final int CAPTION_PADDING = 3;
 
     /**
-     * What state the cell is in, said the way FSR's lists say it: the chosen (or about to
-     * receive a drop) cell wears the accent at the strength a picked row wears, and a merely
-     * hovered one a faint wash of white.
+     * Shared row marks, rising from the caption edge to leave the cell's picture visible.
      *
      * <p>Goes down before the thing the cell is about, so a form keeps its own colours and a
      * texture is shown as it is; the mark reads in the margins around the picture and along the
@@ -31,14 +30,7 @@ public class CellPainter
      */
     public static void marks(UIContext context, int x, int y, int w, int h, CellState state)
     {
-        if (state.isLit() || state.picked)
-        {
-            context.batcher.box(x, y, x + w, y + h, Colors.A50 | BBSSettings.accentColorRGB());
-        }
-        else if (state.hover)
-        {
-            context.batcher.box(x, y, x + w, y + h, Colors.A12 | 0xffffff);
-        }
+        RowStyle.cellWash(context.batcher, x, y, w, h, state.hover, state.isLit() || state.picked);
     }
 
     /** Over the picture of a cell being dragged, so the grid shows where it came from without shouting. */
@@ -51,7 +43,7 @@ public class CellPainter
     }
 
     /**
-     * The bar down the left edge, last so nothing paints over it. Only the cell that is
+     * The bar along the caption edge, last so nothing paints over it. Only the cell that is
      * <em>the</em> chosen one wears it; one of a multi-selection has the wash and no bar, which
      * is the same difference the selection box draws between a picked row and a hovered one.
      */
@@ -59,7 +51,7 @@ public class CellPainter
     {
         if (state.isLit())
         {
-            context.batcher.box(x, y, x + 2, y + h, BBSSettings.accentColorRGB());
+            RowStyle.cellBar(context.batcher, x, y, w, h);
         }
     }
 

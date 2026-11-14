@@ -6,6 +6,8 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Matrix4f;
 
+/** Retained for addon compatibility; production bone overlays use DebugOverlay. */
+@Deprecated
 public class CubicAxisRenderer implements ICubicRenderer
 {
     @Override

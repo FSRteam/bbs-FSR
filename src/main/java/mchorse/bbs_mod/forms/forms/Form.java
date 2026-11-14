@@ -1,5 +1,9 @@
 package mchorse.bbs_mod.forms.forms;
 
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
+import mchorse.bbs_mod.api.FormPropertyAliases;
+import mchorse.bbs_mod.film.replays.tracks.TrackId;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.BaseType;
@@ -13,6 +17,10 @@ import mchorse.bbs_mod.forms.states.AnimationStates;
 import mchorse.bbs_mod.forms.states.StatePlayer;
 import mchorse.bbs_mod.forms.values.ValueAnchor;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
+import mchorse.bbs_mod.settings.values.base.BaseValueGroup;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
+import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.settings.values.core.StableIds;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.core.ValueString;
@@ -27,15 +35,26 @@ import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-
+import java.util.LinkedHashSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 public abstract class Form extends ValueGroup
 {
     /** Sentinel in {@link #disabledTracks} meaning every track of this form is hidden on the timeline. */
     public static final String DISABLED_ALL = "*";
+
+    public final ValueBoolean pickable = new ValueBoolean("pickable", true);
+    public final ValueColor overlayColor = new ValueColor("color_overlay", new Color(1F, 1F, 1F, 0F));
+    public final ValueInt renderLayer = new ValueInt("render_layer", 0);
+
+    public static final int LAYER_AUTO = 0;
+    public static final int LAYER_SOLID = 1;
+    public static final int LAYER_CUTOUT = 2;
+    public static final int LAYER_TRANSLUCENT = 3;
 
     public final ValueBoolean visible = new ValueBoolean("visible", true);
     public final ValueStringKeys disabledTracks = new ValueStringKeys("disabled_tracks");
@@ -44,6 +63,7 @@ public abstract class Form extends ValueGroup
     public final ValueString name = new ValueString("name", "");
     public final ValueTransform transform = new ValueTransform("transform", new Transform());
     public final ValueTransform transformOverlay = new ValueTransform("transform_overlay", new Transform());
+    public final List<ValuePose> additionalOverlays = new ArrayList<>();
     public final ValueFloat uiScale = new ValueFloat("uiScale", 1F);
     public final ValueAnchor anchor = new ValueAnchor("anchor", new Anchor());
     public final ValueBoolean shaderShadow = new ValueBoolean("shaderShadow", true);
@@ -106,6 +126,26 @@ public abstract class Form extends ValueGroup
 
     private final List<StatePlayer> statePlayers = new ArrayList<>();
 
+    private int poseVersion;
+
+    public int getPoseVersion()
+    {
+        this.syncOverlayTracks();
+        return this.poseVersion;
+    }
+
+    public void bumpPoseVersion()
+    {
+        this.poseVersion += 1;
+    }
+
+    @Override
+    public void postNotify(BaseValue value, int flag)
+    {
+        this.bumpPoseVersion();
+        super.postNotify(value, flag);
+    }
+
     public Form()
     {
         super("");
@@ -118,6 +158,11 @@ public abstract class Form extends ValueGroup
         this.additiveColor.invisible();
         this.renderLast.invisible();
 
+        this.pickable.invisible();
+        this.renderLayer.invisible();
+        this.add(this.pickable);
+        this.add(this.overlayColor);
+        this.add(this.renderLayer);
         this.add(this.visible);
         this.add(this.disabledTracks);
         this.add(this.trackName);
@@ -125,18 +170,6 @@ public abstract class Form extends ValueGroup
         this.add(this.name);
         this.add(this.transform);
         this.add(this.transformOverlay);
-
-        /* Settings may be unregistered (bare JVM tests, early bootstrap);
-         * fall back to the registered default of 0 overlays */
-        int overlays = BBSSettings.recordingPoseTransformOverlays == null ? 0 : BBSSettings.recordingPoseTransformOverlays.get();
-
-        for (int i = 0; i < overlays; i++)
-        {
-            ValueTransform valueTransform = new ValueTransform("transform_overlay" + i, new Transform());
-
-            this.additionalTransforms.add(valueTransform);
-            this.add(valueTransform);
-        }
 
         this.add(this.uiScale);
         this.add(this.anchor);
@@ -181,6 +214,66 @@ public abstract class Form extends ValueGroup
 
         this.add(this.parts);
         this.add(this.states);
+    }
+
+    /** Apply global overlay counts to existing forms as well as newly created ones. */
+    public final void syncOverlayTracks()
+    {
+        int previousTransforms = this.additionalTransforms.size();
+        int transforms = BBSSettings.recordingTransformOverlays == null ? 0 : BBSSettings.recordingTransformOverlays.get();
+        while (this.additionalTransforms.size() > transforms)
+            this.remove(this.additionalTransforms.remove(this.additionalTransforms.size() - 1));
+        while (this.additionalTransforms.size() < transforms)
+        {
+            ValueTransform value = new ValueTransform("transform_overlay" + this.additionalTransforms.size(), new Transform());
+            this.additionalTransforms.add(value);
+            this.add(value);
+        }
+
+        List<ValuePose> overlays = this instanceof IPosedForm ? this.additionalOverlays : null;
+        int poses = overlays != null && super.get("pose") != null && BBSSettings.recordingPoseOverlays != null
+            ? BBSSettings.recordingPoseOverlays.get() : 0;
+        if (overlays == null)
+        {
+            if (previousTransforms != transforms) this.bumpPoseVersion();
+            return;
+        }
+        int previousPoses = overlays.size();
+        while (overlays.size() > poses) this.remove(overlays.remove(overlays.size() - 1));
+        while (overlays.size() < poses)
+        {
+            ValuePose value = new ValuePose("pose_overlay" + overlays.size(), new Pose());
+            overlays.add(value);
+            this.add(value);
+        }
+        if (previousTransforms != transforms || previousPoses != poses) this.bumpPoseVersion();
+    }
+
+    @Override
+    public List<BaseValue> getAll()
+    {
+        this.syncOverlayTracks();
+        return super.getAll();
+    }
+
+    @Override
+    public BaseValue get(String key)
+    {
+        this.syncOverlayTracks();
+        return super.get(key);
+    }
+
+    public BaseValueBasic getBasic(String key)
+    {
+        BaseValue value = this.get(key);
+        return value instanceof BaseValueBasic basic ? basic : null;
+    }
+
+    @Override
+    public void copy(BaseValueGroup group)
+    {
+        this.syncOverlayTracks();
+        super.copy(group);
     }
 
     public Object getRenderer()
@@ -271,6 +364,11 @@ public abstract class Form extends ValueGroup
 
     public void applyStates(float transition)
     {
+        if (!this.statePlayers.isEmpty())
+        {
+            this.bumpPoseVersion();
+        }
+
         for (StatePlayer statePlayer : this.statePlayers)
         {
             statePlayer.assignValues(this, transition);
@@ -279,6 +377,11 @@ public abstract class Form extends ValueGroup
 
     public void unapplyStates()
     {
+        if (!this.statePlayers.isEmpty())
+        {
+            this.bumpPoseVersion();
+        }
+
         for (StatePlayer statePlayer : this.statePlayers)
         {
             statePlayer.resetValues(this);
@@ -372,24 +475,72 @@ public abstract class Form extends ValueGroup
 
     public String getTrackName(String property)
     {
-        String s = this.trackName.get();
+        String custom = this.trackName.get();
 
-        if (!s.isEmpty())
+        if (property.isEmpty())
         {
-            if (property.isEmpty())
-            {
-                return s;
-            }
-
-            int slash = property.lastIndexOf('/');
-            String last = slash == -1 ? property : property.substring(slash + 1);
-            /* An address segment (a body part's stable id, or a legacy index) is not a name. */
-            boolean address = StableIds.isStableId(last) || StringUtils.isInteger(last);
-
-            return s + (address ? "" : "/" + last);
+            return custom;
         }
 
-        return property;
+        TrackId track = TrackId.parse(property);
+        String last;
+
+        if (track == null)
+        {
+            int slash = property.lastIndexOf('/');
+
+            last = slash == -1 ? property : property.substring(slash + 1);
+        }
+        else
+        {
+            /* Asked of the address itself: a bone track reads "head", not "pose.bones.head". */
+            last = track.label();
+        }
+
+        /* An address segment (a body part's stable id, or a legacy index) is not a name. */
+        boolean address = StableIds.isStableId(last) || StringUtils.isInteger(last);
+        String leaf = address ? "" : last;
+        String owner = this.getTrackLabel();
+
+        if (owner.isEmpty())
+        {
+            return leaf;
+        }
+
+        return leaf.isEmpty() ? owner : owner + "/" + leaf;
+    }
+
+    /**
+     * What a timeline calls this form when it prefixes one of its tracks: the animator's own track
+     * name when set, otherwise the names of the forms it hangs under as a body part, root-first.
+     * Empty for a root form, whose tracks stand for the replay itself and need no prefix.
+     *
+     * <p>This is the label side of a track's identity; the address side is
+     * {@link FormUtils#getPath}. They must not be confused: the address is
+     * built from random stable ids and is unreadable by design.</p>
+     */
+    public String getTrackLabel()
+    {
+        String custom = this.trackName.get();
+
+        if (!custom.isEmpty())
+        {
+            return custom;
+        }
+
+        List<String> names = new ArrayList<>();
+        Form form = this;
+
+        while (form.getParentForm() != null)
+        {
+            names.add(form.getDisplayName());
+
+            form = form.getParentForm();
+        }
+
+        Collections.reverse(names);
+
+        return String.join("/", names);
     }
 
     /* Update */
@@ -421,8 +572,15 @@ public abstract class Form extends ValueGroup
     /* Data comparison and (de)serialization */
 
     @Override
+    protected String resolveReadKey(String key)
+    {
+        return FormPropertyAliases.resolve(key);
+    }
+
+    @Override
     public void fromData(BaseType data)
     {
+        this.syncOverlayTracks();
         if (data instanceof MapType map)
         {
             /* Compatibility with older forms */
@@ -440,6 +598,15 @@ public abstract class Form extends ValueGroup
 
         super.fromData(data);
 
+        Set<String> migratedTracks = new LinkedHashSet<>();
+        for (String key : this.disabledTracks.get())
+        {
+            TrackId track = FormPropertyAliases.resolve(TrackId.parse(key));
+            migratedTracks.add(track == null ? key : track.toKey());
+        }
+        this.disabledTracks.get().clear();
+        this.disabledTracks.get().addAll(migratedTracks);
+
         if (data instanceof MapType map)
         {
             /* Compatibility with state triggers */
@@ -451,12 +618,28 @@ public abstract class Form extends ValueGroup
             {
                 this.disabledTracks.get().add(DISABLED_ALL);
             }
+
+            /* Pre-overlay FS forms used additive tint as a substitute for color overlay.
+             * Current FSR saves write color_overlay and glint, and keep their explicit blend mode. */
+            if (this.additiveColor.get() && !map.has("color_overlay") && !map.has("glint"))
+            {
+                if (this.get("color") instanceof ValueColor colorValue)
+                {
+                    Color color = colorValue.get();
+
+                    this.overlayColor.set(new Color(color.r, color.g, color.b, color.a));
+                    colorValue.set(Color.white());
+                }
+
+                this.additiveColor.set(false);
+            }
         }
     }
 
     @Override
     public BaseType toData()
     {
+        this.syncOverlayTracks();
         BaseType data = super.toData();
 
         if (data instanceof MapType map)
@@ -465,5 +648,10 @@ public abstract class Form extends ValueGroup
         }
 
         return data;
+    }
+
+    public Icon getIcon()
+    {
+        return Icons.GEAR;
     }
 }

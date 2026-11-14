@@ -71,6 +71,8 @@ public class UITextureManagerPanel extends UIDashboardPanel
     {
         super(dashboard);
 
+        this.onAppear(this::onPanelAppeared);
+
         this.picker = new UITexturePicker(null).cantBeClosed();
         this.picker.full(this);
         this.picker.fill(null);
@@ -83,8 +85,7 @@ public class UITextureManagerPanel extends UIDashboardPanel
         return this.picker.current;
     }
 
-    @Override
-    public void appear()
+    private void onPanelAppeared()
     {
         this.picker.syncToSharedTabs();
     }

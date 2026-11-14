@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input.color;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.ui.ValueColors;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -11,20 +11,17 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITabStrip;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITextTab;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.system.MemoryStack;
@@ -64,11 +61,12 @@ public class UIColorPicker extends UIElement
      * The popup is the same width in both color models, so switching between them moves
      * nothing but the surface in the middle.
      */
-    private static final int POPUP_WIDTH = 200;
+    private static final int POPUP_WIDTH = 180;
+    private static final int HEADER_GAP = 3;
 
     private static final int TABS_HEIGHT = 16;
     private static final int TABS_GAP = 6;
-    private static final int FIELDS_HEIGHT = UIConstants.CONTROL_HEIGHT;
+    private static final int FIELDS_HEIGHT = 16;
     private static final int FIELDS_GAP = 6;
     private static final int RGB_SLIDER_HEIGHT = 50;
     private static final int RGB_SECTION_GAP = 15;
@@ -93,7 +91,7 @@ public class UIColorPicker extends UIElement
 
     public UITextbox input;
     public UIIcon eyedropper;
-    public UIColorPickerTabs tabs;
+    public UITabStrip tabs;
     public UIColorFields fields;
     public UIColorPalette recent;
     public UIColorPalette favorite;
@@ -137,21 +135,9 @@ public class UIColorPicker extends UIElement
 
     public static void renderAlphaPreviewQuad(Batcher2D batcher, int x1, int y1, int x2, int y2, Color color)
     {
-        Matrix4f matrix4f = batcher.getContext().pose().last().pose();
-        BufferBuilder builder;
+        int argb = color.getARGBColor();
 
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        RenderSystem.enableBlend();
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-
-        builder.addVertex(matrix4f, x1, y1, 0F).setColor(color.r, color.g, color.b, 1);
-        builder.addVertex(matrix4f, x1, y2, 0F).setColor(color.r, color.g, color.b, 1);
-        builder.addVertex(matrix4f, x2, y1, 0F).setColor(color.r, color.g, color.b, 1);
-        builder.addVertex(matrix4f, x2, y1, 0F).setColor(color.r, color.g, color.b, color.a);
-        builder.addVertex(matrix4f, x1, y2, 0F).setColor(color.r, color.g, color.b, color.a);
-        builder.addVertex(matrix4f, x2, y2, 0F).setColor(color.r, color.g, color.b, color.a);
-
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+        batcher.splitBox(x1, y1, x2, y2, Colors.opaque(argb), argb);
     }
 
     public UIColorPicker(Consumer<Integer> callback)
@@ -173,20 +159,36 @@ public class UIColorPicker extends UIElement
         this.input.context((menu) -> menu.action(Icons.FAVORITE, UIKeys.COLOR_CONTEXT_FAVORITES_ADD, () -> this.addToFavorites(this.color)));
 
         this.eyedropper = new UIIcon(Icons.EYEDROPPER, (b) -> this.picking = !this.picking);
+        this.eyedropper.highlight(() -> this.picking, Direction.BOTTOM);
         this.eyedropper.tooltip(UIKeys.COLOR_EYEDROPPER);
 
-        this.tabs = new UIColorPickerTabs(this::setHsvPicker);
+        this.tabs = new UITabStrip(ScrollDirection.HORIZONTAL)
+        {
+            @Override
+            protected boolean pressTab(int index, UIContext context)
+            {
+                this.select(index);
+
+                return true;
+            }
+        };
+        this.tabs.fixed();
+        this.tabs.active(() -> this.isHsvPicker() ? 0 : 1);
+        this.tabs.onSelect(index -> this.setHsvPicker(index == 0));
+        this.tabs.addTab(new UITextTab(IKey.constant("HSV"))).w(48).h(TABS_HEIGHT);
+        this.tabs.addTab(new UITextTab(IKey.constant("RGB"))).w(48).h(TABS_HEIGHT);
         this.fields = new UIColorFields(this::applyChannel);
 
         /* While the popup is still unattached the row is built at once; adding children is
          * deferred for a mounted element, which would cost the first frame they show. */
         this.fields.mode(this.isHsvPicker(), this.editAlpha);
 
-        this.recent = new UIColorPalette((color) ->
+        this.recent = new UIColorPalette(this.getRecentColors(), (color) ->
         {
             this.setColor(color.getARGBColor());
             this.notifyColorChanged();
-        }).colors(this.getRecentColors().getCurrentColors());
+        }).editable();
+        this.recent.onChanged(this::resize);
 
         this.recent.context((menu) ->
         {
@@ -194,15 +196,18 @@ public class UIColorPicker extends UIElement
 
             if (this.recent.hasColor(index))
             {
-                menu.action(Icons.FAVORITE, UIKeys.COLOR_CONTEXT_FAVORITES_ADD, () -> this.addToFavorites(this.recent.colors.get(index)));
+                Color color = this.recent.getColor(index);
+
+                menu.action(Icons.FAVORITE, UIKeys.COLOR_CONTEXT_FAVORITES_ADD, () -> this.addToFavorites(color));
             }
         });
 
-        this.favorite = new UIColorPalette((color) ->
+        this.favorite = new UIColorPalette(BBSSettings.favoriteColors, (color) ->
         {
             this.setColor(color.getARGBColor());
             this.notifyColorChanged();
-        }).colors(BBSSettings.favoriteColors.getCurrentColors());
+        }).editable().sortable();
+        this.favorite.onChanged(this::resize);
 
         this.favorite.context((menu) ->
         {
@@ -244,7 +249,7 @@ public class UIColorPicker extends UIElement
     /** Show the current color in the numeric row, in the units of the model on show. */
     private void syncFields()
     {
-        boolean hsv = this.isHsvPicker();
+        boolean hsv = this.layoutHsv;
 
         this.fields.mode(hsv, this.editAlpha);
 
@@ -265,7 +270,7 @@ public class UIColorPicker extends UIElement
      */
     private void applyChannel(int channel, float value)
     {
-        if (this.isHsvPicker())
+        if (this.layoutHsv)
         {
             this.hsv.set(value, channel + 1);
             this.syncColorFromHsv();
@@ -385,6 +390,12 @@ public class UIColorPicker extends UIElement
         this.xy(x, y);
         this.initial.copy(this.color);
         this.setHexError(false);
+    }
+
+    public void applyOpaqueColor(Color color)
+    {
+        this.setValue(color.getRGBColor(), false);
+        this.notifyColorChanged();
     }
 
     private void notifyColorChanged()
@@ -528,7 +539,6 @@ public class UIColorPicker extends UIElement
          * picker or the settings screen, and a popup laid out for one model must never be
          * painted as the other. {@link #render} notices the drift and lays out again. */
         this.layoutHsv = layout.hsv;
-        this.tabs.setHsv(layout.hsv);
 
         this.w(layout.width);
         this.h(layout.height);
@@ -562,8 +572,8 @@ public class UIColorPicker extends UIElement
         layout.hsv = this.isHsvPicker();
         layout.width = POPUP_WIDTH;
         layout.paletteWidth = layout.width - POPUP_PADDING * 2;
-        layout.favoriteHeight = this.favorite.colors.isEmpty() ? 0 : this.favorite.getHeight(layout.paletteWidth);
-        layout.recentHeight = this.recent.colors.isEmpty() ? 0 : this.recent.getHeight(layout.paletteWidth);
+        layout.favoriteHeight = this.favorite.isEmpty() ? 0 : this.favorite.getHeight(layout.paletteWidth);
+        layout.recentHeight = this.recent.isEmpty() ? 0 : this.recent.getHeight(layout.paletteWidth);
         layout.surfaceY = HEADER_HEIGHT + TABS_HEIGHT + TABS_GAP;
         layout.surfaceHeight = layout.hsv ? this.hsvSquareSize(layout.paletteWidth) : RGB_SLIDER_HEIGHT;
         layout.fieldsY = layout.surfaceY + layout.surfaceHeight + FIELDS_GAP;
@@ -604,11 +614,11 @@ public class UIColorPicker extends UIElement
         int surfaceY = this.area.y + layout.surfaceY;
         int headerY = this.area.y + POPUP_PADDING;
         int previewX = this.area.ex() - POPUP_PADDING - PREVIEW_WIDTH;
-        int eyedropperX = previewX - POPUP_PADDING - EYEDROPPER_SIZE;
+        int eyedropperX = previewX - HEADER_GAP - EYEDROPPER_SIZE;
 
         this.preview.set(previewX, headerY, PREVIEW_WIDTH, PREVIEW_SIZE);
         this.eyedropper.set(eyedropperX, headerY, EYEDROPPER_SIZE, INPUT_HEIGHT);
-        this.input.set(contentX, headerY, eyedropperX - POPUP_PADDING - contentX, INPUT_HEIGHT);
+        this.input.set(contentX, headerY, eyedropperX - HEADER_GAP - contentX, INPUT_HEIGHT);
         this.tabs.set(contentX, this.area.y + HEADER_HEIGHT, layout.paletteWidth, TABS_HEIGHT);
 
         if (layout.hsv)
@@ -1055,7 +1065,6 @@ public class UIColorPicker extends UIElement
 
         this.dragging = -1;
         this.layoutHsv = hsv;
-        this.tabs.setHsv(hsv);
         this.syncFields();
         this.resize();
     }
@@ -1118,12 +1127,12 @@ public class UIColorPicker extends UIElement
 
     private void renderPaletteLabels(UIContext context)
     {
-        if (!this.favorite.colors.isEmpty())
+        if (!this.favorite.isEmpty())
         {
             context.batcher.text(UIKeys.COLOR_FAVORITE.get(), this.favorite.area.x, this.favorite.area.y - 10, Colors.GRAY);
         }
 
-        if (!this.recent.colors.isEmpty())
+        if (!this.recent.isEmpty())
         {
             context.batcher.text(UIKeys.COLOR_RECENT.get(), this.recent.area.x, this.recent.area.y - 10, Colors.GRAY);
         }

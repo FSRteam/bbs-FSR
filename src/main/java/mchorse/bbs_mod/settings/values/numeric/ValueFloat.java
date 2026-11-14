@@ -41,6 +41,12 @@ public class ValueFloat extends BaseValueNumber<Float>
     }
 
     @Override
+    public void setNumber(double value)
+    {
+        this.set((float) value);
+    }
+
+    @Override
     public BaseType toData()
     {
         return new FloatType(this.value);

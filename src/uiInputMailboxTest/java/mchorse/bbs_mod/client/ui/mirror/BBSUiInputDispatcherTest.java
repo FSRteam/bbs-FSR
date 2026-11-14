@@ -57,6 +57,7 @@ public final class BBSUiInputDispatcherTest
         assertProductionBBSModLoaded();
         Runnable restoreClipFactories = installHeadlessClipFactories();
         Runnable restoreL10n = installHeadlessL10n();
+        Runnable restoreMinecraft = installHeadlessMinecraftInstance();
 
         try
         {
@@ -81,6 +82,7 @@ public final class BBSUiInputDispatcherTest
         {
             restoreL10n.run();
             restoreClipFactories.run();
+            restoreMinecraft.run();
         }
     }
 
@@ -212,6 +214,9 @@ public final class BBSUiInputDispatcherTest
          * (it deadlocked live gestures); its test group is retired with it. */
         UIElementRemovalOwnershipTest.runAll();
         UIWrapperGestureOwnershipTest.runAll();
+        UIDashboardParityTest.runAll();
+        FrameworkRangeParityTest.runAll();
+        SettingsUiParityTest.runAll();
         UISecondaryGestureOwnershipTest.runAll();
         UISecondaryGestureOwnershipRuntimeTest.runAll();
         UIKeybindGestureOwnershipTest.runAll();
@@ -222,6 +227,7 @@ public final class BBSUiInputDispatcherTest
         OrbitFilmGestureOwnershipTest.runAll();
         GizmoInteractionGenerationTest.runAll();
         PoseFormRegressionSourceTest.runAll();
+        UIPlacementGizmoMigrationTest.main(new String[0]);
         BBSUiLifecycleSourceTest.runAll();
         BBSUiOpenDispatcherTest.runAll();
 

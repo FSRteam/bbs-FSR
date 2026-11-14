@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.forms.categories;
 
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -10,7 +11,6 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.UIFormList;
 import mchorse.bbs_mod.ui.forms.categories.UIFormCategory;
 import mchorse.bbs_mod.ui.forms.categories.UIRecentFormCategory;
-
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,6 +28,8 @@ public class RecentFormCategory extends FormCategory
     public RecentFormCategory(ValueBoolean visibility)
     {
         super(UIKeys.FORMS_CATEGORIES_RECENT, visibility);
+
+        this.icon(Icons.TIME);
     }
 
     @Override

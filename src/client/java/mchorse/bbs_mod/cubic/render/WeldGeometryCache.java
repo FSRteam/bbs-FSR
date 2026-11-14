@@ -64,6 +64,8 @@ public class WeldGeometryCache
         /** Whether the bake emitted any geometry at all (an empty upload can't be drawn). */
         public boolean hasGeometry;
 
+        public List<CubicMaterialRenderer.Batch> materialBatches = new ArrayList<>();
+
         /** The frame epoch the translucent queue last borrowed this buffer in. */
         public long lentEpoch = -1L;
 
@@ -81,6 +83,8 @@ public class WeldGeometryCache
         /** Free the GPU buffer if one was ever allocated. */
         public void close()
         {
+            this.materialBatches.forEach((batch) -> batch.geometry().close());
+            this.materialBatches.clear();
             if (this.vbo != null)
             {
                 this.vbo.close();

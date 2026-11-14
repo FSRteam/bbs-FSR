@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.cubic.constraints.BoneConstraintsIO;
+import mchorse.bbs_mod.cubic.ik.JointDoF;
 import mchorse.bbs_mod.data.DataToString;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
@@ -12,11 +13,19 @@ import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.forms.utils.FormBone;
+import mchorse.bbs_mod.forms.forms.utils.FormMaterial;
 import mchorse.bbs_mod.forms.forms.utils.ValueBones;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.test.HeadlessClientTestBootstrap;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
+import mchorse.bbs_mod.ui.forms.editors.panels.UIFormPanel;
+import mchorse.bbs_mod.ui.utils.BoneSelection;
+import mchorse.bbs_mod.ui.utils.IBoneSelectionHost;
+import mchorse.bbs_mod.ui.utils.UI;
 
 import java.lang.reflect.Field;
 import java.util.Collection;
@@ -24,22 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-/**
- * What happens to the form data a build newer than this one wrote.
- *
- * <p>The case these cover is the one that cannot be undone: an upstream project holds its IK
- * chains, joint limits and physics in a {@code bones} child of the model form. Before the
- * preservation rules under test, opening that project here and saving it deleted them from disk.
- * The assertions below are the two halves of the rule — an unknown child of a parent this build
- * models survives, and an unknown key of a parent it does not know the child of still disappears,
- * because that is what makes a removed property go away.</p>
- *
- * <p>The {@code bones} group is now a child this build models, but only its constraints are
- * modelled: the per-bone IK and physics keys are still newer than this build and still have to
- * survive. That is the sharper version of the same case — the parent became known while most of
- * its children did not — so the tests for it assert the whole subtree, byte for byte, and the
- * {@code constraints} blob this build used to write is asserted to be read once and gone.</p>
- */
+/** Canonical bone migration, addon preservation and the shared bone-panel layout contracts. */
 public final class FormDataPreservationTest
 {
     public static void main(String[] args) throws Exception
@@ -57,25 +51,74 @@ public final class FormDataPreservationTest
         try
         {
             testUpstreamModelFormSurvivesRoundTrip();
+            testMaterialEditsPreserveForeignData();
             testBodyPartInheritanceFlagsSurviveRoundTrip();
             testPreservedKeyIsNotResurrected();
             testClearedOwnPropertyStaysCleared();
             testUnknownKeysAreStillDropped();
             testNamespacedKeysAreStillKept();
             testChildTakesTheKeyOverFromAPreservedCopy();
-            testBonesSubtreeRoundTripsByteForByte();
+            testTypedBonesRoundTrip();
             testUnmodelledBoneKeySurvivesWithoutConstraints();
             testLegacyConstraintsBlobIsMigrated();
             testLegacyBlobWinsOverBonesGroup();
             testPerAxisLimitsSurviveTheExchangeFormat();
             testConstraintsStayReadableAsAPreset();
             testEmptyBonesGroupIsNotWritten();
+            testAdaptiveBoneListLayout();
+            testEditorOwnedBoneSelection();
         }
         finally
         {
             restoreForms.run();
             restoreRuntime.run();
         }
+    }
+
+    private static void testEditorOwnedBoneSelection()
+    {
+        SelectionHost film = new SelectionHost();
+        SelectionHost forms = new SelectionHost();
+        SelectionPanel filmPanel = new SelectionPanel();
+        SelectionPanel formPanel = new SelectionPanel();
+        film.add(filmPanel);
+        forms.add(formPanel);
+        filmPanel.pick("hand");
+        formPanel.pick("head");
+        check(filmPanel.selected().equals("hand") && formPanel.selected().equals("head"),
+            "Film and form editors overwrite each other's selected bone");
+        film.remove(filmPanel);
+        SelectionPanel rebuilt = new SelectionPanel();
+        film.add(rebuilt);
+        check(rebuilt.selected().equals("hand"), "Panel rebuild loses the editor's selected bone");
+        forms.add(filmPanel);
+        check(filmPanel.selected().equals("head"), "Reattached panel retains a stale selection host");
+        SelectionPanel detached = new SelectionPanel();
+        detached.pick("detached");
+        check(detached.selected().equals("detached") && rebuilt.selected().equals("hand"),
+            "Detached panel modifies another editor's selection");
+    }
+
+    private static final class SelectionHost extends UIElement implements IBoneSelectionHost
+    {
+        private final BoneSelection selection = new BoneSelection();
+
+        @Override
+        public BoneSelection getBoneSelection()
+        {
+            return this.selection;
+        }
+    }
+
+    private static final class SelectionPanel extends UIFormPanel<ModelForm>
+    {
+        SelectionPanel()
+        {
+            super(null);
+        }
+
+        void pick(String bone) { this.boneSelection().set(bone); }
+        String selected() { return this.boneSelection().get(); }
     }
 
     /**
@@ -90,9 +133,13 @@ public final class FormDataPreservationTest
         ModelForm form = (ModelForm) architect.fromData(upstream);
         MapType saved = architect.toData(form);
 
-        assertSameSubtree(upstream, saved, "bones");
         assertSameSubtree(upstream, saved, "materials");
-        assertSameSubtree(upstream, saved, "wind");
+        FormBone arm = form.bones.getBone("bone_upper_arm");
+
+        check(arm != null && arm.ikTarget.get().equals("bone_hand"), "the IK target was lost");
+        check(arm.joint.get().limitY && arm.joint.get().stiffnessX == 0.5F, "the typed joint was lost");
+        check(form.wind.get().strength == 0.75F && form.wind.get().local, "the typed wind was lost");
+        check(!saved.has("ik") && !saved.has("physics"), "legacy projections were persisted");
 
         /* The form's own values still load and save normally next to the preserved ones. */
         check("bbs:models/example".equals(saved.getString("model")), "the form's own model link was lost");
@@ -135,6 +182,39 @@ public final class FormDataPreservationTest
         report("body part: still dropped", droppedKeys(upstream, saved));
     }
 
+    private static void testMaterialEditsPreserveForeignData()
+    {
+        MapType source = new MapType();
+        MapType foreign = new MapType();
+        foreign.putString("mode", "future-overlay");
+        source.put("overlay", foreign);
+        source.putBool("culling", false);
+        FormMaterial material = new FormMaterial("skin");
+        material.fromData(source);
+        foreign.putString("mode", "changed-after-load");
+
+        material.smoothness.set(0.75F);
+        MapType saved = material.toData().asMap();
+        check(saved.getMap("overlay").getString("mode").equals("future-overlay"),
+            "editing a material changed or dropped its unmodelled payload");
+        check(saved.get("culling").equals(source.get("culling")) && saved.size() == 3
+            && saved.getFloat("smoothness") == 0.75F,
+            "editing one material value rewrote untouched encodings or added neutral fields");
+
+        material.culling.set(FormMaterial.CULLING_OFF);
+        saved = material.toData().asMap();
+        check(saved.getInt("culling") == FormMaterial.CULLING_OFF,
+            "a loaded material's raw encoding overrode an authored edit");
+        FormMaterial copy = new FormMaterial("copy");
+        copy.copy(material);
+        check(copy.toData().equals(saved), "a copied material lost unknown data or its edited values");
+        FormMaterial reloaded = new FormMaterial("skin");
+        reloaded.fromData(saved);
+        check(reloaded.toData().equals(saved), "a second material round trip changed its sparse payload");
+        copy.fromData(new MapType());
+        check(copy.toData().asMap().isEmpty(), "removed material payload reappeared after a later read");
+    }
+
     /**
      * The other half of the rule: preservation is not memory. Data that does not carry a key must
      * not write that key back, or a property the user deleted would reappear on the next save.
@@ -156,9 +236,17 @@ public final class FormDataPreservationTest
 
         MapType second = architect.toData(architect.fromData(withoutChildren));
 
-        check(!second.has("bones"), "a preserved key came back although the data no longer had it");
-        check(!second.has("materials"), "a preserved key came back although the data no longer had it");
-        check(!second.has("wind"), "a preserved key came back although the data no longer had it");
+        check(!second.has("bones"), "bones came back although the data no longer had it");
+        check(!second.has("materials"), "materials came back although the data no longer had it");
+        check(!second.has("wind"), "wind came back although the data no longer had it");
+
+        ModelForm cleared = (ModelForm) architect.fromData(withChildren);
+        cleared.bones.fromData(new MapType());
+        cleared.materials.fromData(new MapType());
+        cleared.wind.reset();
+        MapType clearedData = architect.toData(cleared);
+        check(!clearedData.has("bones") && !clearedData.has("materials") && !clearedData.has("wind"),
+            "explicitly cleared dynamic groups came back on save");
 
         /* A property this build does model is written only when it has something to write, so a
          * file without it does not gain an empty one — the deletion stays a deletion. */
@@ -177,13 +265,23 @@ public final class FormDataPreservationTest
         FormArchitect architect = BBSMod.getForms();
         MapType data = upstreamModelForm();
 
+        MapType chain = new MapType();
+
+        chain.putString("target", "bone_hand");
+        chain.putInt("chain_length", 4);
         data.put("ik", new MapType());
-        data.getMap("ik").putInt("chain_length", 4);
+        data.getMap("ik").put("bone_upper_arm", chain);
+        BoneConstraint constraint = new BoneConstraint();
+        constraint.limitX = true;
+        constraint.minX = -20F;
+        data.getMap("bones").getMap("bone_upper_arm").put("constraints", constraint.toData());
 
         ModelForm form = (ModelForm) architect.fromData(data);
         MapType before = architect.toData(form);
 
-        check(before.has("ik"), "the own property was not read in the first place");
+        check(form.bones.getBone("bone_upper_arm").ikChainLength.get() == 4,
+            "the legacy chain was not read into the canonical bone");
+        check(!before.has("ik"), "a legacy projection was persisted next to canonical bones");
 
         form.ik.fromData(null);
 
@@ -191,6 +289,12 @@ public final class FormDataPreservationTest
 
         check(!after.has("ik"), "a property the user cleared came back on save");
         check(after.has("bones"), "clearing an own property also dropped a preserved one");
+        check(form.bones.getBone("bone_upper_arm").ikTarget.get().isEmpty(), "clearing IK kept its chain");
+        check(form.bones.getBone("bone_upper_arm").constraints.get().limitX
+            && form.bones.getBone("bone_upper_arm").constraints.get().minX == -20F,
+            "clearing IK also cleared the bone's rotation constraints");
+        check(form.wind.get().strength == 0.75F, "clearing IK also cleared global wind");
+        assertSameSubtree(before, after, "materials");
 
         report("model form: cleared ik", "a cleared own property -> absent from the save, bones untouched");
     }
@@ -272,17 +376,8 @@ public final class FormDataPreservationTest
 
     /* The constraints group */
 
-    /**
-     * The strongest form of the whole round trip: a {@code bones} subtree written by a build that
-     * models more per bone than this one comes back byte for byte — the modelled constraint block
-     * as well as every key this build can only carry.
-     *
-     * <p>It is the assertion that fails loudly if the group is ever read as a known group without
-     * the per-bone preservation list: {@code ik_target}, {@code joint} and the physics keys would
-     * simply be gone, and nothing else in the suite would notice, because nothing else can see
-     * per-bone data at all.</p>
-     */
-    private static void testBonesSubtreeRoundTripsByteForByte()
+    /** Typed controls normalize default fields while preserving authored values and addon data. */
+    private static void testTypedBonesRoundTrip()
     {
         FormArchitect architect = BBSMod.getForms();
         MapType upstream = upstreamBonesGroup();
@@ -290,9 +385,8 @@ public final class FormDataPreservationTest
 
         data.put("bones", upstream);
 
-        MapType saved = architect.toData(architect.fromData(data));
-
-        assertSameSubtree(data, saved, "bones");
+        ModelForm form = (ModelForm) architect.fromData(data);
+        MapType saved = architect.toData(form);
 
         /* Both halves are actually in the fixture — an empty round trip would pass vacuously. */
         MapType savedBones = saved.getMap("bones");
@@ -300,12 +394,19 @@ public final class FormDataPreservationTest
 
         check(arm.has("constraints"), "the constraint block was not read");
         check(arm.getMap("constraints").getBool("limit_x", false), "the constraint's X switch was lost");
-        check(arm.getBool("ik_stretch", true) == false, "an unmodelled IK key was lost");
-        check(arm.has("joint"), "the unmodelled joint group was lost");
-        check(arm.has("physics_radius"), "an unmodelled physics key was lost");
+        check(!arm.getBool("ik_stretch", false), "the neutral IK stretch flag changed");
+        check(arm.has("joint"), "the typed joint group was lost");
+        check(form.bones.getBone("bone_upper_arm").joint.get().limitY, "the joint axis limit was lost");
+        check(form.bones.getBone("bone_upper_arm").joint.get().stiffnessX == 0.5F,
+            "the joint stiffness was lost");
+        check(form.bones.getBone("bone_upper_arm").physicsRadius.get() == 0.25F,
+            "the physics radius was lost");
         check(savedBones.has("bone_only_unmodelled"), "a bone carrying nothing this build models was dropped");
+        assertSameSubtree(upstream.getMap("bone_upper_arm"), arm, "exampleaddon:driver");
+        check(DataToString.toString(saved).equals(DataToString.toString(architect.toData(architect.fromData(saved)))),
+            "canonical typed bone serialization drifted on the second save");
 
-        report("model form: bones subtree", "constraints + unmodelled per-bone keys -> byte for byte identical");
+        report("model form: bones subtree", "typed constraints/IK/joint/physics survive; addon subtree identical; canonical save stable");
     }
 
     /**
@@ -418,8 +519,8 @@ public final class FormDataPreservationTest
 
         check(!saved.has("constraints"), "the blob was written back although the bones group is the newer writer");
         check(saved.has("bones", BaseType.TYPE_MAP), "the bones group was not written");
-        check(saved.getMap("bones").getMap("bone_upper_arm").getBool("ik_stretch", true) == false,
-            "reading the legacy blob dropped an unmodelled per-bone key");
+        check(!form.bones.getBone("bone_upper_arm").ikStretch.get(),
+            "reading the legacy blob changed the IK stretch flag");
         check(saved.getMap("bones").getMap("bone_upper_arm").has("joint"),
             "reading the legacy blob dropped the unmodelled joint group");
         check(saved.getMap("bones").has("bone_only_unmodelled"),
@@ -533,6 +634,42 @@ public final class FormDataPreservationTest
 
     /* Fixtures */
 
+    private static void testAdaptiveBoneListLayout()
+    {
+        UIScrollView options = UI.scrollView(4, 4);
+        options.wh(240, 500);
+        UIElement list = new UIElement().h(180).expand();
+        UISection section = new UISection();
+        section.fields.add(new UIElement().h(280));
+        options.add(list, section);
+        options.resize();
+        int expandedListHeight = list.area.h;
+        int expandedSectionHeight = section.area.h;
+
+        check(expandedListHeight >= 180, "the bone list shrank below its eight-row minimum");
+        section.setExpanded(false);
+        check(list.area.h == expandedListHeight + expandedSectionHeight - section.area.h,
+            "folding a section did not remeasure the parent and give its space to the bone list");
+        options.h(160);
+        options.resize();
+        check(list.area.h == 180, "a short options panel shrank the bone list instead of scrolling");
+        check(options.scroll.scrollSize > options.area.h, "overflowing bone options lost their scroll range");
+
+        UIElement row = new UIElement();
+        row.wh(240, 60);
+        row.row(4);
+        UIElement first = new UIElement().w(20);
+        UIElement hidden = new UIElement().w(100);
+        UIElement last = new UIElement().expand();
+        hidden.setVisible(false);
+        row.add(first, hidden, last);
+        row.resize();
+        check(hidden.area.w == 0 && last.area.x == first.area.ex() + 4,
+            "a hidden row child still occupied a layout slot");
+        check(last.area.h == row.area.h && last.area.ex() == row.area.ex(),
+            "row expansion did not use the remaining width and available height");
+    }
+
     /**
      * A model form shaped the way an upstream build writes one: the per-bone IK group, the material
      * overrides and the global wind, none of which this build has a child for, plus its own shape
@@ -557,12 +694,7 @@ public final class FormDataPreservationTest
         bone.putBool("ik_stretch", false);
         bone.putBool("ik_squash", false);
 
-        MapType joint = new MapType();
-
-        joint.putBool("lock", false);
-        joint.putBool("limited", true);
-        joint.putFloat("stiffness", 0.5F);
-        bone.put("joint", joint);
+        bone.put("joint", jointFixture());
 
         bones.put("bone_upper_arm", bone);
         data.put("bones", bones);
@@ -632,12 +764,13 @@ public final class FormDataPreservationTest
         arm.putBool("ik_squash", false);
         arm.putBool("ik_classic", true);
 
-        MapType joint = new MapType();
+        arm.put("joint", jointFixture());
 
-        joint.putBool("lock", false);
-        joint.putBool("limited", true);
-        joint.putFloat("stiffness", 0.5F);
-        arm.put("joint", joint);
+        MapType addon = new MapType();
+
+        addon.putString("mode", "spring");
+        addon.putFloat("influence", 0.625F);
+        arm.put("exampleaddon:driver", addon);
 
         arm.putBool("physics_collisions", true);
         arm.putFloat("physics_radius", 0.25F);
@@ -669,6 +802,16 @@ public final class FormDataPreservationTest
         bones.put("bone_forearm", forearm);
 
         return bones;
+    }
+
+    private static MapType jointFixture()
+    {
+        JointDoF joint = new JointDoF();
+
+        joint.limitY = true;
+        joint.stiffnessX = 0.5F;
+
+        return joint.toData();
     }
 
     private static MapType defaultConstraintBlock()

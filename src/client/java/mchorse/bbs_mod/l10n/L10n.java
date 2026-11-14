@@ -168,6 +168,7 @@ public class L10n
         }
 
         BBSMod.events.post(new L10nReloadEvent(this));
+        mchorse.bbs_mod.api.EventBus.INSTANCE.post(new mchorse.bbs_mod.api.client.events.L10nReloadEvent(this));
 
         File export = UILanguageEditorOverlayPanel.getLangEditorFolder();
         File[] files = export.listFiles();

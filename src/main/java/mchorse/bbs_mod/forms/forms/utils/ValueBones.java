@@ -16,9 +16,44 @@ import java.util.Map;
  */
 public class ValueBones extends ValueGroup
 {
+    private long revision;
+
     public ValueBones(String id)
     {
         super(id);
+    }
+
+    public long getRevision()
+    {
+        return this.revision;
+    }
+
+    @Override
+    public void add(BaseValue value)
+    {
+        super.add(value);
+        this.revision++;
+    }
+
+    @Override
+    public void remove(BaseValue value)
+    {
+        super.remove(value);
+        this.revision++;
+    }
+
+    @Override
+    public void removeAll()
+    {
+        super.removeAll();
+        this.revision++;
+    }
+
+    @Override
+    public void postNotify(BaseValue value, int flag)
+    {
+        this.revision++;
+        super.postNotify(value, flag);
     }
 
     /** The bone's properties, or null when the author never touched it (neutral). */

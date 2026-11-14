@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.camera.clips.misc;
 
 import mchorse.bbs_mod.camera.clips.CameraClip;
+import mchorse.bbs_mod.camera.clips.IPlaceableClip;
 import mchorse.bbs_mod.camera.data.Placement;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.data.types.BaseType;
@@ -18,7 +19,7 @@ import mchorse.bbs_mod.utils.pose.Transform;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SubtitleClip extends CameraClip
+public class SubtitleClip extends CameraClip implements IPlaceableClip
 {
     /** Old subtitles scaled their text 10x by default; in frame units that's 20. */
     public static final float DEFAULT_SCALE = 20F;
@@ -46,6 +47,23 @@ public class SubtitleClip extends CameraClip
     public static List<Subtitle> getSubtitles(ClipContext context)
     {
         return context.clipData.get("subtitles", ArrayList::new);
+    }
+
+    public Subtitle getSubtitle()
+    {
+        return this.subtitle;
+    }
+
+    @Override
+    public ValuePlacement getPlacement()
+    {
+        return this.placement;
+    }
+
+    @Override
+    public OverlayBox getOverlayBox()
+    {
+        return this.subtitle.box;
     }
 
     public SubtitleClip()

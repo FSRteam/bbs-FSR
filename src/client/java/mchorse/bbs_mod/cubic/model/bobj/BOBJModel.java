@@ -50,6 +50,12 @@ public class BOBJModel implements IModel
         return this.armature;
     }
 
+    @Override
+    public boolean isFacingFlipped()
+    {
+        return true;
+    }
+
     /**
      * Whether any mesh vertex is weighted to this bone. A bone with no skin is a bare reach marker
      * (an end bone), so IK stretch ends the chain at the last deforming bone instead — the marker
@@ -113,7 +119,7 @@ public class BOBJModel implements IModel
 
         for (String key : this.getAllGroupKeys())
         {
-            PoseTransform poseTransform = pose.get(key);
+            PoseTransform poseTransform = pose.getOrCreate(key);
             BOBJBone group = this.armature.bones.get(key);
 
             poseTransform.copy(group.transform);
@@ -128,6 +134,24 @@ public class BOBJModel implements IModel
         for (BOBJBone orderedBone : this.armature.orderedBones)
         {
             orderedBone.reset();
+        }
+    }
+
+    @Override
+    public void snapshotChannels()
+    {
+        for (BOBJBone orderedBone : this.armature.orderedBones)
+        {
+            orderedBone.snapshotChannels();
+        }
+    }
+
+    @Override
+    public void restoreChannels()
+    {
+        for (BOBJBone orderedBone : this.armature.orderedBones)
+        {
+            orderedBone.restoreChannels();
         }
     }
 
@@ -162,6 +186,7 @@ public class BOBJModel implements IModel
             // TODO: bone.color.copy(transform.color);
             bone.transform.translate.add(transform.translate);
             bone.transform.scale.add(transform.scale).sub(1, 1, 1);
+            bone.visible &= transform.visible;
 
             if (transform.rotationMode == Transform.RotationMode.QUATERNION)
             {
@@ -243,6 +268,12 @@ public class BOBJModel implements IModel
                 this.collectChildrenKeys(bone, groups);
             }
         }
+    }
+
+    @Override
+    public Collection<BOBJBone> getRigBones()
+    {
+        return this.armature.orderedBones;
     }
 
     @Override

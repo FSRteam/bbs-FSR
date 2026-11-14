@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.dashboard.utils;
 
 import mchorse.bbs_mod.camera.OrbitCamera;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
@@ -15,6 +16,34 @@ public class UIOrbitCamera implements IUIElement
     private long dragGeneration;
     private boolean control;
     private boolean enabled = true;
+    private boolean freeLook;
+    private boolean pickUpMouse;
+
+    public boolean isFreeLook()
+    {
+        return this.freeLook;
+    }
+
+    public void setFreeLook(boolean freeLook)
+    {
+        freeLook &= this.enabled && this.control;
+
+        if (this.freeLook == freeLook)
+        {
+            return;
+        }
+
+        if (freeLook && (this.dragOwnership.isActive() || Window.isMouseButtonPressed(0)
+            || Window.isMouseButtonPressed(1) || Window.isMouseButtonPressed(2)))
+        {
+            return;
+        }
+
+        this.freeLook = freeLook;
+        this.orbit.setFreeLook(freeLook);
+        this.pickUpMouse = true;
+        Window.setCursorHidden(this, freeLook);
+    }
 
     public boolean canControl()
     {
@@ -30,6 +59,7 @@ public class UIOrbitCamera implements IUIElement
     {
         if (!control)
         {
+            this.setFreeLook(false);
             this.cancelGesture();
 
             /* Key events only reach the camera while control is on, so a flight
@@ -46,6 +76,7 @@ public class UIOrbitCamera implements IUIElement
     {
         if (!enabled)
         {
+            this.setFreeLook(false);
             this.cancelGesture();
             this.orbit.reset();
         }
@@ -124,6 +155,7 @@ public class UIOrbitCamera implements IUIElement
         }
 
         this.orbit.release();
+        this.pickUpMouse = this.freeLook;
 
         return true;
     }
@@ -162,6 +194,17 @@ public class UIOrbitCamera implements IUIElement
     @Override
     public void render(UIContext context)
     {
+        if (this.freeLook)
+        {
+            Window.setCursorHidden(this, true);
+        }
+
+        if (this.pickUpMouse)
+        {
+            this.orbit.cache(context.mouseX, context.mouseY);
+            this.pickUpMouse = false;
+        }
+
         if (!this.control && !this.dragOwnership.isActive())
         {
             this.orbit.cache(context.mouseX, context.mouseY);

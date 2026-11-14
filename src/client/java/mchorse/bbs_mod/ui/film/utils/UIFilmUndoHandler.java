@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.ui.film.utils;
 
-import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.client.film.collaboration.BBSFilmCollaborationBridge;
+import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
@@ -9,19 +9,20 @@ import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.utils.undo.ValueChangeUndo;
 import mchorse.bbs_mod.ui.forms.editors.UIFormUndoHandler;
 import mchorse.bbs_mod.utils.Timer;
-import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.undo.CompoundUndo;
 import mchorse.bbs_mod.utils.undo.IUndo;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 
 public class UIFilmUndoHandler extends UIFormUndoHandler
 {
     private Timer actionsTimer = new Timer(100);
-    private Set<BaseValue> syncData = new HashSet<>();
+    private Set<BaseValue> syncData = Collections.newSetFromMap(new IdentityHashMap<>());
 
     public UIFilmUndoHandler(UIFilmPanel panel)
     {
@@ -38,6 +39,11 @@ public class UIFilmUndoHandler extends UIFormUndoHandler
             return;
         }
 
+        if (baseValue.getPath().getLast().equals("expanded") && baseValue.getPath().strings.contains("replay_categories"))
+        {
+            return;
+        }
+
         super.handlePreValues(baseValue, flag);
     }
 
@@ -46,9 +52,9 @@ public class UIFilmUndoHandler extends UIFormUndoHandler
     {
         super.handleValue(value);
 
-        if (this.isReplayActions(value))
+        if (value.isSynced())
         {
-            this.syncData.add(value);
+            this.syncData.add(getSyncValue(value));
             this.actionsTimer.mark();
         }
     }
@@ -99,47 +105,24 @@ public class UIFilmUndoHandler extends UIFormUndoHandler
         }
     }
 
-    private boolean isReplayActions(BaseValue value)
+    /** New property channels need their factory metadata before the server can resolve child ids. */
+    private static BaseValue getSyncValue(BaseValue value)
     {
-        String path = value.getPath().toString();
+        BaseValue channel = null;
 
-        if (
-            path.endsWith("/replays") ||
-            path.endsWith("/keyframes") ||
-            path.contains("/keyframes/x") ||
-            path.contains("/keyframes/y") ||
-            path.contains("/keyframes/z") ||
-            path.contains("/keyframes/item_slot_") ||
-            path.contains("/keyframes/item_off_hand") ||
-            path.contains("/keyframes/item_head") ||
-            path.contains("/keyframes/item_chest") ||
-            path.contains("/keyframes/item_legs") ||
-            path.contains("/keyframes/item_feet") ||
-            path.endsWith("/actor") ||
-            path.endsWith("/fp") ||
-            path.endsWith("/enabled") ||
-            path.endsWith("/form")
-        ) {
-            return true;
-        }
-
-        /* Specifically for overwriting full replay like what's done when recording
-         * data in the world! */
-        if (value.getParent() != null && value.getParent().getId().equals("replays"))
+        for (BaseValue parent = value; parent != null; parent = parent.getParent())
         {
-            return true;
-        }
-
-        while (value != null)
-        {
-            if (value instanceof Clips clips && clips.getFactory() == BBSMod.getFactoryActionClips())
+            if (parent instanceof FormProperties)
             {
-                return true;
+                return parent;
             }
 
-            value = value.getParent();
+            if (parent instanceof KeyframeChannel<?>)
+            {
+                channel = parent;
+            }
         }
 
-        return false;
+        return channel == null ? value : channel;
     }
 }

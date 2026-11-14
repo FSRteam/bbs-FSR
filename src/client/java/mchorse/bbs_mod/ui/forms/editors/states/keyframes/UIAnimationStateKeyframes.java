@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.states.keyframes;
 
 import mchorse.bbs_mod.camera.utils.TimeUtils;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.film.UIClips;
 import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -42,6 +43,13 @@ public class UIAnimationStateKeyframes extends UIKeyframes
     public float getPlayheadTick(UIContext context)
     {
         return this.editor == null ? 0F : this.editor.getTimelineCursor(context.getTransition());
+    }
+
+    @Override
+    public Float getAutoKeyframeTick()
+    {
+        return this.editor != null && BBSSettings.autoKeyframe != null && BBSSettings.autoKeyframe.get()
+            ? this.getOffset() : null;
     }
 
     @Override

@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * The column of category icons next to a timeline. When the editor gets too short for a single stack,
- * the buttons wrap into a second column so none of them is pushed under the pinned bottom toggles.
+ * the buttons wrap into enough columns to stay above the pinned bottom toggles.
  */
 public class UITimelineCategoryBar extends UIElement
 {
@@ -24,12 +24,14 @@ public class UITimelineCategoryBar extends UIElement
         this.w(BUTTON_SIZE).h(1F);
     }
 
-    /** Width the bar needs at the given height: two columns as soon as one cannot hold every button. */
+    /** Width needed to keep every category reachable above the pinned actions. */
     public int getWidthForHeight(int height)
     {
-        int required = this.getChildren(UIIcon.class).size() * BUTTON_SIZE + this.bottomSpace;
+        int rows = Math.max(1, (height - this.bottomSpace) / BUTTON_SIZE);
+        int count = this.getChildren(UIIcon.class).size();
+        int columns = Math.max(1, (count + rows - 1) / rows);
 
-        return height < required ? BUTTON_SIZE * 2 : BUTTON_SIZE;
+        return columns * BUTTON_SIZE;
     }
 
     @Override

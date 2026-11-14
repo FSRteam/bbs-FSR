@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
@@ -22,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 public class FFMpegUtils
 {
@@ -31,6 +33,7 @@ public class FFMpegUtils
     private static final long TERMINATION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1L);
     private static final Pattern LIBX264_ENCODER = Pattern.compile("(?m)^\\s*V\\S*\\s+libx264\\s");
     private static final Pattern AAC_ENCODER = Pattern.compile("(?m)^\\s*A\\S*\\s+aac\\s");
+    private static final Pattern VERSION_NUMBER = Pattern.compile("\\d+(\\.\\d+)*");
 
     /**
      * People usually are not bright enough, even though everything is stated
@@ -101,6 +104,56 @@ public class FFMpegUtils
         {
             return false;
         }
+    }
+
+    /** Reports the configured encoder's version. Call from a worker because it runs a process. */
+    public static Optional<String> version()
+    {
+        Path log = null;
+
+        try
+        {
+            log = Files.createTempFile("bbs-ffmpeg-version-", ".log");
+
+            if (executeCommand(BBSMod.getGameFolder(), log.toFile(),
+                List.of(getFFMPEG(), "-version"), HEALTH_CHECK_TIMEOUT_MS))
+            {
+                try (BufferedReader reader = Files.newBufferedReader(log))
+                {
+                    return parseVersion(reader.readLine());
+                }
+            }
+        }
+        catch (IOException e)
+        {}
+        finally
+        {
+            if (log != null)
+            {
+                try
+                {
+                    Files.deleteIfExists(log);
+                }
+                catch (IOException e)
+                {}
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    static Optional<String> parseVersion(String first)
+    {
+        if (first != null && first.startsWith("ffmpeg version "))
+        {
+            String[] words = first.split(" ");
+            String word = words.length > 2 ? words[2] : "?";
+            Matcher number = VERSION_NUMBER.matcher(word);
+
+            return Optional.of(number.find() ? number.group() : word);
+        }
+
+        return Optional.empty();
     }
 
     public static boolean checkFFMPEG(Path candidate)

@@ -427,6 +427,18 @@ public class Transform implements IMapSerializable
         return false;
     }
 
+    public int contentHash()
+    {
+        int hash = this.translate.hashCode();
+
+        hash = 31 * hash + this.scale.hashCode();
+        hash = 31 * hash + this.rotate.hashCode();
+        hash = 31 * hash + this.quat.hashCode();
+        hash = 31 * hash + this.rotationMode.ordinal();
+
+        return hash;
+    }
+
     public Transform copy()
     {
         Transform transform = new Transform();

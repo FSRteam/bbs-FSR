@@ -2,6 +2,7 @@ package mchorse.bbs_mod.forms.forms;
 
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.settings.values.core.ValueStableList;
+import mchorse.bbs_mod.utils.CollectionUtils;
 
 public class BodyPartManager extends ValueStableList<BodyPart>
 {
@@ -25,7 +26,11 @@ public class BodyPartManager extends ValueStableList<BodyPart>
     public void removeBodyPart(BodyPart part)
     {
         this.preNotify();
-        this.list.remove(part);
+        int index = CollectionUtils.getIndex(this.list, part);
+        if (index >= 0)
+        {
+            this.list.remove(index);
+        }
         this.postNotify();
     }
 
@@ -33,8 +38,10 @@ public class BodyPartManager extends ValueStableList<BodyPart>
     {
         this.preNotify();
 
-        if (this.list.remove(part))
+        int current = CollectionUtils.getIndex(this.list, part);
+        if (current >= 0)
         {
+            this.list.remove(current);
             this.list.add(index, part);
         }
 

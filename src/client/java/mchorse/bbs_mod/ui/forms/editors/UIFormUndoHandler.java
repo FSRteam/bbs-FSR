@@ -12,12 +12,14 @@ import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.undo.CompoundUndo;
 import mchorse.bbs_mod.utils.undo.IUndo;
 import mchorse.bbs_mod.utils.undo.UndoManager;
+import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class UIFormUndoHandler
 {
@@ -28,6 +30,8 @@ public class UIFormUndoHandler
     protected MapType uiData;
 
     protected Timer undoTimer = new Timer(1000);
+    protected boolean batching;
+    protected Timer batchTimer = new Timer(300);
 
     protected UIElement uiElement;
 
@@ -90,6 +94,8 @@ public class UIFormUndoHandler
         this.cachedValues.clear();
         this.uiData = null;
         this.cacheMarkLastUndoNoMerging = false;
+        this.batching = false;
+        this.batchTimer.reset();
     }
 
     /**
@@ -149,6 +155,28 @@ public class UIFormUndoHandler
 
     public void handlePreValues(BaseValue baseValue, int flag)
     {
+        if ((flag & IValueListener.FLAG_BATCH) != 0)
+        {
+            this.batching = true;
+            this.batchTimer.mark();
+        }
+
+        if (this.batching)
+        {
+            BaseValue parent = baseValue;
+
+            while (parent != null)
+            {
+                if (parent instanceof KeyframeChannel)
+                {
+                    baseValue = parent;
+                    break;
+                }
+
+                parent = parent.getParent();
+            }
+        }
+
         if (this.uiData == null && this.uiElement.getRoot() != null)
         {
             this.uiData = this.uiElement.getRoot().collectAllUndoData();
@@ -167,7 +195,25 @@ public class UIFormUndoHandler
 
     public void submitUndo()
     {
+        this.submitUndo(false);
+    }
+
+    public void submitUndo(boolean force)
+    {
         this.handleTimers();
+
+        boolean batched = this.batching;
+
+        if (this.batching)
+        {
+            if (!force && !this.batchTimer.checkReset())
+            {
+                return;
+            }
+
+            this.batching = false;
+            this.batchTimer.reset();
+        }
 
         if (this.cachedValues.isEmpty())
         {
@@ -177,18 +223,26 @@ public class UIFormUndoHandler
         reduceUndoRedundancy(this.cachedValues);
 
         List<ValueChangeUndo> changeUndos = new ArrayList<>();
-        List<BaseValue> committedValues = new ArrayList<>(this.cachedValues.keySet());
+        List<BaseValue> committedValues = new ArrayList<>();
 
         for (Map.Entry<BaseValue, BaseType> entry : this.cachedValues.entrySet())
         {
             BaseValue value = entry.getKey();
-            ValueChangeUndo undo = new ValueChangeUndo(value.getPath(), entry.getValue(), value.toData());
+            BaseType after = value.toData();
+
+            if (batched && Objects.equals(entry.getValue(), after))
+            {
+                continue;
+            }
+
+            ValueChangeUndo undo = new ValueChangeUndo(value.getPath(), entry.getValue(), after);
 
             undo.cacheAfter(this.uiElement);
             undo.cacheBefore(this.uiData);
             changeUndos.add(undo);
 
             this.handleValue(value);
+            committedValues.add(value);
         }
 
         if (changeUndos.size() == 1)

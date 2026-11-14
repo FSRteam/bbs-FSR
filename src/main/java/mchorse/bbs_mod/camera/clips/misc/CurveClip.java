@@ -41,6 +41,7 @@ public class CurveClip extends CameraClip
     {
         this.add(this.channels);
         this.channels.addChannel("sun_rotation");
+        this.channels.addChannel("sun_horizontal_rotation");
     }
 
     @Override

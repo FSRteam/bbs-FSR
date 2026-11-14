@@ -9,8 +9,9 @@
  * collects anything it reports into {@link mchorse.bbs_mod.api.BBSApi#addonDiagnostics()}.</p>
  *
  * <p><b>What is and isn't a contract.</b> This package and its sub-packages are; the rest of BBS
- * is not. A signature in here does not change without
- * {@link mchorse.bbs_mod.api.BBSApi#VERSION} changing with it. Everything outside this package
+ * is not. A stable signature in here does not change without
+ * {@link mchorse.bbs_mod.api.BBSApi#VERSION} changing with it. Members marked
+ * {@link mchorse.bbs_mod.api.Experimental} may change without a version bump. Everything outside this package
  * moves without notice — an addon reaching into it is on its own, and the breakage shows up in
  * the game rather than on the build.</p>
  *

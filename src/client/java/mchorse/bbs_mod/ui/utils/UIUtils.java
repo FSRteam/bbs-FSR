@@ -3,13 +3,16 @@ package mchorse.bbs_mod.ui.utils;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.utils.OS;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.sounds.SoundEvents;
+import org.lwjgl.opengl.GL11;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 
 public class UIUtils
 {
@@ -27,6 +30,24 @@ public class UIUtils
 
         return new int[] {vx, vy, vw, vh};
     }
+    /** Capture the active viewport, including offscreen film rendering scopes. */
+    public static int[] currentViewport()
+    {
+        int[] viewport = new int[4];
+
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
+
+        return viewport;
+    }
+
+    public static void restoreViewport(int[] viewport)
+    {
+        if (viewport != null)
+        {
+            RenderSystem.viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        }
+    }
+
     /**
      * Open web link (in default web browser)
      */
@@ -118,6 +139,14 @@ public class UIUtils
         else
         {
             Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, pitch));
+        }
+    }
+
+    public static void setEnabledDeep(UIElement container, boolean enabled)
+    {
+        for (UIElement element : container.getChildren(UIElement.class, new ArrayList<>(), false))
+        {
+            element.setEnabled(enabled);
         }
     }
 }

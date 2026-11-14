@@ -95,6 +95,7 @@ public final class FilmFlightEditingTest
             testFreeFlightAndCancellation();
             testLayerSelectionAndCameraLocalModifiers();
             testKeyframeTickAndEnd();
+            testAdditiveKeyframeFlight();
             withTimelineInput(FilmFlightEditingTest::testDragAfterProgrammaticClipSelection);
         }
         finally
@@ -371,6 +372,52 @@ public final class FilmFlightEditingTest
             check(Math.abs(keyframe.x.interpolate(tick - 10) - MOVED.point.x) < 0.00001D,
                 "keyframe flight wrote at the new playhead instead of the captured relative tick");
             check(fixture.track.clips.get().size() == 3, "exclusive-end editing created a stray one-tick clip");
+        }
+    }
+
+    private static void testAdditiveKeyframeFlight()
+    {
+        for (boolean secondary : new boolean[]{false, true})
+        {
+            Fixture fixture = fixture(secondary);
+            KeyframeClip keyframe = new KeyframeClip();
+            keyframe.tick.set(10);
+            keyframe.duration.set(30);
+            keyframe.layer.set(3);
+            keyframe.additive.set(true);
+            keyframe.envelope.enabled.set(true);
+            keyframe.envelope.keyframes.set(true);
+            keyframe.envelope.channel.insert(0F, 0.5D);
+            keyframe.envelope.channel.insert(30F, 0.5D);
+            keyframe.x.insert(8F, 20D);
+            keyframe.yaw.insert(8F, 3D);
+            fixture.track.clips.addClip(keyframe);
+            TranslateClip upper = new TranslateClip();
+            upper.tick.set(0);
+            upper.duration.set(40);
+            upper.layer.set(4);
+            upper.translate.get().x = 8D;
+            fixture.track.clips.addClip(upper);
+            fixture.panel.cameraEditor.pickClip(keyframe);
+            fixture.panel.setCursor(17);
+            fixture.sample();
+            fixture.panel.setFlight(true);
+            fixture.move(MOVED);
+            fixture.panel.setCursor(55);
+            check(keyframe.x.get(0).getTick() == 0F && keyframe.x.get(0).getValue() == 20D,
+                "Additive flight changed its reference instead of adding a zero-time anchor");
+            check(keyframe.x.interpolate(8F) == 20D && keyframe.yaw.interpolate(8F) == 3D,
+                "Additive flight overwrote an unrelated existing key");
+            fixture.panel.setCursor(17);
+            same(fixture.sample(), MOVED, "Additive flight failed to invert the camera's own input and upper layers");
+
+            fixture.panel.setCursor(10);
+            BaseType before = keyframe.toData().copy();
+            UIKeyframeClip editor = allocate(UIKeyframeClip.class);
+            set(editor, "clip", keyframe);
+            set(editor, "editor", fixture.panel.cameraEditor);
+            editor.editClip(MOVED);
+            check(before.equals(keyframe.toData()), "Editing additive time zero moved the reference pose");
         }
     }
 

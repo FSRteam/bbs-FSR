@@ -74,13 +74,14 @@ public class CubicVAOBuilderRenderer implements ICubicRenderer
             }
         }
 
-        /* Split a group's geometry by material so each material can be drawn with its own
-         * texture: cubes belong to the default material (""), meshes to their own. */
+        /* Cubes and meshes share material buckets so each authored material draws with its own texture. */
         Map<String, MaterialBucket> buckets = new LinkedHashMap<>();
 
         for (ModelCube cube : group.cubes)
         {
-            this.renderCube(buckets.computeIfAbsent("", (k) -> new MaterialBucket()), stack, group, cube);
+            String material = cube.material == null ? "" : cube.material;
+
+            this.renderCube(buckets.computeIfAbsent(material, (k) -> new MaterialBucket()), stack, group, cube);
         }
 
         for (ModelMesh mesh : group.meshes)
@@ -191,7 +192,7 @@ public class CubicVAOBuilderRenderer implements ICubicRenderer
         stack.popPose();
     }
 
-    /** Write a cube vertex with its own normal (bevel strips shade smooth), transformed per vertex. */
+    /** Write a cube vertex with its own normal, transformed per vertex. */
     private void writeVertex(MaterialBucket bucket, PoseStack stack, ModelGroup group, ModelVertex vertex)
     {
         this.normal.set(vertex.normal.x, vertex.normal.y, vertex.normal.z);

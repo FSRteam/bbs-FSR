@@ -30,11 +30,10 @@ import java.util.Map;
  * negotiate a shared bone with another chain — a classic chain that overlaps
  * one solves on the core instead (the panel marks this statically).
  *
- * <p>Position solve and orientation pass are lifted from the legacy direct
- * solver this port carried before M6 (since removed: it was reachable only from
- * the IK physics test source set), trimmed to the two-segment case; both bone
- * flavours write the result to {@code orient}, the same constraint-stack
- * contract the core path honours.
+ * <p>Position solve and orientation pass are lifted from the legacy
+ * {@code IKSolver}/{@code ModelIKApplier} (pre-M6), trimmed to the two-segment
+ * case; both bone flavours write the result to {@code orient}, the same
+ * constraint-stack contract the core path honours.
  */
 final class ClassicLimbSolver
 {
@@ -65,7 +64,9 @@ final class ClassicLimbSolver
      */
     static boolean apply(IModel model, List<String> workIds, Map<String, PivotFrame> frames, Vector3f target, Quaternionf tipTarget, Vector3f polePoint, float poleAngle, float softness, float weight, boolean stretch, boolean squash)
     {
-        if (!eligible(workIds) || !(model instanceof Model || model instanceof BOBJModel))
+        IKRig rig = IKRig.of(model);
+
+        if (!eligible(workIds) || rig == null)
         {
             return false;
         }
@@ -97,14 +98,14 @@ final class ClassicLimbSolver
             return false;
         }
 
-        Vector3f root = new Vector3f(positions.get(0));
-        Vector3f goal = clampReach(root, target, total, softness);
-
         /* Captured BEFORE the solve overwrites the positions: the second bone's
          * length is what turns the solve's goal point back into the tip the
          * chain actually reaches, which is what a stretch or a squash measures
          * its gap from. */
         float tipLength = positions.get(1).distance(positions.get(2));
+
+        Vector3f root = new Vector3f(positions.get(0));
+        Vector3f goal = clampReach(root, target, total, softness);
 
         /* Bend direction: the live posed bend when the limb is actually bent,
          * else the authored REST bend (knee forward, elbow back) carried into
@@ -132,15 +133,15 @@ final class ClassicLimbSolver
          * stable twist through the reach boundary instead of jittering. */
         Vector3f bendSeed = orientBend(positions, hinge, polePoint, poleAngle);
 
-        /* IK stretch and squash, the legacy in-pass flavour: the gap the rotation
-         * solve could not close is split among the bones as translations (see the
-         * orientation pass), weighted so it fades with the IK. Measured from the
-         * tip the chain REACHES, not from the solve's goal point: the position
-         * pass writes the goal into the last position even when it is out of
-         * reach (short) or too close to fold onto (overshot), and only the
-         * reached tip tells the two apart. Which of the two boxes has to be
-         * ticked follows from that side — a leg keeping its foot planted as the
-         * body squats must not turn rubbery when the body rises again. */
+        /* IK stretch, the legacy in-pass flavour: the gap the rotation solve could
+         * not close is split among the bones as translations (see the orientation
+         * pass), weighted so it fades with the IK. Measured from the tip the chain
+         * REACHES, not from the solve's goal point: the position pass writes the
+         * goal into the last position even when it is out of reach (short) or too
+         * close to fold onto (overshot), and only the reached tip tells the two
+         * apart. Which of the two boxes has to be ticked follows from that side —
+         * a leg keeping its foot planted as the body squats must not turn rubbery
+         * when the body rises again. */
         Vector3f stretchGap = null;
 
         if (stretch || squash)
@@ -156,20 +157,13 @@ final class ClassicLimbSolver
             }
         }
 
-        if (model instanceof Model cubic)
-        {
-            buildChainOrientations(cubic, workIds, positions, rootParentRotation, weight, tipTarget, stretchGap, bendSeed);
-        }
-        else
-        {
-            buildChainOrientationsBobj((BOBJModel) model, workIds, positions, rootParentRotation, weight, tipTarget, stretchGap, bendSeed);
-        }
+        rig.buildChainOrientations(workIds, positions, rootParentRotation, weight, tipTarget, stretchGap, bendSeed);
 
         return true;
     }
 
     /* ------------------------------------------------------------------ */
-    /* Position solve (legacy direct solver, two-segment subset)           */
+    /* Position solve (legacy IKSolver, two-segment subset)                */
     /* ------------------------------------------------------------------ */
 
     /**
@@ -243,13 +237,6 @@ final class ClassicLimbSolver
         p.get(2).set(goal);
     }
 
-    /**
-     * The tip the chain actually REACHES, from the solved two-bone positions: the
-     * last bone's direction carried out by its own rest length. The position pass
-     * writes the clamped goal into {@code p.get(2)}, which is not where the tip
-     * lands when the goal was out of reach — this is what a stretch measures its
-     * shortfall from, and what a squash measures its overshoot from.
-     */
     private static Vector3f reachedTip(List<Vector3f> p, float tipLength)
     {
         Vector3f dir = new Vector3f(p.get(2)).sub(p.get(1));
@@ -423,7 +410,7 @@ final class ClassicLimbSolver
      * advancing by each bone's rendered (blended) orientation so children inherit
      * the same frame the renderer establishes.
      */
-    private static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed)
+    static void buildChainOrientations(Model model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed)
     {
         int bones = chainIds.size() - 1;
         Vector3f[] restDir = new Vector3f[bones];
@@ -458,6 +445,8 @@ final class ClassicLimbSolver
 
         boolean doStretch = stretchGap != null && reach >= 1 && reachTotal > EPS;
 
+        boolean rootStretch = stretchGap != null && reach == 0;
+
         Vector3f[] restNormal = transportNormals(restDir, null);
         Vector3f[] solvedNormal = transportNormals(segWorld, bendSeed);
 
@@ -488,6 +477,10 @@ final class ClassicLimbSolver
             if (doStretch && i >= 1 && i <= reach)
             {
                 bone.offset = stretchOffset(stretchGap, solved.get(i - 1).distance(solved.get(i)), reachTotal, parentWorld);
+            }
+            else if (rootStretch && i == 0)
+            {
+                bone.offset = stretchOffset(stretchGap, 1F, 1F, parentWorld);
             }
 
             /* Advance by the orientation the renderer will actually apply (the
@@ -532,7 +525,7 @@ final class ClassicLimbSolver
      * in world, so at rest the two frames coincide and the orientation is identity
      * — no baseline twist. Same X-mirror as cubic ({@link Matrices#orientMirroredX}).
      */
-    private static void buildChainOrientationsBobj(BOBJModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed)
+    static void buildChainOrientationsBobj(BOBJModel model, List<String> chainIds, List<Vector3f> solved, Quaternionf rootParentRotation, float weight, Quaternionf tipTarget, Vector3f stretchGap, Vector3f bendSeed)
     {
         int bones = chainIds.size() - 1;
         Map<String, BOBJBone> bonesMap = model.getArmature().bones;
@@ -716,7 +709,19 @@ final class ClassicLimbSolver
             reachTotal += solved.get(i).distance(solved.get(i + 1));
         }
 
-        if (reach < 1 || reachTotal <= EPS)
+        if (reach == 0)
+        {
+            BOBJBone root = bonesMap.get(chainIds.get(0));
+
+            if (root != null)
+            {
+                root.offset = new Vector3f(gap);
+            }
+
+            return;
+        }
+
+        if (reachTotal <= EPS)
         {
             return;
         }
@@ -760,36 +765,37 @@ final class ClassicLimbSolver
      */
     private static Vector3f restDirection(IModel model, List<String> chainIds, int i)
     {
-        String id = chainIds.get(i);
-        String childId = chainIds.get(i + 1);
+        IKRig rig = IKRig.of(model);
 
-        if (model instanceof Model cubic)
+        return rig == null ? null : rig.restDirection(chainIds, i);
+    }
+
+    /** See {@link IKRig.CubicIKRig#restDirection}. */
+    static Vector3f cubicRestDirection(Model model, List<String> chainIds, int i)
+    {
+        ModelGroup bone = model.getGroup(chainIds.get(i));
+        ModelGroup child = model.getGroup(chainIds.get(i + 1));
+
+        if (bone == null || child == null)
         {
-            ModelGroup bone = cubic.getGroup(id);
-            ModelGroup child = cubic.getGroup(childId);
-
-            if (bone == null || child == null)
-            {
-                return null;
-            }
-
-            return normalizeRest(new Vector3f(child.initial.translate).sub(bone.initial.translate));
+            return null;
         }
 
-        if (model instanceof BOBJModel bobj)
+        return normalizeRest(new Vector3f(child.initial.translate).sub(bone.initial.translate));
+    }
+
+    /** See {@link IKRig.BobjIKRig#restDirection}. */
+    static Vector3f bobjRestDirection(BOBJModel model, List<String> chainIds, int i)
+    {
+        BOBJBone bone = model.getArmature().bones.get(chainIds.get(i));
+        BOBJBone child = model.getArmature().bones.get(chainIds.get(i + 1));
+
+        if (bone == null)
         {
-            BOBJBone bone = bobj.getArmature().bones.get(id);
-            BOBJBone child = bobj.getArmature().bones.get(childId);
-
-            if (bone == null)
-            {
-                return null;
-            }
-
-            return normalizeRest(ModelRotationBlender.getBobjRestDirection(bobj, bone, child, chainIds, i));
+            return null;
         }
 
-        return null;
+        return normalizeRest(ModelRotationBlender.getBobjRestDirection(model, bone, child, chainIds, i));
     }
 
     private static Vector3f normalizeRest(Vector3f restDir)
@@ -805,7 +811,7 @@ final class ClassicLimbSolver
     }
 
     /* ------------------------------------------------------------------ */
-    /* Small vector helpers (legacy direct solver)                         */
+    /* Small vector helpers (legacy IKSolver)                              */
     /* ------------------------------------------------------------------ */
 
     /** A deterministic unit perpendicular to {@code dir}, cross with world Z (falling back to world Y). */

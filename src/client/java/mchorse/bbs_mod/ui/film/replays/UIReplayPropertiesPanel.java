@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.replays;
 
+import mchorse.bbs_mod.api.client.events.RegisterReplayActionsEvent;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
@@ -18,6 +19,8 @@ import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.utils.CollectionUtils;
 
 import java.util.function.Consumer;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
 
 public class UIReplayPropertiesPanel extends UIElement
 {
@@ -36,6 +39,7 @@ public class UIReplayPropertiesPanel extends UIElement
     public UITrackpad shadowOffsetZ;
     public UITrackpad looping;
     public UIToggle actor;
+    public UIToggle actorPickup;
     public UIToggle fp;
     public UIToggle relative;
     public UITrackpad relativeOffsetX;
@@ -45,6 +49,7 @@ public class UIReplayPropertiesPanel extends UIElement
     public UIButton pickAxesPreviewBone;
 
     private UIReplayList list;
+    private Replay replay;
 
     public UIReplayPropertiesPanel(UIFilmPanel filmPanel)
     {
@@ -90,6 +95,8 @@ public class UIReplayPropertiesPanel extends UIElement
         this.looping.limit(0).integer().tooltip(UIKeys.FILM_REPLAY_LOOPING_TOOLTIP);
         this.actor = new UIToggle(UIKeys.FILM_REPLAY_ACTOR, (b) -> this.edit((replay) -> replay.actor.set(b.getValue())));
         this.actor.tooltip(UIKeys.FILM_REPLAY_ACTOR_TOOLTIP);
+        this.actorPickup = new UIToggle(UIKeys.FILM_REPLAY_ACTOR_PICKUP, (b) -> this.edit((replay) -> replay.actorPickup.set(b.getValue())));
+        this.actorPickup.tooltip(UIKeys.FILM_REPLAY_ACTOR_PICKUP_TOOLTIP);
         this.fp = new UIToggle(UIKeys.FILM_REPLAY_FP, (b) ->
         {
             if (filmPanel.getData() != null)
@@ -136,7 +143,7 @@ public class UIReplayPropertiesPanel extends UIElement
         UISection other = new UISection(UIKeys.FILM_REPLAY_SECTION_OTHER);
 
         other.fields.add(
-            this.looping, this.actor, this.fp,
+            this.looping, this.actor, this.actorPickup, this.fp,
             this.relative, UI.row(this.relativeOffsetX, this.relativeOffsetY, this.relativeOffsetZ),
             this.axesPreview, this.pickAxesPreviewBone
         );
@@ -150,6 +157,16 @@ public class UIReplayPropertiesPanel extends UIElement
             other
         );
         this.refreshEditPanelOffset();
+
+        for (BiFunction<UIFilmPanel, Supplier<Replay>, UIElement> factory : RegisterReplayActionsEvent.getActions())
+        {
+            UIElement action = factory.apply(this.filmPanel, () -> this.replay);
+
+            if (action != null)
+            {
+                this.properties.add(action);
+            }
+        }
 
         this.add(this.properties);
         this.setReplay(null);
@@ -185,6 +202,7 @@ public class UIReplayPropertiesPanel extends UIElement
 
     public void setReplay(Replay replay)
     {
+        this.replay = replay;
         this.properties.setVisible(replay != null);
 
         if (replay != null)
@@ -201,6 +219,7 @@ public class UIReplayPropertiesPanel extends UIElement
             this.shadowOffsetZ.setValue(replay.shadowOffset.get().z);
             this.looping.setValue(replay.looping.get());
             this.actor.setValue(replay.actor.get());
+            this.actorPickup.setValue(replay.actorPickup.get());
             this.fp.setValue(replay.fp.get());
             this.relative.setValue(replay.relative.get());
             this.relativeOffsetX.setValue(replay.relativeOffset.get().x);

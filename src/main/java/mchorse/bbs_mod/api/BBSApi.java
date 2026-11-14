@@ -12,8 +12,9 @@ import java.util.function.Supplier;
 /**
  * The entry point of BBS's addon API.
  *
- * <p>Everything in {@code mchorse.bbs_mod.api} is a contract: it does not change without
- * {@link #VERSION} changing with it. Everything outside of that package is BBS's own business and
+ * <p>Stable API in {@code mchorse.bbs_mod.api} does not change without
+ * {@link #VERSION} changing with it. {@link Experimental} members may change without a version bump.
+ * Everything outside of that package is BBS's own business and
  * moves without notice — an addon reaching into it is on its own, and the breakage shows up in
  * the game rather than on the build.</p>
  *

@@ -568,7 +568,7 @@ public final class ActionRuntimeAuthorityWiringTest
             "public void receiveActions(",
             "public void applyRecordedKeyframes"
         );
-        String panelOpen = section(filmPanel, "public void open()", "public void receiveActions(");
+        String panelOpen = section(filmPanel, "private void onPanelOpened()", "public void receiveActions(");
         String applyKeyframes = section(receiveActions, "if (applyKeyframes", "boolean mergeTerminalActions");
         String mergeActions = section(receiveActions, "if (mergeTerminalActions)", "if (changed)");
 
@@ -754,6 +754,8 @@ public final class ActionRuntimeAuthorityWiringTest
             "UI availability once again owns c7 recorder teardown");
         check(!receiveActions.contains("sendActionRecording"),
             "c7 recording completion loops a client stop request back to s5");
+        check(filmPanel.contains("this.onOpen(this::onPanelOpened)"),
+            "Film panel opening no longer reaches the exact local recording completion callback");
         assertOrdered(panelOpen,
             "Recorder recorder = BBSModClient.getFilms().stopRecording()",
             "Film film = this.data",

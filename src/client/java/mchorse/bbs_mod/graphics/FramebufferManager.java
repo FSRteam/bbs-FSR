@@ -10,6 +10,12 @@ import java.util.function.Consumer;
 public class FramebufferManager
 {
     public final Map<Link, Framebuffer> framebuffers = new HashMap<>();
+    public final FramebufferPool pool = new FramebufferPool();
+
+    public FramebufferPool getFormFramebuffers()
+    {
+        return this.pool;
+    }
 
     public Framebuffer getFramebuffer(Link key, Consumer<Framebuffer> setup)
     {
@@ -54,6 +60,8 @@ public class FramebufferManager
 
     public void delete()
     {
+        this.pool.delete();
+
         for (Framebuffer framebuffer : this.framebuffers.values())
         {
             framebuffer.delete();

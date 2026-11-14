@@ -1,6 +1,9 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
+import mchorse.bbs_mod.film.replays.tracks.TrackCatalog;
+import mchorse.bbs_mod.film.replays.tracks.TrackDescriptor;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -35,6 +38,7 @@ public class UIGeneralFormPanel extends UIFormPanel
     public UIKeybind hotkey;
 
     public UIToggle visible;
+    public UIToggle pickable;
     public UIButton filterTracks;
     public UIToggle boneTracks;
 
@@ -73,7 +77,8 @@ public class UIGeneralFormPanel extends UIFormPanel
         });
         this.hotkey.single().tooltip(UIKeys.FORMS_EDITORS_GENERAL_HOTKEY);
 
-        this.visible = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_VISIBLE, (b) -> this.form.visible.set(b.getValue()));
+        this.pickable = UIValues.toggle(UIKeys.FORMS_EDITORS_GENERAL_PICKABLE, () -> this.form.pickable);
+        this.visible = UIValues.toggle(UIKeys.FORMS_EDITORS_GENERAL_VISIBLE, () -> this.form.visible);
         this.filterTracks = new UIButton(UIKeys.FORMS_EDITORS_GENERAL_FILTER_TRACKS, (b) -> this.openTrackFilter());
         this.filterTracks.tooltip(UIKeys.FORMS_EDITORS_GENERAL_FILTER_TRACKS_TOOLTIP);
         this.boneTracks = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_BONE_TRACKS, (b) ->
@@ -81,13 +86,13 @@ public class UIGeneralFormPanel extends UIFormPanel
             if (this.form instanceof PoseForm poseForm) poseForm.getBoneTracks().set(b.getValue());
         });
         this.boneTracks.tooltip(UIKeys.FORMS_EDITORS_GENERAL_BONE_TRACKS_TOOLTIP);
-        this.trackName = new UITextbox(120, (t) -> this.form.trackName.set(t));
+        this.trackName = UIValues.textbox(120, () -> this.form.trackName);
         this.trackName.tooltip(UIKeys.FORMS_EDITORS_GENERAL_TRACK_NAME_TOOLTIP);
         this.lighting = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING, (b) -> this.form.lighting.set(b.getValue() ? 1F : 0F));
         this.lighting.tooltip(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING_TOOLTIP);
-        this.shaderShadow = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_SHADER_SHADOW, (b) -> this.form.shaderShadow.set(b.getValue()));
-        this.additiveColor = new UIToggle(UIKeys.FORMS_EDITORS_ADDITIVE_COLOR, (b) -> this.form.additiveColor.set(b.getValue()));
-        this.renderLast = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_RENDER_LAST, (b) -> this.form.renderLast.set(b.getValue()));
+        this.shaderShadow = UIValues.toggle(UIKeys.FORMS_EDITORS_GENERAL_SHADER_SHADOW, () -> this.form.shaderShadow);
+        this.additiveColor = UIValues.toggle(UIKeys.FORMS_EDITORS_ADDITIVE_COLOR, () -> this.form.additiveColor);
+        this.renderLast = UIValues.toggle(UIKeys.FORMS_EDITORS_GENERAL_RENDER_LAST, () -> this.form.renderLast);
         this.renderLast.tooltip(UIKeys.FORMS_EDITORS_GENERAL_RENDER_LAST_TOOLTIP);
         this.glintMode = new UICirculate((c) -> this.form.glintMode.set(c.getValue()));
         this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_OFF);
@@ -96,42 +101,42 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_VANILLA);
         this.glintMode.tooltip(UIKeys.FORMS_EDITORS_GENERAL_GLINT_TOOLTIP);
         this.glintMode.h(UIConstants.CONTROL_HEIGHT);
-        this.glintColor = new UIColor((c) -> this.form.glintColor.set(Color.rgba(c)));
+        this.glintColor = UIValues.color(() -> this.form.glintColor);
         this.glintColor.withAlpha();
         this.glintColor.tooltip(UIKeys.POSE_CONTEXT_GLINT_COLOR_TOOLTIP);
-        this.glintSpeed = new UITrackpad((v) -> this.form.glintSpeed.set(v.floatValue()));
+        this.glintSpeed = UIValues.trackpad(() -> this.form.glintSpeed);
         this.glintSpeed.limit(-4D, 4D).increment(0.1D).values(0.1D, 0.05D, 0.5D);
         this.glintSpeed.tooltip(UIKeys.POSE_CONTEXT_GLINT_SPEED_TOOLTIP);
         this.glintTransform = new UIPropTransform().callbacks(() -> this.form.glintTransform).barBackground();
-        this.uiScale = new UITrackpad((v) -> this.form.uiScale.set(v.floatValue()));
+        this.uiScale = UIValues.trackpad(() -> this.form.uiScale);
         this.uiScale.limit(0.01D, 100D);
-        this.name = new UITextbox(120, (t) -> this.form.name.set(t));
+        this.name = UIValues.textbox(120, () -> this.form.name);
 
         this.transform = new UIPropTransform().callbacks(() -> this.form.transform).barBackground();
         this.transform.enableHotkeys();
 
-        this.hitbox = new UIToggle(UIKeys.CAMERA_PANELS_ENABLED, (b) -> this.form.hitbox.set(b.getValue()));
-        this.hitboxWidth = new UITrackpad((v) -> this.form.hitboxWidth.set(v.floatValue()));
+        this.hitbox = UIValues.toggle(UIKeys.CAMERA_PANELS_ENABLED, () -> this.form.hitbox);
+        this.hitboxWidth = UIValues.trackpad(() -> this.form.hitboxWidth);
         this.hitboxWidth.limit(0).tooltip(UIKeys.FORMS_EDITORS_GENERAL_HITBOX_WIDTH);
-        this.hitboxHeight = new UITrackpad((v) -> this.form.hitboxHeight.set(v.floatValue()));
+        this.hitboxHeight = UIValues.trackpad(() -> this.form.hitboxHeight);
         this.hitboxHeight.limit(0).tooltip(UIKeys.FORMS_EDITORS_GENERAL_HITBOX_HEIGHT);
         this.hitboxSneakMultiplier = new UISliderTrackpad((v) -> this.form.hitboxSneakMultiplier.set(v.floatValue()));
         this.hitboxSneakMultiplier.limit(0, 1);
         this.hitboxEyeHeight = new UISliderTrackpad((v) -> this.form.hitboxEyeHeight.set(v.floatValue()));
         this.hitboxEyeHeight.limit(0, 1);
 
-        this.hp = new UITrackpad((v) -> this.form.hp.set(v.floatValue()));
+        this.hp = UIValues.trackpad(() -> this.form.hp);
         this.hp.limit(1F);
-        this.speed = new UITrackpad((v) -> this.form.speed.set(v.floatValue()));
+        this.speed = UIValues.trackpad(() -> this.form.speed);
         this.speed.limit(0F);
-        this.stepHeight = new UITrackpad((v) -> this.form.stepHeight.set(v.floatValue()));
+        this.stepHeight = UIValues.trackpad(() -> this.form.stepHeight);
         this.stepHeight.limit(0F);
 
         UISection display = new UISection(UIKeys.FORMS_EDITORS_GENERAL_SECTION_DISPLAY);
 
         display.fields.add(
             UI.labelRow(UIKeys.FORMS_EDITORS_GENERAL_DISPLAY, this.name),
-            this.hotkey, this.visible,
+            this.hotkey, this.visible, this.pickable,
             this.lighting, this.shaderShadow, this.additiveColor,
             this.renderLast,
             UI.labelRow(UIKeys.FORMS_EDITORS_GENERAL_UI_SCALE, this.uiScale)
@@ -188,6 +193,7 @@ public class UIGeneralFormPanel extends UIFormPanel
         this.hotkey.setKeyCombo(new KeyCombo(IKey.EMPTY, form.hotkey.get()));
 
         this.visible.setValue(form.visible.get());
+        this.pickable.setValue(form.pickable.get());
         if (form instanceof PoseForm poseForm)
         {
             this.boneTracks.setValue(poseForm.getBoneTracks().get());
@@ -251,13 +257,12 @@ public class UIGeneralFormPanel extends UIFormPanel
         Map<String, Integer> keyToColor = new HashMap<>();
         Map<String, String> keyToLabel = new HashMap<>();
 
-        for (UIKeyframeSheet sheet : UIReplaysEditorUtils.collectFormTrackSheets(this.form))
+        for (TrackDescriptor track : TrackCatalog.of(this.form))
         {
-            String key = UIReplaysEditor.getSheetFilterKey(sheet);
-
+            String key = track.filterKey();
             keys.add(key);
-            keyToColor.put(key, sheet.color);
-            keyToLabel.put(key, sheet.title.get());
+            keyToColor.put(key, track.color());
+            keyToLabel.put(key, track.title().get());
         }
 
         UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(disabled, keys, keyToColor, keyToLabel);

@@ -31,7 +31,7 @@ public class UIFilmDetailsOverlayPanel extends UIOverlayPanel
         /* Stats */
         int replaysCount = film.replays.getList().size();
         int clipsCount = film.camera.get().size();
-        int duration = film.camera.calculateDuration();
+        int duration = film.calculateDuration();
         long timeSpentActiveTicks = film.timeSpentActive.get();
 
         String timeFormatted = this.formatTime(timeSpentActiveTicks);

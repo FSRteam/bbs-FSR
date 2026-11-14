@@ -1,12 +1,27 @@
 package mchorse.bbs_mod.ui.forms.editors.states.keyframes;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.film.replays.tracks.TrackCatalog;
+import mchorse.bbs_mod.film.replays.tracks.TrackDescriptor;
+import mchorse.bbs_mod.api.client.editor.TrackCategory;
+import mchorse.bbs_mod.api.client.editor.TrackCategories;
+import mchorse.bbs_mod.ui.forms.editors.UIForms;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
+import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITimelineCategoryBar;
+import mchorse.bbs_mod.l10n.L10n;
+import mchorse.bbs_mod.utils.Direction;
+
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.IPosedForm;
 import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
@@ -14,6 +29,7 @@ import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
 import mchorse.bbs_mod.forms.states.AnimationState;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
+import mchorse.bbs_mod.settings.values.core.ValuePose;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditor;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
@@ -26,6 +42,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeEditor;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
+import mchorse.bbs_mod.ui.framework.elements.input.items.FoldState;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIPoseKeyframeFactory;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.UIKeyframeDopeSheet;
@@ -38,6 +55,7 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
+import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
@@ -52,6 +70,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -60,58 +79,130 @@ import java.util.function.Supplier;
 
 public class UIAnimationStateEditor extends UIElement
 {
+    private static final int CATEGORY_BAR_WIDTH = 20;
     public UIKeyframeEditor keyframeEditor;
 
     public UIFormEditor editor;
     public UIElement editArea;
+    public final UIForms bodyParts;
+
+    private final UIElement sidebar = new UIElement();
+    private final UIElement timelineArea = new UIElement()
+    {
+        @Override
+        protected void afterResizeApplied()
+        {
+            UIAnimationStateEditor.this.layoutCategoryBar();
+        }
+    };
+    private final UITimelineCategoryBar categoryBar = new UITimelineCategoryBar(0);
+    private final UIElement partHeader = new UIElement()
+    {
+        @Override
+        protected boolean subMouseClicked(UIContext context)
+        {
+            return this.area.isInside(context);
+        }
+    };
+    private final Map<TrackCategory, UIIcon> categoryButtons = new LinkedHashMap<>();
+    private final List<TrackCategory> visibleCategories = new ArrayList<>();
+    private TrackCategory category = TrackCategory.FORM;
+    private boolean allMode = true;
+    private final UISection bodyPartsSection = new UISection(L10n.lang("bbs.ui.film.replays.body_parts"));
+    private Form root;
+    private String selectedPart = "";
 
     private AnimationState state;
     private Set<String> keys = new LinkedHashSet<>();
+    private int poseOverlayCount;
+    private int transformOverlayCount;
+
+    /** Track rows the user has unfolded right now; handed to the dope sheet, which folds them in place. */
+    private final FoldState<String> expandedTabs = new FoldState<>();
 
     public UIAnimationStateEditor(UIFormEditor editor)
     {
         this.editor = editor;
+        this.setUndoId("form_animation_state_editor");
+        this.bodyParts = new UIForms(list ->
+        {
+            if (!list.isEmpty())
+            {
+                this.selectPart(list.get(0).getPath());
+            }
+        });
+        this.sidebar.relative(this).x(BBSSettings.editorLayoutSettings.getStateEditorSizeH()).wTo(this.area, 1F).h(1F);
+        this.timelineArea.relative(this).y(1F).anchorY(1F).wTo(this.sidebar.area)
+            .h(BBSSettings.editorLayoutSettings.getStateEditorSizeV());
+
+        this.categoryBar.relative(this.timelineArea);
+        UIIcon all = new UIIcon(Icons.LIST, button -> this.setCategory(null));
+        all.tooltip(UIKeys.FILM_REPLAY_ALL_TRACKS, Direction.RIGHT);
+        all.highlight(() -> this.allMode, Direction.LEFT);
+        this.categoryBar.add(all);
+
+        for (TrackCategory category : TrackCategories.values())
+        {
+            if (category == TrackCategory.REPLAY) continue;
+            UIIcon button = new UIIcon(category.icon, b -> this.setCategory(category));
+            button.tooltip(category.tooltip, Direction.RIGHT);
+            button.highlight(() -> !this.allMode && this.category == category, Direction.LEFT);
+            this.categoryButtons.put(category, button);
+        }
+
+        TrackCategories.registerShortcuts(this.keys(), () -> this.visibleCategories, this::setCategory);
+
+        this.partHeader.relative(this.timelineArea).x(CATEGORY_BAR_WIDTH).w(120).h(20);
+        this.partHeader.add(new UIRenderable(context -> this.partHeader.area.render(context.batcher, BBSSettings.baseSurface())));
+        UILabel partName = new UILabel(this::getSelectedPartName).labelAnchor(0F, 0.5F);
+        partName.relative(this.partHeader).x(5).w(1F, -10).h(1F);
+        partName.tooltip(() -> L10n.lang("bbs.ui.film.replays.selected_body_part").format(this.getSelectedPartName()).get());
+        this.partHeader.add(partName);
+        this.timelineArea.add(this.categoryBar, this.partHeader);
+
+        this.bodyPartsSection.relative(this.sidebar).x(3).y(1F, -3).w(1F, -6).anchorY(1F);
+        this.bodyPartsSection.fields.add(this.bodyParts);
+        this.bodyPartsSection.setVisible(false);
 
         this.editArea = new UIElement();
-        this.editArea.relative(this)
-            .x(BBSSettings.editorLayoutSettings.getStateEditorSizeH())
-            .wTo(this.area, 1F)
-            .h(1F);
+        this.editArea.relative(this.sidebar).w(1F).hTo(this.bodyPartsSection.area);
+        /* The section's natural height determines how much space remains for properties. */
+        this.sidebar.add(this.bodyPartsSection, this.editArea);
 
         UIDraggable draggable = new UIDraggable((context) ->
         {
             float fx = (context.mouseX - this.area.x) / (float) this.area.w;
-            float fy = -(context.mouseY - this.getParent().area.ey()) / (float) this.getParent().area.h;
+            float fy = (this.area.ey() - context.mouseY) / (float) this.area.h;
 
             BBSSettings.editorLayoutSettings.setStateEditorSizeV(fy);
             BBSSettings.editorLayoutSettings.setStateEditorSizeH(fx);
 
-            this.h(BBSSettings.editorLayoutSettings.getStateEditorSizeV());
-            this.editArea.x(BBSSettings.editorLayoutSettings.getStateEditorSizeH());
+            this.timelineArea.h(BBSSettings.editorLayoutSettings.getStateEditorSizeV());
+            this.sidebar.x(BBSSettings.editorLayoutSettings.getStateEditorSizeH());
             this.getParent().resize();
         });
         draggable.cursors(GLFW.GLFW_CROSSHAIR_CURSOR, GLFW.GLFW_CROSSHAIR_CURSOR);
 
-        draggable.reference(() -> new Vector2i(this.editArea.area.x, this.area.y));
+        draggable.reference(() -> new Vector2i(this.sidebar.area.x, this.timelineArea.area.y));
         draggable.rendering((context) ->
         {
             int size = 5;
-            int x = this.editArea.area.x + 3;
-            int y = this.editArea.area.y + 3;
+            int x = this.sidebar.area.x + 3;
+            int y = this.timelineArea.area.y + 3;
 
             context.batcher.box(x, y, x + 1, y + size, Colors.WHITE);
             context.batcher.box(x, y - 1, x + size, y, Colors.WHITE);
 
-            x = this.editArea.area.x - 3;
-            y = this.editArea.area.y + 3;
+            x = this.sidebar.area.x - 3;
+            y = this.timelineArea.area.y + 3;
 
             context.batcher.box(x - 1, y, x, y + size, Colors.WHITE);
             context.batcher.box(x - size, y - 1, x, y, Colors.WHITE);
         });
 
-        draggable.hoverOnly().relative(this.editArea).w(40).h(6).anchorX(0.5F);
+        draggable.hoverOnly().relative(this.timelineArea).x(1F).w(40).h(6).anchorX(0.5F);
 
-        this.add(this.editArea, draggable);
+        this.add(this.sidebar, this.timelineArea, draggable);
     }
 
     public AnimationState getState()
@@ -132,21 +223,49 @@ public class UIAnimationStateEditor extends UIElement
         return transform != null && Gizmo.INSTANCE.start(stencilIndex, context.mouseX, context.mouseY, transform, drag);
     }
 
+    private void setCategory(TrackCategory category)
+    {
+        this.allMode = category == null;
+        if (category != null) this.category = category;
+        this.setState(this.state);
+    }
+
+    public String getSelectedPartName()
+    {
+        for (UIForms.FormEntry entry : this.bodyParts.getList())
+            if (entry.getPath().equals(this.selectedPart)) return entry.toString();
+        return "";
+    }
+
+    public String getSelectedPart() { return this.selectedPart; }
+
     public void setState(AnimationState state)
     {
         UIKeyframes lastEditor = null;
-        Set<String> expandedPoseIds = Collections.emptySet();
 
         if (this.keyframeEditor != null)
         {
             lastEditor = this.keyframeEditor.view;
-            expandedPoseIds = new LinkedHashSet<>(lastEditor.getDopeSheet().getExpandedPoseTabIds());
 
             this.keyframeEditor.removeFromParent();
             this.keyframeEditor = null;
         }
 
         this.state = state;
+        if (this.root != this.editor.form)
+        {
+            this.root = this.editor.form;
+            this.selectedPart = "";
+            this.expandedTabs.collapseAll();
+        }
+        if (this.root != null)
+        {
+            this.bodyParts.setForm(this.root);
+            this.selectedPart = this.bodyParts.setCurrentPath(this.selectedPart);
+        }
+        this.bodyPartsSection.setVisible(state != null);
+        this.poseOverlayCount = BBSSettings.recordingPoseOverlays.get();
+        this.transformOverlayCount = BBSSettings.recordingTransformOverlays.get();
 
         if (this.state == null)
         {
@@ -154,42 +273,24 @@ public class UIAnimationStateEditor extends UIElement
         }
 
         List<UIKeyframeSheet> sheets = new ArrayList<>();
-        Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs = new HashMap<>();
-        Map<UIKeyframeSheet, Integer> poseTabDepths = new HashMap<>();
-
-        /* Form properties */
-        Form lastForm = null;
-        List<UIKeyframeSheet> formSheets = new ArrayList<>();
-
-        for (String key : FormUtils.collectPropertyPaths(this.editor.form))
+        List<TrackDescriptor> catalog = new ArrayList<>();
+        for (TrackDescriptor track : TrackCatalog.forPart(this.editor.form, this.state.properties, this.selectedPart))
+            if (!track.kind().isSolver()) catalog.add(track);
+        this.visibleCategories.clear();
+        for (TrackCategory candidate : TrackCategories.values())
         {
-            KeyframeChannel property = this.state.properties.getOrCreate(this.editor.form, key);
-
-            if (property != null)
+            UIIcon button = this.categoryButtons.get(candidate);
+            if (button == null) continue;
+            button.removeFromParent();
+            if (candidate == TrackCategory.FORM || candidate == TrackCategory.POSE
+                || catalog.stream().anyMatch(track -> TrackCategories.categoryOf(track.id(), true) == candidate))
             {
-                BaseValueBasic formProperty = FormUtils.getProperty(this.editor.form, key);
-                Form form = formProperty.getParent() instanceof Form f ? f : null;
-
-                if (form != lastForm)
-                {
-                    if (lastForm != null)
-                    {
-                        this.flushForm(sheets, formSheets, lastForm, poseTabs, poseTabDepths);
-                    }
-
-                    lastForm = form;
-                }
-
-                UIKeyframeSheet sheet = new UIKeyframeSheet(UIReplaysEditor.getColor(key), false, property, formProperty);
-
-                formSheets.add(sheet.icon(UIReplaysEditor.getIcon(key)));
+                this.visibleCategories.add(candidate);
+                this.categoryBar.add(button);
             }
         }
-
-        if (lastForm != null)
-        {
-            this.flushForm(sheets, formSheets, lastForm, poseTabs, poseTabDepths);
-        }
+        if (!this.visibleCategories.contains(this.category)) this.category = TrackCategory.FORM;
+        UIReplaysEditorUtils.buildSheets(catalog, sheets);
 
         this.keys.clear();
         Map<String, Integer> keyToColor = new HashMap<>();
@@ -205,6 +306,7 @@ public class UIAnimationStateEditor extends UIElement
         }
 
         sheets.removeIf((v) -> v.id.equals("anchor"));
+        sheets.removeIf(sheet -> !this.allMode && UIReplaysEditor.categoryOf(sheet) != this.category);
 
         /* The state isn't empty by itself - so if the filter empties it, the timeline has to stay (see below). */
         boolean hadTracks = !sheets.isEmpty();
@@ -233,39 +335,17 @@ public class UIAnimationStateEditor extends UIElement
             return false;
         });
 
-        Set<UIKeyframeSheet> kept = new LinkedHashSet<>(sheets);
-
-        poseTabs.entrySet().removeIf((entry) ->
-        {
-            entry.getValue().removeIf((child) -> !kept.contains(child));
-
-            return !kept.contains(entry.getKey()) || entry.getValue().isEmpty();
-        });
-        poseTabDepths.keySet().retainAll(kept);
-
-        lastForm = null;
-
-        for (UIKeyframeSheet sheet : sheets)
-        {
-            Form form = UIReplaysEditor.getSheetForm(sheet);
-
-            if (!Objects.equals(lastForm, form))
-            {
-                sheet.separator = true;
-            }
-
-            lastForm = form;
-        }
+        UIReplaysEditorUtils.pruneTree(sheets);
 
         /*
          * Filtering every track off used to drop the timeline itself, and the track filter lives in its
          * context menu - so "disable all" locked the user out of the only way back. Keep the (empty)
          * timeline whenever the state had tracks before the filter ran; the dope sheet says why it's blank.
          */
-        if (!sheets.isEmpty() || hadTracks)
+        if (!sheets.isEmpty() || hadTracks || !this.allMode)
         {
             this.keyframeEditor = new UIKeyframeEditor((consumer) -> new UIAnimationStateKeyframes(this.editor, consumer)).target(this.editArea);
-            this.keyframeEditor.relative(this).h(1F).wTo(this.editArea.area);
+            this.keyframeEditor.relative(this.timelineArea).x(CATEGORY_BAR_WIDTH).w(1F, -CATEGORY_BAR_WIDTH).h(1F);
             this.keyframeEditor.setUndoId("form_animation_state_keyframe_editor");
             this.keyframeEditor.view.getDopeSheet().setEmptyState(UIKeys.KEYFRAMES_EMPTY_FILTERED, UIKeys.KEYFRAMES_EMPTY_FILTERED_HINT);
 
@@ -278,30 +358,49 @@ public class UIAnimationStateEditor extends UIElement
             this.keyframeEditor.view.duration(() -> this.state.duration.get());
             this.keyframeEditor.view.context((menu) ->
             {
-                if (this.editor.form instanceof ModelForm modelForm)
+                UIKeyframeSheet sheet = this.keyframeEditor.view.getGraph().getSheet(this.getContext().mouseY);
+                UIReplaysEditorUtils.addOverlayTrackAction(menu, sheet, parent ->
                 {
-                    int mouseY = this.getContext().mouseY;
-                    UIKeyframeSheet sheet = this.keyframeEditor.view.getGraph().getSheet(mouseY);
+                    this.expandedTabs.set(parent.toKey(), true);
+                    this.setState(this.state);
+                });
+                menu.action(Icons.KEY, UIKeys.FILM_AUTO_KEYFRAME, BBSSettings.autoKeyframe.get(),
+                    () -> BBSSettings.autoKeyframe.set(!BBSSettings.autoKeyframe.get()));
 
-                    if (sheet != null && sheet.channel.getFactory() == KeyframeFactories.POSE && sheet.id.equals("pose"))
+                IPosedForm posedForm = sheet == null ? null : sheet.getPosedForm();
+
+                if (posedForm != null && sheet.selection.hasAny() && posedForm.hasBoneTracks())
+                {
+                    menu.action(Icons.LIMB, UIKeys.FILM_REPLAY_CONTEXT_POSES_TO_LIMBS, () ->
                     {
-                        menu.action(Icons.POSE, UIKeys.FILM_REPLAY_CONTEXT_ANIMATION_TO_KEYFRAMES, () ->
+                        if (UIReplaysEditorUtils.posesToLimbTracks(this.state.properties, sheet))
                         {
-                            ModelInstance model = ModelFormRenderer.getModel(modelForm);
+                            this.expandedTabs.set(sheet.id, true);
+                            this.setState(this.state);
+                        }
+                    });
+                }
 
-                            if (model != null)
+                ModelForm poseModelForm = sheet == null ? null : sheet.getPoseForm();
+
+                if (poseModelForm != null)
+                {
+                    menu.action(Icons.POSE, UIKeys.FILM_REPLAY_CONTEXT_ANIMATION_TO_KEYFRAMES, () ->
+                    {
+                        ModelInstance model = ModelFormRenderer.getModel(poseModelForm);
+
+                        if (model != null)
+                        {
+                            UIOverlay.addOverlay(this.getContext(), new UIAnimationToPoseOverlayPanel((animationKey, onlyKeyframes, length, step) ->
                             {
-                                UIOverlay.addOverlay(this.getContext(), new UIAnimationToPoseOverlayPanel((animationKey, onlyKeyframes, length, step) ->
-                                {
-                                    UIContext context = this.getContext();
-                                    float current = this.editor.getKeyframeCursor(context == null ? 0F : context.getTransition());
-                                    IEntity entity = this.editor.renderer.getTargetEntity();
+                                UIContext context = this.getContext();
+                                float current = this.editor.getKeyframeCursor(context == null ? 0F : context.getTransition());
+                                IEntity entity = this.editor.renderer.getTargetEntity();
 
-                                    UIReplaysEditorUtils.animationToPoseKeyframes(this.keyframeEditor, sheet, modelForm, entity, current, animationKey, onlyKeyframes, length, step);
-                                }, modelForm, sheet), 200, 197);
-                            }
-                        });
-                    }
+                                UIReplaysEditorUtils.animationToPoseKeyframes(this.keyframeEditor, sheet, poseModelForm, entity, current, animationKey, onlyKeyframes, length, step);
+                            }, poseModelForm, sheet), 200, 197);
+                        }
+                    });
                 }
 
                 if (this.keyframeEditor.view.getGraph() instanceof UIKeyframeDopeSheet)
@@ -331,9 +430,12 @@ public class UIAnimationStateEditor extends UIElement
                 this.keyframeEditor.view.addSheet(sheet);
             }
 
-            this.keyframeEditor.view.getDopeSheet().configurePoseTabs(poseTabs, poseTabDepths, expandedPoseIds);
+            this.keyframeEditor.view.getDopeSheet().setExpanded(this.expandedTabs);
 
-            this.addAfter(this.editArea, this.keyframeEditor);
+            this.timelineArea.add(this.keyframeEditor);
+            this.categoryBar.removeFromParent();
+            this.partHeader.removeFromParent();
+            this.timelineArea.add(this.categoryBar, this.partHeader);
         }
 
         this.resize();
@@ -344,59 +446,52 @@ public class UIAnimationStateEditor extends UIElement
         }
     }
 
-    private void flushForm(
-        List<UIKeyframeSheet> sheets,
-        List<UIKeyframeSheet> formSheets,
-        Form form,
-        Map<UIKeyframeSheet, List<UIKeyframeSheet>> poseTabs,
-        Map<UIKeyframeSheet, Integer> poseTabDepths
-    )
+    public void selectPart(String path)
     {
-        String path = FormUtils.getPath(form);
-        String poseId = path.isEmpty() ? "pose" : path + FormUtils.PATH_SEPARATOR + "pose";
-        UIKeyframeSheet poseSheet = null;
-
-        for (UIKeyframeSheet sheet : formSheets)
+        if (!this.selectedPart.equals(path))
         {
-            if (poseId.equals(sheet.id) && sheet.channel.getFactory() == KeyframeFactories.POSE)
-            {
-                poseSheet = sheet;
-                break;
-            }
+            this.selectedPart = path;
+            this.setState(this.state);
         }
+    }
 
-        List<UIKeyframeSheet> orderedFormSheets = new ArrayList<>(formSheets);
-        formSheets.clear();
+    private void selectForm(Form form)
+    {
+        if (form != null) this.selectPart(FormUtils.getPath(form));
+    }
 
-        if (form instanceof PoseForm)
-        {
-            UIReplaysEditorUtils.addGlintControlSheet(form, this.state.properties, orderedFormSheets);
+    private void layoutCategoryBar()
+    {
+        int width = this.categoryBar.getWidthForHeight(this.timelineArea.area.h);
+        this.categoryBar.w(width);
+        this.partHeader.x(width);
+        if (this.keyframeEditor != null) this.keyframeEditor.x(width).w(1F, -width);
+    }
 
-            List<UIKeyframeSheet> boneSheets = new ArrayList<>();
-            Map<String, Integer> depthBySheetId = new HashMap<>();
+    @Override
+    public void resize()
+    {
+        int maxHeight = Math.min(160, this.getFlex().getH() / 2);
+        this.bodyParts.h(Math.max(1, Math.min(this.bodyParts.getList().size() * this.bodyParts.scroll.scrollItemSize, maxHeight)));
+        this.editArea.hTo(this.bodyPartsSection.isVisible() ? this.bodyPartsSection.area : this.sidebar.area,
+            this.bodyPartsSection.isVisible() ? 0F : 1F);
+        super.resize();
+    }
 
-            UIReplaysEditorUtils.addBoneTrackSheets(form, this.state.properties, boneSheets, depthBySheetId);
+    @Override
+    public void collectUndoData(MapType data)
+    {
+        super.collectUndoData(data);
+        data.putString("body_part", this.selectedPart);
+    }
 
-            for (UIKeyframeSheet boneSheet : boneSheets)
-            {
-                poseTabDepths.put(boneSheet, depthBySheetId.getOrDefault(boneSheet.id, 0));
-            }
-
-            if (poseSheet != null && !boneSheets.isEmpty())
-            {
-                poseTabs.put(poseSheet, boneSheets);
-
-                int poseIndex = orderedFormSheets.indexOf(poseSheet);
-
-                orderedFormSheets.addAll(poseIndex < 0 ? orderedFormSheets.size() : poseIndex + 1, boneSheets);
-            }
-            else
-            {
-                orderedFormSheets.addAll(boneSheets);
-            }
-        }
-
-        sheets.addAll(orderedFormSheets);
+    @Override
+    public void applyUndoData(MapType data)
+    {
+        super.applyUndoData(data);
+        this.root = this.editor.form;
+        this.selectedPart = data.getString("body_part");
+        this.setState(this.state);
     }
 
     public boolean clickViewport(UIContext context, StencilFormFramebuffer stencil)
@@ -408,7 +503,10 @@ public class UIAnimationStateEditor extends UIElement
             if (pair != null)
             {
                 return UIReplaysEditorUtils.pickFormWithOffers(context, pair, (form, bone, insert) ->
-                    UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, form, bone, insert));
+                {
+                    this.selectForm(form);
+                    UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, form, bone, insert);
+                });
             }
         }
 
@@ -424,6 +522,7 @@ public class UIAnimationStateEditor extends UIElement
 
     public void pickForm(Form form, String bone)
     {
+        this.selectForm(form);
         UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.editor, form, bone, false);
     }
 
@@ -476,21 +575,40 @@ public class UIAnimationStateEditor extends UIElement
                 transform.getTransform(),
                 rotationSampler
             ));
-            drag.setRotate2Axes(GizmoDrag.computeRotateAxes(transform.getTransform(), true, rotationSampler));
-
             this.editor.applyStateForSampling(tick);
-            drag.setRotationParents(transform.getTransform(), this.getMatrixEntry(transition).rotationOffset(), rotationSampler);
+            drag.setFrameAxes(
+                this.editor.renderer.toSceneMatrix(this.getOriginMatrix(transition)),
+                this.editor.renderer.toSceneMatrix(this.getParentOriginMatrix(transition))
+            );
+            drag.setAdditiveRotationBase(this.poseRotationBase(transition));
             this.editor.applyStateForSampling(tick);
         }
 
         return drag;
     }
 
+    private Vector3f poseRotationBase(float transition)
+    {
+        if (!(this.keyframeEditor.editor instanceof UIPoseKeyframeFactory))
+        {
+            return null;
+        }
+
+        UIKeyframeSheet sheet = this.keyframeEditor.getSheet(this.keyframeEditor.editor.getKeyframe());
+        Pair<String, Boolean> bone = this.keyframeEditor.getBone();
+        Form root = FormUtils.getRoot(this.editor.form);
+        BaseValueBasic property = sheet == null ? null : FormUtils.getProperty(root, sheet.id);
+
+        return property instanceof ValuePose pose && bone != null
+            ? FormUtils.additivePoseRotationBase(pose, StringUtils.fileName(bone.a), this.getMatrixEntry(transition).evaluatedRotation())
+            : null;
+    }
+
     private Matrix3f getMobTranslateJacobian(float transition)
     {
         Matrix4f origin = this.getMatrixEntry(transition).origin();
 
-        return origin == null ? null : GizmoDrag.computeModelPartTranslateJacobian(origin);
+        return origin == null ? null : GizmoDrag.computeModelPartTranslateJacobian(this.editor.renderer.toSceneMatrix(origin));
     }
 
     private boolean isMobPoseBoneTrack()
@@ -527,6 +645,13 @@ public class UIAnimationStateEditor extends UIElement
     public Matrix4f getOriginMatrix(float transition)
     {
         return this.getOriginInternal(transition, true);
+    }
+
+    /** The parent frame paired with the rotation-bearing matrix for a live axis walk. */
+    public Matrix4f getParentOriginMatrix(float transition)
+    {
+        Matrix4f origin = this.getMatrixEntry(transition).origin();
+        return origin == null ? Matrices.EMPTY_4F : origin;
     }
 
     private Matrix4f getOriginInternal(float transition, boolean forceMatrix)
@@ -567,6 +692,17 @@ public class UIAnimationStateEditor extends UIElement
     @Override
     public void render(UIContext context)
     {
+        if (this.state != null && (this.poseOverlayCount != BBSSettings.recordingPoseOverlays.get()
+            || this.transformOverlayCount != BBSSettings.recordingTransformOverlays.get())) this.setState(this.state);
+        boolean notEditing = this.keyframeEditor == null || !this.keyframeEditor.view.isEditing();
+        this.categoryBar.setVisible(this.state != null && notEditing);
+        this.partHeader.setVisible(this.state != null && notEditing && this.keyframeEditor != null
+            && this.keyframeEditor.view.getGraph() == this.keyframeEditor.view.getDopeSheet());
+        if (this.partHeader.isVisible())
+        {
+            int width = Math.min(this.keyframeEditor.view.getLabelWidth(), this.keyframeEditor.view.area.w);
+            if (this.partHeader.area.w != width) this.partHeader.w(width).resize();
+        }
         if (this.keyframeEditor != null)
         {
             UIPropTransform transform = this.getEditableTransform();

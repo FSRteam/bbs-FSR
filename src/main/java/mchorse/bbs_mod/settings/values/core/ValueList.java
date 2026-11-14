@@ -114,6 +114,23 @@ public abstract class ValueList <T extends BaseValue> extends BaseValueGroup
     protected abstract T create(String id);
 
     @Override
+    public void reset()
+    {
+        if (!this.list.isEmpty())
+        {
+            this.preNotify();
+            this.list.clear();
+            this.postNotify();
+        }
+    }
+
+    @Override
+    public boolean isDefault()
+    {
+        return this.list.isEmpty();
+    }
+
+    @Override
     public BaseType toData()
     {
         ListType list = new ListType();

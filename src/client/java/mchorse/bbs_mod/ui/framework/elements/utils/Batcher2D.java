@@ -1,8 +1,11 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.client.PixelArt;
 import mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind;
 import mchorse.bbs_mod.api.client.ui.BBSUiColoredMesh;
 import mchorse.bbs_mod.api.client.ui.BBSUiTexturedMesh;
@@ -16,6 +19,7 @@ import mchorse.bbs_mod.ui.themes.ThemeManager;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIArt;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -56,6 +60,28 @@ public class Batcher2D
         fontRenderer.setRenderer(Minecraft.getInstance().font);
 
         return fontRenderer;
+    }
+
+    /** Preserve crisp texel seams at fractional UI scales, with vanilla as the fallback. */
+    private static Supplier<ShaderInstance> texturedProgram()
+    {
+        if (PixelArt.isEnabled() && BBSShaders.getPixelArtProgram() != null)
+        {
+            return BBSShaders::getPixelArtProgram;
+        }
+
+        return GameRenderer::getPositionTexColorShader;
+    }
+
+    /** Texture filtering selected by the user takes precedence over pixel art reconstruction. */
+    private static Supplier<ShaderInstance> texturedProgram(Texture texture)
+    {
+        if (texture != null && (texture.isLinear() || texture.isMipmap()))
+        {
+            return GameRenderer::getPositionTexColorShader;
+        }
+
+        return texturedProgram();
     }
 
     /* Quad batching. A scope opened with beginBatch() collects every solid quad (box,
@@ -114,6 +140,7 @@ public class Batcher2D
 
         if (mesh != null)
         {
+            BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
             BufferUploader.drawWithShader(mesh);
         }
 
@@ -278,9 +305,85 @@ public class Batcher2D
 
         this.prepareUiBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
         this.restoreDepth();
+    }
+
+    /** Draw two solid triangles, preserving the alpha of each half independently. */
+    public void splitBox(float x1, float y1, float x2, float y2, int topLeft, int bottomRight)
+    {
+        topLeft = this.applyGlobalAlpha(topLeft);
+        bottomRight = this.applyGlobalAlpha(bottomRight);
+        this.flushBeforeTesselator();
+
+        Matrix4f matrix = this.context.pose().last().pose();
+        ColoredMeshBatch mirror = new ColoredMeshBatch(matrix);
+        mirror.addTriangle(x1, y1, topLeft, x1, y2, topLeft, x2, y1, topLeft);
+        mirror.addTriangle(x2, y1, bottomRight, x1, y2, bottomRight, x2, y2, bottomRight);
+        mirror.finish();
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+        builder.addVertex(matrix, x1, y1, 0F).setColor(topLeft);
+        builder.addVertex(matrix, x1, y2, 0F).setColor(topLeft);
+        builder.addVertex(matrix, x2, y1, 0F).setColor(topLeft);
+        builder.addVertex(matrix, x2, y1, 0F).setColor(bottomRight);
+        builder.addVertex(matrix, x1, y2, 0F).setColor(bottomRight);
+        builder.addVertex(matrix, x2, y2, 0F).setColor(bottomRight);
+        this.prepareUiBlend();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+        this.restoreDepth();
+    }
+
+    public void highlight(Area area, Direction edge)
+    {
+        int radius = BBSSettings.cornerWidget();
+
+        if (radius > 0)
+        {
+            int fill = BBSSettings.tabActiveGradientColor();
+
+            if (fill == 0)
+            {
+                fill = BBSSettings.primaryColor(Colors.A50);
+            }
+
+            this.roundedFrame(area.x, area.y, area.w, area.h, radius, 1F, BBSSettings.tabActiveLineColor(), fill);
+
+            return;
+        }
+
+        this.highlight(area, edge, BBSSettings.accentColorRGB());
+    }
+
+    public void highlight(Area area, Direction edge, int color)
+    {
+        color &= Colors.RGB;
+        int bar = Colors.A100 | color;
+        int near = Colors.A75 | color;
+        int thickness = 2;
+
+        switch (edge)
+        {
+            case TOP:
+                this.box(area.x, area.y, area.ex(), area.y + thickness, bar);
+                this.gradientVBox(area.x, area.y + thickness, area.ex(), area.ey(), near, color);
+                break;
+            case BOTTOM:
+                this.box(area.x, area.ey() - thickness, area.ex(), area.ey(), bar);
+                this.gradientVBox(area.x, area.y, area.ex(), area.ey() - thickness, color, near);
+                break;
+            case LEFT:
+                this.box(area.x, area.y, area.x + thickness, area.ey(), bar);
+                this.gradientHBox(area.x + thickness, area.y, area.ex(), area.ey(), near, color);
+                break;
+            case RIGHT:
+                this.box(area.ex() - thickness, area.y, area.ex(), area.ey(), bar);
+                this.gradientHBox(area.x, area.y, area.ex() - thickness, area.ey(), color, near);
+                break;
+        }
     }
 
     public void fillRect(BufferBuilder builder, Matrix4f matrix4f, float x, float y, float w, float h, int color1, int color2, int color3, int color4)
@@ -409,6 +512,7 @@ public class Batcher2D
 
             this.prepareUiBlend();
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
+            BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
             BufferUploader.drawWithShader(builder.buildOrThrow());
             this.restoreDepth();
         }
@@ -431,6 +535,7 @@ public class Batcher2D
             this.prepareUiBlend();
             RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
             RenderSystem.setShaderTexture(0, mask.id);
+            BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
             BufferUploader.drawWithShader(builder.buildOrThrow());
         }
         else
@@ -446,6 +551,7 @@ public class Batcher2D
 
             this.prepareUiBlend();
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
+            BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
             BufferUploader.drawWithShader(builder.buildOrThrow());
         }
 
@@ -509,6 +615,7 @@ public class Batcher2D
 
             this.prepareUiBlend();
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
+            BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
             BufferUploader.drawWithShader(builder.buildOrThrow());
             this.restoreDepth();
         }
@@ -535,6 +642,7 @@ public class Batcher2D
             this.prepareUiBlend();
             RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
             RenderSystem.setShaderTexture(0, mask.id);
+            BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
             BufferUploader.drawWithShader(builder.buildOrThrow());
         }
         else
@@ -554,6 +662,7 @@ public class Batcher2D
 
             this.prepareUiBlend();
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
+            BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
             BufferUploader.drawWithShader(builder.buildOrThrow());
         }
 
@@ -616,6 +725,7 @@ public class Batcher2D
             this.prepareUiBlend();
             RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
             RenderSystem.setShaderTexture(0, mask.id);
+            BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
             BufferUploader.drawWithShader(builder.buildOrThrow());
         }
         else
@@ -648,6 +758,7 @@ public class Batcher2D
 
             this.prepareUiBlend();
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
+            BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
             BufferUploader.drawWithShader(builder.buildOrThrow());
         }
 
@@ -685,6 +796,11 @@ public class Batcher2D
 
     public void dropShadow(int left, int top, int right, int bottom, int offset, int opaque, int shadow)
     {
+        if (!BBSSettings.hasInterfaceGlow())
+        {
+            return;
+        }
+
         opaque = this.applyGlobalAlpha(opaque);
         shadow = this.applyGlobalAlpha(shadow);
 
@@ -744,6 +860,7 @@ public class Batcher2D
 
         this.prepareUiBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
         this.restoreDepth();
@@ -797,6 +914,7 @@ public class Batcher2D
 
         this.prepareUiBlend();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
         this.restoreDepth();
@@ -847,6 +965,8 @@ public class Batcher2D
             builder.addVertex(matrix4f, (int) (x - Math.cos(a) * offset), (int) (y + Math.sin(a) * offset), 0F).setColor(opaque);
         }
 
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
+
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
         /* Draw outer shadow */
@@ -881,6 +1001,8 @@ public class Batcher2D
         }
 
         shadowMirror.finish();
+
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
@@ -953,6 +1075,22 @@ public class Batcher2D
         y -= icon.h * ay;
 
         this.texturedBox(BBSModClient.getTextures().getTexture(ThemeManager.resolveIconAtlas(icon.texture)), color, x, y, icon.w, icon.h, icon.x, icon.y, icon.x + icon.w, icon.y + icon.h, icon.textureW, icon.textureH);
+    }
+
+    /** Scales a picture-like icon to its cell; control icons retain their intrinsic size. */
+    public void scaledIcon(Icon icon, int color, float x, float y, float size)
+    {
+        if (icon.texture == null)
+        {
+            return;
+        }
+
+        if (BBSSettings.isLightTheme())
+        {
+            color = darkenWhite(color);
+        }
+
+        this.texturedBox(BBSModClient.getTextures().getTexture(ThemeManager.resolveIconAtlas(icon.texture)), color, x, y, size, size, icon.x, icon.y, icon.x + icon.w, icon.y + icon.h, icon.textureW, icon.textureH);
     }
 
     public void iconArea(Icon icon, float x, float y, float w, float h)
@@ -1039,11 +1177,13 @@ public class Batcher2D
         flushBeforeTesselator();
 
         this.prepareUiBlend();
-        RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
+        RenderSystem.setShader(texturedProgram(texture));
         RenderSystem.setShaderTexture(0, texture.id);
 
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
         this.fillTexturedBox(builder, matrix, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH);
+
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
@@ -1055,7 +1195,7 @@ public class Batcher2D
         color = this.applyGlobalAlpha(color);
 
         this.texturedBoxNative(
-            GameRenderer::getPositionTexColorShader,
+            texturedProgram(),
             texture, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH,
             BBSUiUnsupportedReason.RAW_TEXTURE
         );
@@ -1160,6 +1300,8 @@ public class Batcher2D
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
         this.fillTexturedBox(builder, matrix, color, x, y, w, h, u1, v1, u2, v2, textureW, textureH);
 
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
+
         BufferUploader.drawWithShader(builder.buildOrThrow());
 
         this.restoreDepth();
@@ -1196,7 +1338,7 @@ public class Batcher2D
         flushBeforeTesselator();
 
         this.prepareUiBlend();
-        RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
+        RenderSystem.setShader(texturedProgram(texture));
         RenderSystem.setShaderTexture(0, texture.id);
 
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
@@ -1227,6 +1369,8 @@ public class Batcher2D
 
             this.fillTexturedBox(builder, matrix, color, xx, yy, xw, yh, u, v, u + xw, v + yh, tw, th);
         }
+
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
 
         BufferUploader.drawWithShader(builder.buildOrThrow());
 

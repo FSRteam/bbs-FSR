@@ -158,6 +158,11 @@ public abstract class UIParticleSchemeSection extends UISection
 
     public abstract IKey getTitle();
 
+    public void editMoLang(String id, Consumer<String> callback, MolangExpression expression)
+    {
+        this.editor.editMoLang(id, callback, expression);
+    }
+
     protected UITextbox molangField(IKey placeholder, IKey tooltip, Consumer<String> callback, MolangExpression expression)
     {
         UITextbox textbox = new UITextbox(10000, (str) ->
@@ -178,14 +183,9 @@ public abstract class UIParticleSchemeSection extends UISection
 
     public MolangExpression parse(String string, MolangExpression old)
     {
-        if (string.isEmpty())
-        {
-            return MolangParser.ZERO;
-        }
-
         try
         {
-            MolangExpression expression = this.scheme.parser.parseExpression(string);
+            MolangExpression expression = string.isEmpty() ? MolangParser.ZERO : this.scheme.parser.parseExpression(string);
 
             this.editor.dirty();
 

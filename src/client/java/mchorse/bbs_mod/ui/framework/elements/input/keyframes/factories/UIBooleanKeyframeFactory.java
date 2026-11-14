@@ -21,7 +21,7 @@ public class UIBooleanKeyframeFactory extends UIKeyframeFactory<Boolean>
          * boolean key has no drag gesture, so without this the key did nothing in this editor. */
         this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () ->
         {
-            this.setValue(!this.keyframe.getValue());
+            this.setValue(!this.getDisplayValue());
             this.update();
         }).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
@@ -33,6 +33,6 @@ public class UIBooleanKeyframeFactory extends UIKeyframeFactory<Boolean>
     {
         super.update();
 
-        this.toggle.setValue(this.keyframe.getValue());
+        this.toggle.setValue(this.getDisplayValue());
     }
 }

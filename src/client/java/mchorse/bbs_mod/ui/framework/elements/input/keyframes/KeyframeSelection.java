@@ -110,6 +110,19 @@ public class KeyframeSelection
         this.selected.remove(index);
     }
 
+    public void shiftAfterInsert(int index)
+    {
+        Set<Integer> shifted = new LinkedHashSet<>();
+
+        for (Integer selected : this.selected)
+        {
+            shifted.add(selected >= index ? selected + 1 : selected);
+        }
+
+        this.selected.clear();
+        this.selected.addAll(shifted);
+    }
+
     public void removeSelected()
     {
         tmpIndices.clear();

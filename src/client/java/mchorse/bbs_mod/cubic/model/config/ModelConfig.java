@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.cubic.model.config;
 
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.cubic.model.ArmorSlot;
 import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.View;
@@ -38,6 +39,7 @@ import java.util.Map;
 public class ModelConfig extends ValueGroup
 {
     public final ValueBoolean procedural = new ValueBoolean("procedural", false);
+    public final ValueStringMap proceduralBones = new ValueStringMap("procedural_bones");
     public final ValueBoolean culling = new ValueBoolean("culling", true);
     public final ValueBoolean onCpu = new ValueBoolean("on_cpu", false);
     public final ValueString poseGroup = new ValueString("pose_group", "");
@@ -50,6 +52,7 @@ public class ModelConfig extends ValueGroup
 
     public final LookAtValue lookAt = new LookAtValue("look_at");
     public final ValuePose sneakingPose = new ValuePose("sneaking_pose", new Pose());
+    public final ValuePose defaultPose = new ValuePose("default_pose", new Pose());
     public final ItemSlotList itemsMain = new ItemSlotList("items_main");
     public final ItemSlotList itemsOff = new ItemSlotList("items_off");
     public final ArmorSlotsValue armorSlots = new ArmorSlotsValue("armor_slots");
@@ -78,6 +81,7 @@ public class ModelConfig extends ValueGroup
         super(id);
 
         this.add(this.procedural);
+        this.add(this.proceduralBones);
         this.add(this.culling);
         this.add(this.onCpu);
         this.add(this.poseGroup);
@@ -89,6 +93,7 @@ public class ModelConfig extends ValueGroup
         this.add(this.disabledBones);
         this.add(this.lookAt);
         this.add(this.sneakingPose);
+        this.add(this.defaultPose);
         this.add(this.itemsMain);
         this.add(this.itemsOff);
         this.add(this.armorSlots);
@@ -105,6 +110,11 @@ public class ModelConfig extends ValueGroup
     @Override
     public void fromData(BaseType data)
     {
+        if (data.isMap())
+        {
+            if (!data.asMap().has("procedural_bones")) this.proceduralBones.fromData(new MapType());
+            if (!data.asMap().has("default_pose")) this.defaultPose.fromData(new MapType());
+        }
         super.fromData(data);
 
         this.rebuild();
@@ -113,6 +123,8 @@ public class ModelConfig extends ValueGroup
     @Override
     protected boolean canPersist(BaseValue value)
     {
+        if (value == this.proceduralBones) return !this.proceduralBones.get().isEmpty();
+        if (value == this.defaultPose) return !this.defaultPose.get().isEmpty();
         /* Optional blocks stay absent from the file when empty, matching how they were authored. */
         if (value == this.lookAt) return this.lookAt.isActive();
         if (value == this.fpMain) return this.fpMain.isActive();
@@ -184,6 +196,11 @@ public class ModelConfig extends ValueGroup
     public Pose getSneakingPose()
     {
         return this.sneakingPose.get();
+    }
+
+    public Pose getDefaultPose()
+    {
+        return this.defaultPose.get();
     }
 
     public View getView()
@@ -285,6 +302,146 @@ public class ModelConfig extends ValueGroup
             }
 
             return list;
+        }
+    }
+
+    public void renameBone(String from, String to)
+    {
+        MapType data = this.toData().asMap();
+
+        renameBone(data, from, to);
+        this.fromData(data);
+        this.rebuild();
+    }
+
+    private static void renameBone(MapType data, String from, String to)
+    {
+        renameString(data, "anchor", from, to);
+        MapType procedural = map(data, "procedural_bones");
+
+        if (procedural != null)
+        {
+            for (String role : procedural.keys())
+            {
+                renameString(procedural, role, from, to);
+            }
+        }
+        renameStrings(data, "disabledBones", from, to);
+        renameString(map(data, "look_at"), "head", from, to);
+        renameKey(map(map(data, "sneaking_pose"), "pose"), from, to);
+        renameKey(map(map(data, "default_pose"), "pose"), from, to);
+        renameSlots(list(data, "items_main"), from, to);
+        renameSlots(list(data, "items_off"), from, to);
+        renameString(map(data, "fp_main"), "group", from, to);
+        renameString(map(data, "fp_offhand"), "group", from, to);
+        renamePairs(map(data, "flipped_parts"), from, to);
+        renamePairs(map(data, "picking_overrides"), from, to);
+        renamePairs(map(data, "cem_parents"), from, to);
+
+        MapType armor = map(data, "armor_slots");
+
+        if (armor != null)
+        {
+            for (String key : new ArrayList<>(armor.keys()))
+            {
+                renameString(map(armor, key), "group", from, to);
+            }
+        }
+
+        ListType welds = list(data, "welds");
+
+        if (welds != null)
+        {
+            for (BaseType weld : welds)
+            {
+                if (weld.isMap())
+                {
+                    renameString(weld.asMap(), "source_bone", from, to);
+                    renameString(weld.asMap(), "target_bone", from, to);
+                }
+            }
+        }
+    }
+
+    private static MapType map(MapType data, String key)
+    {
+        return data != null && data.has(key) && data.get(key).isMap() ? data.get(key).asMap() : null;
+    }
+
+    private static ListType list(MapType data, String key)
+    {
+        return data != null && data.has(key) && data.get(key).isList() ? data.get(key).asList() : null;
+    }
+
+    private static void renameString(MapType map, String key, String from, String to)
+    {
+        if (map != null && map.has(key) && from.equals(map.getString(key)))
+        {
+            map.putString(key, to);
+        }
+    }
+
+    private static void renameKey(MapType map, String from, String to)
+    {
+        if (map != null && map.has(from))
+        {
+            BaseType value = map.get(from);
+
+            map.remove(from);
+            map.put(to, value);
+        }
+    }
+
+    private static void renameStrings(MapType data, String key, String from, String to)
+    {
+        ListType list = list(data, key);
+
+        if (list == null)
+        {
+            return;
+        }
+
+        ListType fresh = new ListType();
+
+        for (BaseType element : list)
+        {
+            fresh.addString(from.equals(element.asString()) ? to : element.asString());
+        }
+
+        data.put(key, fresh);
+    }
+
+    private static void renamePairs(MapType map, String from, String to)
+    {
+        if (map == null)
+        {
+            return;
+        }
+
+        for (String key : new ArrayList<>(map.keys()))
+        {
+            if (from.equals(map.getString(key)))
+            {
+                map.putString(key, to);
+            }
+        }
+
+        renameKey(map, from, to);
+    }
+
+    private static void renameSlots(ListType slots, String from, String to)
+    {
+        if (slots == null)
+        {
+            return;
+        }
+
+        for (BaseType slot : slots)
+        {
+            if (slot.isMap())
+            {
+                renameString(slot.asMap(), "group", from, to);
+            }
         }
     }
 }

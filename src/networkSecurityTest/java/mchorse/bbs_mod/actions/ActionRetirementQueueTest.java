@@ -114,8 +114,11 @@ public final class ActionRetirementQueueTest
             "this.resendActors()");
         check(!staging.contains("this.actors.clear()") && !staging.contains("this.actors.putAll(nextActors)"),
             "live actor map commit can still expose a partially replaced map");
-        check(stop.contains("this.actorRetirements.drain(LivingEntity::discard)"),
+        check(stop.contains("this.actorRetirements.drain(ActionPlayer::retireActor)"),
             "runtime teardown no longer retries detached actor retirement");
+        assertOrdered(section(player, "private static void retireActor(LivingEntity actor)", "private void discardCurrentActors()"),
+            "actorEntity.dropPickedUp()",
+            "actor.discard()");
         assertOrdered(manager,
             "player = new ActionPlayer(",
             "player.stopDamage = false",

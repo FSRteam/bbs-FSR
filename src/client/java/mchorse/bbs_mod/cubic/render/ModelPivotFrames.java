@@ -30,7 +30,7 @@ public final class ModelPivotFrames
 
     public static void collect(IModel model, Set<String> wanted, Map<String, CubicRenderer.PivotFrame> out)
     {
-        collect(model, wanted, out, null, false);
+        collect(model, wanted, out, null);
     }
 
     public static void collect(IModel model, Set<String> wanted, Map<String, CubicRenderer.PivotFrame> out, Matrix4f baseTransform)

@@ -5,28 +5,32 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.IUITreeEventListener;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.IFileDropConsumer;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.utils.UIFileDialogs;
+import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.FFMpegDownloadManager;
 import mchorse.bbs_mod.utils.FFMpegUtils;
 import mchorse.bbs_mod.utils.OS;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
-public class UIFFMpegPath extends UIElement implements IFileDropConsumer
+public class UIFFMpegPath extends UIElement implements IFileDropConsumer, IUITreeEventListener
 {
-    private static final int CONTROL_WIDTH = 220;
     private static final String EXECUTABLE_NAME = OS.CURRENT == OS.WINDOWS ? "ffmpeg.exe" : "ffmpeg";
 
     private final ValueString value;
@@ -41,6 +45,11 @@ public class UIFFMpegPath extends UIElement implements IFileDropConsumer
     private boolean showDownloadStatus;
 
     public UIFFMpegPath(ValueString value)
+    {
+        this(value, true);
+    }
+
+    public UIFFMpegPath(ValueString value, boolean labelled)
     {
         this.value = value;
         this.downloads = FFMpegDownloadManager.getInstance();
@@ -68,19 +77,20 @@ public class UIFFMpegPath extends UIElement implements IFileDropConsumer
         this.pick.tooltip(UIKeys.GENERAL_FFMPEG_SELECT);
         this.download.tooltip(UIKeys.GENERAL_FFMPEG_DOWNLOAD);
         this.status.labelAnchor(0F, 0.5F).h(12);
+        this.pick.wh(Icons.FOLDER.w, UIConstants.CONTROL_HEIGHT);
+        this.download.wh(Icons.DOWNLOAD.w, UIConstants.CONTROL_HEIGHT);
 
         UIElement controls = UI.row(2, this.textbox, this.pick, this.download);
-        UIElement pathRow = new UIElement();
-        UIElement statusRow = new UIElement();
+        UIElement fields = new UIElement();
 
-        controls.w(CONTROL_WIDTH).h(20);
-        pathRow.row(0).preferred(0).height(20);
-        pathRow.add(UIValueFactory.label(value), controls);
-        statusRow.row(0).preferred(0).height(12);
-        statusRow.add(new UIElement(), this.status.w(CONTROL_WIDTH));
-
+        controls.h(UIConstants.CONTROL_HEIGHT);
+        fields.column(2).vertical().stretch();
+        fields.add(controls, this.status);
+        fields.h(UIConstants.CONTROL_HEIGHT + 14);
         this.column(2).vertical().stretch();
-        this.add(pathRow, statusRow);
+        this.add(labelled ? UIPathRow.column(value, fields) : fields);
+        this.h(UIConstants.CONTROL_HEIGHT + (labelled ? 25 : 14));
+        this.context(this::fillPathContextMenu);
         UIValueFactory.commetTooltip(this, value);
     }
 
@@ -132,38 +142,103 @@ public class UIFFMpegPath extends UIElement implements IFileDropConsumer
 
     private void pickFile()
     {
-        String current = this.value.get();
-        CharSequence defaultPath = current == null || current.isBlank() || current.equalsIgnoreCase("ffmpeg")
-            ? EXECUTABLE_NAME
-            : current;
-        String result = TinyFileDialogs.tinyfd_openFileDialog(
-            UIKeys.GENERAL_FFMPEG_SELECT.get(), defaultPath, null, null, false);
+        UIPathRow.PathRequest request = UIPathRow.captureRequest(this, this.value, ++this.validationGeneration);
 
-        if (result != null)
+        if (request == null)
         {
-            try
-            {
-                this.validate(Path.of(result));
-            }
-            catch (InvalidPathException e)
-            {
-                this.showDownloadStatus = false;
-                this.manualState = ManualState.FAILED;
-                this.notifyError(UIKeys.GENERAL_FFMPEG_STATUS_INVALID);
-            }
+            return;
         }
+
+        String[] patterns = OS.CURRENT == OS.WINDOWS ? new String[] {"*.exe"} : null;
+
+        UIFileDialogs.pickFile(UIKeys.GENERAL_DIALOG_ENCODER, this.getEncoder(), patterns,
+            UIKeys.GENERAL_DIALOG_ENCODER, (file) ->
+        {
+            if (this.isCurrentRequest(request))
+            {
+                this.validate(file.toPath());
+            }
+        });
+    }
+
+    public void fillPathContextMenu(ContextMenuManager menu)
+    {
+        File encoder = this.getEncoder();
+
+        if (encoder != null)
+        {
+            menu.action(Icons.FOLDER, UIKeys.GENERAL_FFMPEG_OPEN_FOLDER,
+                () -> UIUtils.openFolder(encoder.getAbsoluteFile().getParentFile()));
+        }
+
+        if (OS.CURRENT == OS.WINDOWS && !this.downloads.isBusy() && this.manualState != ManualState.CHECKING)
+        {
+            menu.action(Icons.SEARCH, UIKeys.GENERAL_FFMPEG_FIND, this::findEncoder);
+        }
+    }
+
+    private File getEncoder()
+    {
+        File file = new File(this.value.get());
+
+        return file.isFile() ? file : null;
+    }
+
+    private void findEncoder()
+    {
+        UIPathRow.PathRequest request = UIPathRow.captureRequest(this, this.value, ++this.validationGeneration);
+
+        if (request == null)
+        {
+            return;
+        }
+
+        File[] roots = File.listRoots();
+        Path root = (roots.length == 0 ? new File("C:\\") : roots[0]).toPath();
+
+        this.showDownloadStatus = false;
+        this.manualState = ManualState.CHECKING;
+        CompletableFuture.supplyAsync(() -> FFMpegUtils.findFFMpeg(root)).whenComplete((found, error) ->
+            Minecraft.getInstance().execute(() ->
+            {
+                if (!this.isCurrentRequest(request))
+                {
+                    return;
+                }
+
+                this.manualState = ManualState.UNCHECKED;
+
+                if (error == null && found != null && found.isPresent())
+                {
+                    Path candidate = found.get();
+                    String path = candidate.toAbsolutePath().toString();
+
+                    request.context().replaceContextMenu((menu) -> menu.action(Icons.VIDEO_CAMERA, IKey.constant(path), () ->
+                    {
+                        if (this.isCurrentRequest(request))
+                        {
+                            this.validate(candidate);
+                        }
+                    }));
+                }
+            }));
     }
 
     private void validate(Path candidate)
     {
-        long generation = ++this.validationGeneration;
+        UIPathRow.PathRequest request = UIPathRow.captureRequest(this, this.value, ++this.validationGeneration);
+
+        if (request == null)
+        {
+            return;
+        }
 
         this.showDownloadStatus = false;
         this.manualState = ManualState.CHECKING;
         this.downloads.validateCandidate(candidate).whenComplete((validation, error) ->
             Minecraft.getInstance().execute(() ->
             {
-                if (generation != this.validationGeneration)
+                if (!this.isCurrentRequest(request))
                 {
                     return;
                 }
@@ -187,12 +262,23 @@ public class UIFFMpegPath extends UIElement implements IFileDropConsumer
 
     private void download()
     {
-        this.validationGeneration += 1L;
+        UIPathRow.PathRequest request = UIPathRow.captureRequest(this, this.value, ++this.validationGeneration);
+
+        if (request == null)
+        {
+            return;
+        }
+
         this.manualState = ManualState.UNCHECKED;
         this.showDownloadStatus = true;
         this.downloads.start().whenComplete((result, error) ->
             Minecraft.getInstance().execute(() ->
             {
+                if (!this.isCurrentRequest(request))
+                {
+                    return;
+                }
+
                 if (error == null && result != null)
                 {
                     String path = result.executable().toAbsolutePath().normalize().toString();
@@ -208,6 +294,46 @@ public class UIFFMpegPath extends UIElement implements IFileDropConsumer
                     this.notifyError(this.getFailureKey(this.downloads.getStatus().failure()));
                 }
             }));
+    }
+
+    private boolean isCurrentRequest(UIPathRow.PathRequest request)
+    {
+        if (request.generation() != this.validationGeneration)
+        {
+            return false;
+        }
+
+        if (!request.isCurrent(this, this.value, this.validationGeneration))
+        {
+            this.manualState = ManualState.UNCHECKED;
+
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    protected void onRemove(UIElement parent)
+    {
+        this.invalidateRequest();
+        super.onRemove(parent);
+    }
+
+    @Override
+    public void onAddedToTree(UIElement element)
+    {}
+
+    @Override
+    public void onRemovedFromTree(UIElement element)
+    {
+        this.invalidateRequest();
+    }
+
+    private void invalidateRequest()
+    {
+        this.validationGeneration += 1L;
+        this.manualState = ManualState.UNCHECKED;
     }
 
     private String getStatusText()

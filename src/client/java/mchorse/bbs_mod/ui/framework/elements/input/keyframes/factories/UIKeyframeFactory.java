@@ -1,9 +1,12 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.ui.Keys;
+import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.ScrollMemory;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.context.UIInterpolationContextMenu;
@@ -35,11 +38,14 @@ public abstract class UIKeyframeFactory <T> extends UIElement
 {
     private static final Map<IKeyframeFactory, IUIKeyframeFactoryFactory> FACTORIES = new HashMap<>();
     private static final Map<String, IUIKeyframeFactoryFactory> PROPERTIES = new HashMap<>();
-    private static final Map<IKeyframeFactory, Integer> SCROLLS = new HashMap<>();
+    private static final ScrollMemory<IKeyframeFactory> SCROLLS = new ScrollMemory<>();
+    private static boolean initialized;
 
     public UIScrollView scroll;
     public UITrackpad tick;
     public UITrackpad duration;
+    public UITrackpad motionShift;
+    private boolean draggingMotionShift;
     public UIIcon interp;
 
     public UIIcon shape;
@@ -48,8 +54,15 @@ public abstract class UIKeyframeFactory <T> extends UIElement
     protected Keyframe<T> keyframe;
     protected UIKeyframes editor;
 
-    static
+    /** Register built-in editors before addons contribute their replacements. */
+    public static void setup()
     {
+        if (initialized)
+        {
+            return;
+        }
+
+        initialized = true;
         register(KeyframeFactories.ANCHOR, UIAnchorKeyframeFactory::new);
         register(KeyframeFactories.BOOLEAN, UIBooleanKeyframeFactory::new);
         register(KeyframeFactories.COLOR, UIColorKeyframeFactory::new);
@@ -62,6 +75,7 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         register(KeyframeFactories.IK, UIIKKeyframeFactory::new);
         register(KeyframeFactories.PHYSICS, UIPhysicsKeyframeFactory::new);
         register(KeyframeFactories.WIND, UIWindKeyframeFactory::new);
+        register(KeyframeFactories.BONE_CONSTRAINT, UIBoneConstraintKeyframeFactory::new);
         register(KeyframeFactories.POSE_TRANSFORM, UIPoseTransformKeyframeFactory::new);
         register(KeyframeFactories.STRING, UIStringKeyframeFactory::new);
         register(KeyframeFactories.TRANSFORM, UITransformKeyframeFactory::new);
@@ -81,6 +95,12 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         register(KeyframeFactories.SOUND_REFLECTIONS, UISoundKeyframeFactory::new);
     }
 
+    /* Preserve early FSR addon and standalone callers of createPanel. */
+    static
+    {
+        setup();
+    }
+
     public static <T> void register(IKeyframeFactory<T> clazz, IUIKeyframeFactoryFactory<T> factory)
     {
         FACTORIES.put(clazz, factory);
@@ -95,14 +115,14 @@ public abstract class UIKeyframeFactory <T> extends UIElement
     {
         if (editor != null)
         {
-            SCROLLS.put(editor.keyframe.getFactory(), (int) editor.scroll.scroll.getScroll());
+            SCROLLS.save(editor.keyframe.getFactory(), editor.scroll);
         }
     }
 
     /** Restore after the property panel has a laid-out viewport, so clamping uses its real size. */
     public void restoreScroll()
     {
-        this.scroll.scroll.setScroll(SCROLLS.getOrDefault(this.keyframe.getFactory(), 0));
+        SCROLLS.restore(this.keyframe.getFactory(), this.scroll);
     }
 
     public static <T> UIKeyframeFactory createPanel(Keyframe<T> keyframe, UIKeyframes editor)
@@ -150,6 +170,22 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         this.interp.tooltip(new InterpolationTooltip(0F, 0.5F, () -> this.keyframe.getInterpolation()));
         this.interp.keys().register(Keys.KEYFRAMES_INTERP, this.interp::clickItself).category(UIKeys.KEYFRAMES_KEYS_CATEGORY);
 
+        this.motionShift = new UITrackpad(value -> this.editor.getGraph().setMotionShift(value.floatValue() / 100F, !this.draggingMotionShift));
+        this.motionShift.limit(-49, 49).tooltip(UIKeys.KEYFRAMES_MOTION_SHIFT);
+        this.motionShift.getEvents().register(UITrackpadDragStartEvent.class, event ->
+        {
+            this.draggingMotionShift = true;
+            this.editor.cacheKeyframes();
+        });
+        this.motionShift.getEvents().register(UITrackpadDragEndEvent.class, event ->
+        {
+            this.draggingMotionShift = false;
+            this.editor.submitKeyframes();
+            this.editor.getGraph().pickSelected();
+        });
+        this.motionShift.setValue(keyframe.getMotionShift() * 100F);
+        this.motionShift.setEnabled(keyframe.supportsMotionShift());
+
         this.color = new UIColor((c) ->
         {
             for (UIKeyframeSheet sheet : this.editor.getGraph().getSheets())
@@ -172,35 +208,13 @@ public abstract class UIKeyframeFactory <T> extends UIElement
             });
         });
 
-        this.shape = new UIIcon(Icons.SHAPES, (b) ->
-        {
-            KeyframeShape currentShape = keyframe.getShape() == null ? KeyframeShape.SQUARE : keyframe.getShape();
-
-            this.getContext().replaceContextMenu((menu) ->
-            {
-                for (KeyframeShape shape : KeyframeShape.values())
-                {
-                    IKeyframeShapeRenderer shapeRenderer = KeyframeShapeRenderers.SHAPES.get(shape);
-
-                    menu.action(shapeRenderer.getIcon(), shapeRenderer.getLabel(), shape == currentShape, () ->
-                    {
-                        for (UIKeyframeSheet sheet : this.editor.getGraph().getSheets())
-                        {
-                            for (Keyframe kf : sheet.selection.getSelected())
-                            {
-                                kf.setShape(shape);
-                            }
-                        }
-                    });
-                }
-            });
-        });
+        this.shape = new UIIcon(Icons.SHAPES, (b) -> this.editor.openStyleEditor());
         this.shape.wh(UIConstants.CONTROL_HEIGHT, UIConstants.CONTROL_HEIGHT);
-        this.shape.tooltip(UIKeys.KEYFRAMES_CHANGE_SHAPE);
+        this.shape.tooltip(UIKeys.KEYFRAMES_CONTEXT_KEYFRAME_STYLE);
 
         this.scroll.add(UI.column(0, 0, 0,
-            UI.row(UIConstants.MARGIN, 0, 0, this.interp, this.tick, this.duration),
-            UI.row(UIConstants.MARGIN, 0, 0, this.shape, this.color).marginTop(UIConstants.SECTION_GAP)
+            UI.row(UIConstants.MARGIN, 0, 0, this.interp, this.tick, this.duration, this.motionShift),
+            UI.row(UIConstants.MARGIN, 0, 0, this.shape).marginTop(UIConstants.SECTION_GAP)
         ));
 
         this.add(this.scroll);
@@ -215,9 +229,36 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         return this.keyframe;
     }
 
+    public Keyframe<T> getEditTarget()
+    {
+        return this.editor.getGraph().getEditTarget(this.keyframe);
+    }
+
+    protected boolean followsPlayhead()
+    {
+        return this.editor.getAutoKeyframeTick() != null;
+    }
+
+    protected T getDisplayValue()
+    {
+        Float tick = this.editor.getAutoKeyframeTick();
+        UIKeyframeSheet sheet = tick == null ? null : this.editor.getGraph().getSheet(this.keyframe);
+        T value = sheet == null || sheet.channel.isEmpty() ? null : (T) sheet.channel.interpolate(tick);
+
+        return value == null ? this.keyframe.getValue() : value;
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        if (this.followsPlayhead()) this.update();
+        super.render(context);
+    }
+
     public void setTick(double tick)
     {
-        double time = TimeUtils.fromTime(tick);
+        double time = BBSSettings.editorSnapToTicks.get() ? TimeUtils.fromTime(tick)
+            : (BBSSettings.editorSeconds.get() ? tick * 20D : tick);
 
         this.editor.getGraph().setTick((float) time, false);
     }
@@ -229,12 +270,14 @@ public abstract class UIKeyframeFactory <T> extends UIElement
 
     public void setValue(Object value)
     {
-        this.editor.getGraph().setValue(value, true);
+        this.editor.getGraph().setValue(value, true, true);
     }
 
     public void update()
     {
         this.tick.setValue(TimeUtils.toTime(this.keyframe.getTick()));
+        this.motionShift.setValue(this.keyframe.getMotionShift() * 100F);
+        this.motionShift.setEnabled(this.keyframe.supportsMotionShift());
     }
 
     public static interface IUIKeyframeFactoryFactory <T>

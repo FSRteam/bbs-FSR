@@ -106,16 +106,14 @@ public class FilmRepository implements IRepository<Film>
 
         ClientNetwork.sendManagerData(RepositoryOperation.BACKUPS, mapType, (data) ->
         {
-            if (!data.isList())
-            {
-                return;
-            }
-
             List<String> list = new ArrayList<>();
 
-            for (BaseType element : data.asList())
+            if (data.isList())
             {
-                list.add(element.asString());
+                for (BaseType element : data.asList())
+                {
+                    list.add(element.asString());
+                }
             }
 
             callback.accept(list);

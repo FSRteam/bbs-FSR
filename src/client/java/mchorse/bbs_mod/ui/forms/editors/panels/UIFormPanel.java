@@ -9,6 +9,8 @@ import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.utils.BoneSelection;
+import mchorse.bbs_mod.ui.utils.IBoneSelectionHost;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.bones.UIBonePicker;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -90,6 +92,15 @@ public abstract class UIFormPanel <T extends Form> extends UIElement
     {
         return "";
     }
+    private final BoneSelection detachedSelection = new BoneSelection();
+
+    protected BoneSelection boneSelection()
+    {
+        IBoneSelectionHost host = this.getAncestor(IBoneSelectionHost.class);
+
+        return host == null ? this.detachedSelection : host.getBoneSelection();
+    }
+
     protected UIBonePicker.Viewport viewportBonePicking()
     {
         return new UIBonePicker.Viewport()

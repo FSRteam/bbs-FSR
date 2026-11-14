@@ -10,32 +10,48 @@ public interface IUIElement
     /**
      * Should be called when position has to be recalculated
      */
-    public void resize();
+    public default void resize()
+    {}
 
     /**
      * Whether this element is enabled (and can accept any input) 
      */
-    public boolean isEnabled();
+    public default boolean isEnabled()
+    {
+        return false;
+    }
 
     /**
      * Whether this element is visible
      */
-    public boolean isVisible();
+    public default boolean isVisible()
+    {
+        return true;
+    }
 
     /**
      * Mouse was clicked
      */
-    public IUIElement mouseClicked(UIContext context);
+    public default IUIElement mouseClicked(UIContext context)
+    {
+        return null;
+    }
 
     /**
      * Mouse wheel was scrolled
      */
-    public IUIElement mouseScrolled(UIContext context);
+    public default IUIElement mouseScrolled(UIContext context)
+    {
+        return null;
+    }
 
     /**
      * Mouse was released
      */
-    public IUIElement mouseReleased(UIContext context);
+    public default IUIElement mouseReleased(UIContext context)
+    {
+        return null;
+    }
 
     /** Release through the exact ancestor path that owned the initiating press. */
     public default IUIElement mouseReleasedCaptured(UIContext context, List<IUIElement> path, int index)
@@ -54,20 +70,30 @@ public interface IUIElement
     /**
      * Key was typed
      */
-    public IUIElement keyPressed(UIContext context);
+    public default IUIElement keyPressed(UIContext context)
+    {
+        return null;
+    }
 
     /**
-     * Component was inputted
+     * Text was inputted
      */
-    public IUIElement textInput(UIContext context);
+    public default IUIElement textInput(UIContext context)
+    {
+        return null;
+    }
 
     /**
      * Determines whether this element can be rendered on the screen
      */
-    public boolean canBeRendered(Area viewport);
+    public default boolean canBeRendered(Area viewport)
+    {
+        return false;
+    }
 
     /**
      * Draw its components on the screen
      */
-    public void render(UIContext context);
+    public default void render(UIContext context)
+    {}
 }

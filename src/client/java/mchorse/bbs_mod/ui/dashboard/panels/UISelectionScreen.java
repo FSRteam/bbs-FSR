@@ -11,6 +11,7 @@ import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.list.UIDataPathList;
+import mchorse.bbs_mod.ui.dashboard.panels.landing.UILandingScreen;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -25,6 +26,7 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.keys.KeyCombo;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -63,6 +65,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
     protected final UIIcon remove;
     protected final UISearchList<DataPath> names;
     protected final UIDataPathList namesList;
+    public final UILandingScreen landing;
 
     public UISelectionScreen(UIDataDashboardPanel<T> panel)
     {
@@ -120,21 +123,21 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
 
                     if (data != null)
                     {
-                        menu.action(Icons.PASTE, UIKeys.PANELS_CONTEXT_PASTE, () -> this.paste(data));
+                        menu.icon(MenuVerb.PASTE, () -> this.paste(data));
                     }
                 }
                 catch (Exception e)
                 {}
 
-                menu.action(Icons.ADD, UIKeys.GENERAL_ADD, this::addData);
+                menu.icon(MenuVerb.ADD, this::addData);
                 menu.action(Icons.FOLDER, UIKeys.PANELS_MODALS_ADD_FOLDER_TITLE, this::addNewFolder);
                 menu.action(Icons.EDIT, UIKeys.GENERAL_RENAME, this::renameSelected);
                 menu.action(Icons.DUPE, UIKeys.GENERAL_DUPE, this::dupeSelected);
-                menu.action(Icons.REMOVE, UIKeys.GENERAL_REMOVE, this::removeSelected);
+                menu.icon(MenuVerb.REMOVE, this::removeSelected);
 
                 if (this.canCopySelected())
                 {
-                    menu.action(Icons.COPY, UIKeys.PANELS_CONTEXT_COPY, this::copy);
+                    menu.icon(MenuVerb.COPY, this::copy);
                 }
             }
 
@@ -156,6 +159,19 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
         this.banner.add(new UIRenderable((ctx) -> this.renderBanner(ctx, this.banner.area)));
         this.card.add(new UIRenderable((ctx) -> this.renderCard(ctx, this.card.area)), this.banner, this.header, this.listWrap);
         this.add(new UIRenderable(this::renderBackdrop), this.card);
+
+        this.landing = new UILandingScreen(this.panel.getType().getId(), this.getHeaderTitle(),
+            (id) -> this.getFileIcon(), this.panel::pickData, this::showManager,
+            () -> this.panel.getRepository().getFolder());
+        this.landing.full(this);
+
+        if (this.showActionButtons())
+        {
+            this.landing.creation(UIKeys.GENERAL_ADD, this::addData);
+        }
+
+        this.add(this.landing);
+        this.showLanding();
     }
 
     @Override
@@ -167,6 +183,7 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
 
         if (visible && !wasVisible)
         {
+            this.showLanding();
             this.names.filter("", true);
             this.namesList.deselect();
             this.panel.requestNames();
@@ -177,11 +194,29 @@ public class UISelectionScreen<T extends ValueGroup> extends UIElement
     {
         this.namesList.fill(names);
         this.namesList.deselect();
+        this.landing.fillNames(names);
+    }
+
+    private void showLanding()
+    {
+        this.card.setVisible(false);
+        this.landing.setVisible(true);
+    }
+
+    private void showManager()
+    {
+        this.landing.setVisible(false);
+        this.card.setVisible(true);
+        this.resize();
     }
 
     private List<UIIcon> getHeaderIcons()
     {
         ArrayList<UIIcon> icons = new ArrayList<>();
+        UIIcon back = new UIIcon(Icons.ARROW_LEFT, (b) -> this.showLanding());
+
+        back.tooltip(UIKeys.GENERAL_BACK);
+        icons.add(back);
 
         if (this.showActionButtons())
         {

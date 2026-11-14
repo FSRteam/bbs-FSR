@@ -6,6 +6,7 @@ import mchorse.bbs_mod.actions.types.ActionClip;
 import mchorse.bbs_mod.actions.types.AttackActionClip;
 import mchorse.bbs_mod.actions.types.SwipeActionClip;
 import mchorse.bbs_mod.actions.types.blocks.InteractBlockActionClip;
+import mchorse.bbs_mod.actions.types.item.UseItemActionClip;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.utils.clips.Clips;
 import net.minecraft.server.level.ServerPlayer;
@@ -20,6 +21,8 @@ public class ActionRecorder
     private int countdown;
     private int initialTick;
     private boolean targetedAttackRecordedThisTick;
+    /** The held use action grows until the recorded hand stops using its item. */
+    private UseItemActionClip useClip;
     /** The last block interaction, until it's known whether it opened a container. */
     private InteractBlockActionClip interactClip;
     private Clips terminalClips;
@@ -118,7 +121,11 @@ public class ActionRecorder
 
         this.clips.addClip(clip);
 
-        if (clip instanceof InteractBlockActionClip interactClip)
+        if (clip instanceof UseItemActionClip useClip)
+        {
+            this.useClip = useClip;
+        }
+        else if (clip instanceof InteractBlockActionClip interactClip)
         {
             this.interactClip = interactClip;
         }
@@ -138,6 +145,7 @@ public class ActionRecorder
             return;
         }
 
+        this.trackItemUse(player);
         this.trackContainer(player);
 
         boolean swingStarted = player.swingTime == -1;
@@ -166,6 +174,25 @@ public class ActionRecorder
     static boolean shouldRecordFallbackAttack(boolean swingStarted, boolean targetedAttackRecorded)
     {
         return swingStarted && !targetedAttackRecorded;
+    }
+
+    private void trackItemUse(ServerPlayer player)
+    {
+        if (this.useClip == null)
+        {
+            return;
+        }
+
+        InteractionHand hand = this.useClip.hand.get() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
+
+        if (player.isUsingItem() && player.getUsedItemHand() == hand)
+        {
+            this.useClip.duration.set(Math.max(1, this.tick - this.useClip.tick.get() + 1));
+        }
+        else
+        {
+            this.useClip = null;
+        }
     }
 
     /**

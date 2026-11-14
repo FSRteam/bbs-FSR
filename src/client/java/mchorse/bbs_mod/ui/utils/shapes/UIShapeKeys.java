@@ -74,6 +74,19 @@ public class UIShapeKeys extends UIElement
         }
     }
 
+    public ShapeKeys getShapeKeys()
+    {
+        return this.shapeKeys;
+    }
+
+    public void updateShapeKeys(ShapeKeys shapeKeys)
+    {
+        this.shapeKeys = shapeKeys;
+        String current = this.list.getCurrentFirst();
+
+        if (current != null) this.pick(current, false);
+    }
+
     protected void setValue(float v)
     {
         this.shapeKeys.shapeKeys.put(this.list.getCurrentFirst(), v);
@@ -81,7 +94,7 @@ public class UIShapeKeys extends UIElement
 
     private void pick(String key, boolean select)
     {
-        this.value.setValue(this.shapeKeys.shapeKeys.computeIfAbsent(key, (k) -> 0F));
+        this.value.setValue(this.shapeKeys.shapeKeys.getOrDefault(key, 0F));
 
         if (select)
         {

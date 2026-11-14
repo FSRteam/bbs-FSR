@@ -1,6 +1,9 @@
 package mchorse.bbs_mod.actions.types.item;
 
 import mchorse.bbs_mod.actions.SuperFakePlayer;
+import mchorse.bbs_mod.actions.ActionCommandContext;
+import mchorse.bbs_mod.actions.InteractionActionSemantics;
+import mchorse.bbs_mod.api.compat.VanillaAccess;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.settings.values.mc.ValueItemStack;
@@ -11,6 +14,11 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 
 /**
  * Vanilla's "released the use button" moment: a drawn bow firing its arrow, a
@@ -50,12 +58,27 @@ public class ReleaseUseItemActionClip extends ItemActionClip
     @Override
     public void applyAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
     {
+        if (!ActionCommandContext.isAuthorizedFor(player))
+        {
+            return;
+        }
+
+        InteractionActionSemantics.withIsolatedInteractionState(player, () ->
+            this.applyIsolatedAction(actor, player, film, replay, tick));
+    }
+
+    private void applyIsolatedAction(LivingEntity actor, SuperFakePlayer player, Film film, Replay replay, int tick)
+    {
         InteractionHand hand = this.hand.get() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
         InteractionHand other = this.hand.get() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
         ItemStack stack = this.itemStack.get().copy();
         ItemStack projectile = this.projectile.get();
 
-        this.applyPositionRotation(player, replay, tick);
+        if (!InteractionActionSemantics.canReplayItemUse(stack.isEmpty(), stack.isItemEnabled(player.serverLevel().enabledFeatures()))
+            || !this.applyInteractionPositionRotation(player, replay, tick))
+        {
+            return;
+        }
 
         if (this.riptide.get())
         {
@@ -97,6 +120,9 @@ public class ReleaseUseItemActionClip extends ItemActionClip
         /* 1.21.1 keeps the three riptide sounds in the enchantment's own data
          * instead of picking one by level, and answers with the throw sound for
          * a trident that spins without one. */
+        SoundEvent sound = EnchantmentHelper.pickHighestLevel(stack, EnchantmentEffectComponents.TRIDENT_SOUND)
+            .orElse(SoundEvents.TRIDENT_THROW).value();
+
         /* The spin is tracked data, so this is what makes every client show
          * the body whirling - the animator poses it from the same flag.
          * useRiptide() belongs to PlayerEntity; an actor is not one, so it
@@ -106,8 +132,13 @@ public class ReleaseUseItemActionClip extends ItemActionClip
         {
             playerActor.startAutoSpinAttack(20, 8F, stack);
         }
-        /* Non-player morph actors have no vanilla riptide state to expose. */
+        else if (actor != null)
+        {
+            VanillaAccess.setRiptideTicks(actor, 20);
+            VanillaAccess.setLivingFlag(actor, 4, true);
+        }
 
+        player.level().playSound(null, player.getX(), player.getY(), player.getZ(), sound, SoundSource.PLAYERS, 1F, 1F);
     }
 
     @Override

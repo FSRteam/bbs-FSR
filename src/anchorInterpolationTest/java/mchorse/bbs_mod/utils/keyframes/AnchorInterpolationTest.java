@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.utils.Anchor;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.FilmMatrices;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.interps.IInterp;
@@ -39,6 +40,7 @@ public class AnchorInterpolationTest
     public static void main(String[] args)
     {
         AnchorKeyframeFactory factory = new AnchorKeyframeFactory();
+        testInheritanceFlags(factory);
         Anchor p = anchor("", -4F), a = anchor("", 0F);
         Anchor b = anchor("", 10F), q = anchor("", 12F);
 
@@ -144,6 +146,65 @@ public class AnchorInterpolationTest
 
     /* A proxy keeps this runnable in a source set that only has the client classpath: IEntity
      * drags in Minecraft's interaction and pose types, none of which are read on this path. */
+    private static void testInheritanceFlags(AnchorKeyframeFactory factory)
+    {
+        Matrix4f target = new Matrix4f().translation(7F, 8F, 9F).rotateY(0.7F).scale(2F, 3F, 4F);
+        Matrix4f fallback = new Matrix4f().translation(1F, 2F, 3F).rotateY(-0.3F).scale(5F, 6F, 7F);
+
+        for (int bits = 0; bits < 8; bits++)
+        {
+            boolean position = (bits & 1) != 0;
+            boolean rotation = (bits & 2) != 0;
+            boolean scale = (bits & 4) != 0;
+            Anchor anchor = new Anchor(TARGET, "head", position, rotation, scale);
+            Matrix4f expected = new Matrix4f()
+                .translation(position ? 7F : 1F, position ? 8F : 2F, position ? 9F : 3F)
+                .rotateY(rotation ? 0.7F : -0.3F)
+                .scale(scale ? 2F : 5F, scale ? 3F : 6F, scale ? 4F : 7F);
+            matrix(anchor.filterMatrix(target, fallback), expected, "Anchor inheritance combination " + bits);
+            Anchor read = factory.fromData(factory.toData(anchor));
+            near(read.equals(anchor) ? 1F : 0F, 1F, "New flags survive serialization " + bits);
+            near(anchor.copy().equals(anchor) ? 1F : 0F, 1F, "New flags survive copying " + bits);
+            MapType saved = anchor.toData();
+            near(saved.has("translate") || saved.has("scale") ? 1F : 0F, 0F,
+                "Canonical anchor does not rewrite legacy flags " + bits);
+        }
+
+        for (boolean translate : new boolean[] {false, true})
+        {
+            for (boolean scale : new boolean[] {false, true})
+            {
+                MapType legacy = new MapType();
+                legacy.putString("actor", TARGET);
+                legacy.putBool("translate", translate);
+                legacy.putBool("scale", scale);
+                Anchor migrated = factory.fromData(legacy);
+                near(migrated.inheritPosition ? 1F : 0F, 1F, "Legacy always inherited position");
+                near(migrated.inheritRotation ? 1F : 0F, translate ? 0F : 1F, "Legacy rotation migration");
+                near(migrated.inheritScale ? 1F : 0F, translate || scale ? 0F : 1F, "Legacy scale migration");
+            }
+        }
+
+        MapType mixed = new MapType();
+        mixed.putBool("translate", true);
+        mixed.putBool("scale", true);
+        mixed.putBool("inheritPosition", false);
+        Anchor canonical = factory.fromData(mixed);
+        near(!canonical.inheritPosition && canonical.inheritRotation && canonical.inheritScale ? 1F : 0F,
+            1F, "New flags take precedence and absent new flags default to true");
+
+        Anchor from = new Anchor(TARGET, "head", true, true, true);
+        Anchor to = new Anchor(TARGET, "head", true, false, true);
+        Anchor interpolated = factory.interpolate(from, from, to, to, Interpolations.LINEAR, 0.5F);
+        near(interpolated.previous != null ? 1F : 0F, 1F,
+            "Changing inheritance interpolates resolved frames instead of unrelated local transforms");
+
+        matrix(target, new Matrix4f().translation(7F, 8F, 9F).rotateY(0.7F).scale(2F, 3F, 4F),
+            "Filtering preserves the target input");
+        matrix(fallback, new Matrix4f().translation(1F, 2F, 3F).rotateY(-0.3F).scale(5F, 6F, 7F),
+            "Filtering preserves the fallback input");
+    }
+
     private static IEntity entity(double x)
     {
         return (IEntity) Proxy.newProxyInstance(IEntity.class.getClassLoader(), new Class<?>[] {IEntity.class}, (proxy, method, values) ->

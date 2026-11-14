@@ -1,17 +1,22 @@
 package mchorse.bbs_mod.ui.framework.elements.buttons;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.motion.UIMotions;
 import mchorse.bbs_mod.ui.utils.motion.UITween;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.Direction;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class UIIcon extends UIClickable<UIIcon>
 {
+    private Supplier<Boolean> highlighted;
+    private Direction highlightDirection;
+
     private static final int NO_BACKGROUND = Integer.MIN_VALUE;
 
     private Icon icon;
@@ -242,6 +247,10 @@ public class UIIcon extends UIClickable<UIIcon>
     @Override
     protected void renderSkin(UIContext context)
     {
+        if (this.highlighted != null && this.highlighted.get())
+        {
+            context.batcher.highlight(this.area, this.highlightDirection);
+        }
         Icon icon = this.getIcon();
         int color;
 
@@ -288,5 +297,17 @@ public class UIIcon extends UIClickable<UIIcon>
         }
 
         context.batcher.icon(icon, color, this.area.mx(), this.area.my(), 0.5F, 0.5F);
+    }
+
+    public UIIcon highlight(Supplier<Boolean> highlighted, Direction direction)
+    {
+        this.highlighted = highlighted;
+        this.highlightDirection = direction;
+        return this;
+    }
+
+    public boolean isHighlighted()
+    {
+        return this.highlighted != null && this.highlighted.get();
     }
 }

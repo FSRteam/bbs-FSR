@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.actions;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.actions.types.ActionClip;
 import mchorse.bbs_mod.actions.values.ActionTarget;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.entity.ActorEntity;
@@ -9,12 +10,16 @@ import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.entities.EntityState;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.morphing.Morph;
+import mchorse.bbs_mod.mixin.EntityInvoker;
+import mchorse.bbs_mod.mixin.LivingEntityRollAccessor;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.utils.DataPath;
+import mchorse.bbs_mod.utils.clips.Clip;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -215,7 +220,7 @@ public class ActionPlayer
         }
 
         this.allowFirstPersonState = canApplyFirstPersonState;
-        this.duration = film.camera.calculateDuration();
+        this.duration = film.calculateDuration();
 
         if (!deferReplayEntities && !this.tryUpdateReplayEntities())
         {
@@ -452,6 +457,7 @@ public class ActionPlayer
 
                     stagedActors.add(actor);
                     actor.setReplayId(replay.getId());
+                    actor.setPickUpItems(replay.actorPickup.get());
 
                     if (this.type.isTargetedDelivery() && this.serverPlayer != null)
                     {
@@ -570,12 +576,12 @@ public class ActionPlayer
             }
         }
 
-        return this.actorRetirements.drain(LivingEntity::discard);
+        return this.actorRetirements.drain(ActionPlayer::retireActor);
     }
 
     private boolean retryActorRetirements(String phase)
     {
-        Throwable failure = this.actorRetirements.drain(LivingEntity::discard);
+        Throwable failure = this.actorRetirements.drain(ActionPlayer::retireActor);
 
         if (failure != null)
         {
@@ -678,6 +684,11 @@ public class ActionPlayer
 
     private boolean applySafely(LivingEntity actor, Replay replay, float tick, boolean ticking)
     {
+        if (actor instanceof ActorEntity actorEntity)
+        {
+            actorEntity.setPickUpItems(replay.actorPickup.get());
+        }
+
         double x = replay.keyframes.x.interpolate(tick);
         double y = replay.keyframes.y.interpolate(tick);
         double z = replay.keyframes.z.interpolate(tick);
@@ -717,9 +728,17 @@ public class ActionPlayer
         actor.setYHeadRot(yawHead);
         actor.setXRot(pitch);
         actor.setYBodyRot(yawBody);
-        actor.setShiftKeyDown(replay.keyframes.sneaking.interpolate(tick) > 0);
+        boolean sneaking = EntityState.isOn(replay.keyframes.sneaking.interpolate(tick));
+        boolean swimming = EntityState.isOn(replay.keyframes.swimming.interpolate(tick));
+        boolean gliding = EntityState.isOn(replay.keyframes.gliding.interpolate(tick));
+
+        actor.setShiftKeyDown(sneaking);
         actor.setOnGround(grounded);
-        actor.setSprinting(replay.keyframes.sprinting.interpolate(tick) > 0);
+        actor.setSprinting(EntityState.isOn(replay.keyframes.sprinting.interpolate(tick)));
+        actor.setSwimming(swimming);
+        ((EntityInvoker) actor).bbs$setFlag(EntityState.FALL_FLYING_FLAG, gliding);
+        actor.setPose(EntityState.pose(gliding, swimming, sneaking));
+        ((LivingEntityRollAccessor) actor).bbs$setRoll(replay.keyframes.roll.interpolate(tick).intValue());
 
         boolean actorProjection = actor instanceof ActorEntity;
         boolean isolatedProjection = actor instanceof ActorEntity actorEntity
@@ -1000,7 +1019,7 @@ public class ActionPlayer
                     this.refreshFirstPersonState(nextFirstPerson);
                 }
 
-                nextDuration = this.film.camera.calculateDuration();
+                nextDuration = this.film.calculateDuration();
 
                 if (refreshActors && !this.tryUpdateReplayEntities())
                 {
@@ -1118,7 +1137,51 @@ public class ActionPlayer
             }
         }
 
+        this.applySeekRanges(tick);
         this.currentTickActionApplied = tick >= 0;
+    }
+
+    /** Seek updates held range state without replaying one-shot mutations. */
+    private void applySeekRanges(int tick)
+    {
+        List<Replay> replays = this.film.replays.getList();
+
+        ActionCommandContext.withRequester(this.requester, () ->
+            PlaybackActorActionContext.withActors(this.actors.values(), () ->
+                ActionTarget.withReplayActors(this.actors, () ->
+        {
+            for (int index = 0; index < replays.size(); index++)
+            {
+                Replay replay = replays.get(index);
+
+                if (index == this.exception || !replay.enabled.get())
+                {
+                    continue;
+                }
+
+                LivingEntity actor = this.actors.get(replay.getId());
+
+                for (Clip clip : replay.actions.getClips(tick))
+                {
+                    if (!this.hasRuntimeAuthority())
+                    {
+                        this.requestForcedStop();
+
+                        return;
+                    }
+
+                    long relative = (long) tick - clip.tick.get();
+
+                    if (clip instanceof ActionClip action && clip.enabled.get()
+                        && relative >= 0L && relative < clip.duration.get())
+                    {
+                        action.applyRange(actor, this.fakePlayer, this.film, replay, tick);
+                    }
+                }
+            }
+        })));
+
+        this.fakePlayer.flushLids();
     }
 
     public void stop()
@@ -1299,9 +1362,19 @@ public class ActionPlayer
         this.firstPersonLease.release();
     }
 
+    private static void retireActor(LivingEntity actor)
+    {
+        if (actor instanceof ActorEntity actorEntity)
+        {
+            actorEntity.dropPickedUp();
+        }
+
+        actor.discard();
+    }
+
     private void discardCurrentActors()
     {
-        Throwable failure = this.actorRetirements.drain(LivingEntity::discard);
+        Throwable failure = this.actorRetirements.drain(ActionPlayer::retireActor);
         Iterator<Map.Entry<String, LivingEntity>> iterator = this.actors.entrySet().iterator();
 
         while (iterator.hasNext())
@@ -1316,7 +1389,7 @@ public class ActionPlayer
 
             try
             {
-                actor.discard();
+                retireActor(actor);
                 iterator.remove();
             }
             catch (RuntimeException | LinkageError e)

@@ -1,16 +1,22 @@
 package mchorse.bbs_mod.utils.sodium;
 
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.logging.LogUtils;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexSodiumConsumer;
 import mchorse.bbs_mod.utils.colors.Color;
+import org.slf4j.Logger;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 
 public class SodiumUtils
 {
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     private static Method optionsAccessor;
     private static CullingState pointCameraCulling;
+    private static boolean cullingUnavailable;
 
     public static VertexConsumer createVertexBuffer(VertexConsumer b, Color color)
     {
@@ -38,6 +44,11 @@ public class SodiumUtils
 
     public static CullingState captureCameraCulling()
     {
+        if (cullingUnavailable)
+        {
+            return null;
+        }
+
         try
         {
             if (optionsAccessor == null)
@@ -47,25 +58,30 @@ public class SodiumUtils
 
             /* Sodium 0.8 changed the return type from SodiumGameOptions to SodiumOptions. */
             Object options = optionsAccessor.invoke(null);
-            Field field = options.getClass().getField("performance");
 
-            return captureCameraCulling(field.get(options));
+            if (options == null)
+            {
+                return null;
+            }
+
+            Field field = options.getClass().getField("performance");
+            Object performance = field.get(options);
+
+            return performance == null ? null : captureCameraCulling(performance);
         }
         catch (InvocationTargetException failure)
         {
-            if (failure.getCause() instanceof Error error)
-            {
-                throw error;
-            }
-
-            throw new IllegalStateException("Could not read Sodium camera culling settings", failure.getCause());
+            disableCameraCulling(failure.getCause() == null ? failure : failure.getCause());
         }
-        catch (ReflectiveOperationException | LinkageError ignored)
+        catch (ReflectiveOperationException | RuntimeException | LinkageError failure)
         {
-            return null;
+            disableCameraCulling(failure);
         }
+
+        return null;
     }
 
+    /** Explicit settings capture retains diagnostics for callers that supply their own object. */
     public static CullingState captureCameraCulling(Object performance)
     {
         try
@@ -78,6 +94,15 @@ public class SodiumUtils
         catch (ReflectiveOperationException failure)
         {
             throw new IllegalStateException("Unsupported Sodium camera culling settings", failure);
+        }
+    }
+
+    private static void disableCameraCulling(Throwable failure)
+    {
+        if (!cullingUnavailable)
+        {
+            cullingUnavailable = true;
+            LOGGER.warn("[BBS] Sodium camera culling bridge is unavailable; disabling further overrides", failure);
         }
     }
 
@@ -100,14 +125,42 @@ public class SodiumUtils
 
         public void apply(boolean orthographic)
         {
+            boolean previousFaces = false;
+            boolean previousFog = false;
+            boolean captured = false;
+
             try
             {
+                previousFaces = this.facesField.getBoolean(this.performance);
+                previousFog = this.fogField.getBoolean(this.performance);
+                captured = true;
+
                 this.facesField.setBoolean(this.performance, this.faces && !orthographic);
                 this.fogField.setBoolean(this.performance, this.fog && !orthographic);
             }
-            catch (IllegalAccessException failure)
+            catch (ReflectiveOperationException | RuntimeException | LinkageError failure)
             {
-                throw new IllegalStateException("Could not restore Sodium camera culling settings", failure);
+                /* Restore the incoming values even if only one write succeeded.
+                 * Existing scope snapshots can still restore after the bridge is disabled. */
+                if (captured)
+                {
+                    this.restoreValue(this.facesField, previousFaces, failure);
+                    this.restoreValue(this.fogField, previousFog, failure);
+                }
+
+                disableCameraCulling(failure);
+            }
+        }
+
+        private void restoreValue(Field field, boolean value, Throwable failure)
+        {
+            try
+            {
+                field.setBoolean(this.performance, value);
+            }
+            catch (ReflectiveOperationException | RuntimeException | LinkageError rollbackFailure)
+            {
+                failure.addSuppressed(rollbackFailure);
             }
         }
     }

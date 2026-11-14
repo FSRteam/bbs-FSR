@@ -12,12 +12,8 @@ import mchorse.bbs_mod.utils.colors.Colors;
  * tick rather than by name, which is why it carries no behaviour beyond where it sits and how it
  * reads. It belongs to the film as a whole, not to a clip, a track or a replay.
  *
- * <p>{@link #id} is the marker's identity <em>inside its own saved data</em>, the same convention
- * the camera tracks use: the container keys the marker by this id, so a value path such as
- * {@code markers/&lt;id&gt;/title} keeps pointing at this very marker after its neighbours are
- * inserted or removed. That is what makes undo and the per-field collaboration mutations safe.
- * The field is written into the element's map so two independent readers of the same file — the
- * client and the server — arrive at the same ids.
+ * <p>The shared stable list owns identity and persistence. {@link #id} remains a compatibility
+ * view for FSR addons, while value paths use the marker's {@link #getId()}.
  */
 public class FilmMarker extends ValueGroup
 {
@@ -42,6 +38,17 @@ public class FilmMarker extends ValueGroup
         this.add(this.color);
     }
 
+    @Override
+    public void setId(String id)
+    {
+        super.setId(id);
+
+        if (this.id != null)
+        {
+            this.id.set(id);
+        }
+    }
+
     /**
      * A fresh marker gets a random hue rather than one shared colour: markers are told apart at a
      * glance on the ruler, and a row of identical pins defeats that before anyone gets round to
@@ -52,6 +59,6 @@ public class FilmMarker extends ValueGroup
      */
     public static int randomBrightColor()
     {
-        return Colors.HSVtoRGB((float) Math.random(), 0.75F, 1F).getRGBColor();
+        return Colors.randomBright();
     }
 }

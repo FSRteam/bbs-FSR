@@ -1,92 +1,168 @@
 package mchorse.bbs_mod.forms.forms.utils;
 
 import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
-import mchorse.bbs_mod.settings.values.core.ValueBoneConstraint;
-import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.cubic.ik.IKControl;
+import mchorse.bbs_mod.cubic.ik.JointDoF;
+import mchorse.bbs_mod.cubic.physics.PhysicsControl;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
-
-import java.util.Set;
+import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
+import mchorse.bbs_mod.settings.values.core.ValueBoneConstraint;
+import mchorse.bbs_mod.settings.values.core.ValueBoneIK;
+import mchorse.bbs_mod.settings.values.core.ValueBonePhysics;
+import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.settings.values.core.ValueJointDoF;
+import mchorse.bbs_mod.settings.values.core.ValueString;
+import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
+import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
+import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 
 /**
- * One bone of a model form, as a group of the bone's own properties. Mirrors a per-material
- * group: every default is neutral — an untouched bone behaves exactly as if this object didn't
- * exist — and {@link ValueBones} creates it lazily on the first edit.
+ * One bone of a model form, as a group of the bone's own properties (the pose is set to move in
+ * here too). Mirrors {@link FormMaterial}: every default is neutral — an untouched bone behaves
+ * exactly as if this object didn't exist — and {@link ValueBones} creates it lazily on the first
+ * edit.
  *
- * <p>Each property is one compound animatable value: its type serves both as the form's static
+ * <p>An animatable property is one compound value whose type serves both as the form's static
  * setting and as a film track's keyframe, which is what keeps a separate "animatable mirror"
- * class from ever existing.</p>
- *
- * <p><b>The bone group is modelled ahead of its properties.</b> This build stores only the
- * rotation limits here; IK and physics still travel in the form-level {@code ik} / {@code physics}
- * blobs, so the per-bone keys a newer build writes for them are not children of this class. They
- * are named by {@link #PRESERVED_UNKNOWN_KEYS} instead, because being present in {@code bones}
- * makes this group a <em>known</em> group: {@code ValueGroup.fromData} reads only the keys some
- * child claims, so without that list the first save after a read would delete every chain and
- * every physics setting of every bone — silently, which is the one outcome this whole branch
- * exists to prevent.</p>
+ * class from ever existing. What refers to other bones — the IK chain's target, pole and length —
+ * and what configures the solver's character — the chain's mode toggles — are plain static
+ * settings next to it: numbers animate, addresses and modes configure.</p>
  */
 public class FormBone extends ValueGroup
 {
-    /** The per-bone children of a newer build that this one does not model yet. */
-    private static final Set<String> PRESERVED_UNKNOWN_KEYS = Set.of(
-        "ik_target",
-        "ik_pole_target",
-        "ik_chain_length",
-        "ik_tip_rotation",
-        "ik_stretch",
-        "ik_squash",
-        "ik_classic",
-        "ik",
-        "joint",
-        "physics_end",
-        "physics_target_bone",
-        "physics_iterations",
-        "physics_collisions",
-        "physics_radius",
-        "physics_relative_gravity",
-        "physics_gravity_rotate_x",
-        "physics_gravity_rotate_y",
-        "physics_gravity_rotate_z",
-        "physics"
-    );
-
     public final ValueBoneConstraint constraints = new ValueBoneConstraint("constraints", new BoneConstraint());
+
+    /* The IK chain this bone is the tip of. The addresses and modes are the chain's structure;
+     * the animatable scalars (weight, softness, pole angle, enabled) live in {@link #ik}. */
+    public final ValueString ikTarget = new ValueString("ik_target", "");
+    public final ValueString ikPoleTarget = new ValueString("ik_pole_target", "");
+    public final ValueInt ikChainLength = new ValueInt("ik_chain_length", 0);
+    public final ValueBoolean ikTipRotation = new ValueBoolean("ik_tip_rotation", false);
+    public final ValueBoolean ikStretch = new ValueBoolean("ik_stretch", false);
+    public final ValueBoolean ikSquash = new ValueBoolean("ik_squash", false);
+    public final ValueBoolean ikClassic = new ValueBoolean("ik_classic", false);
+    public final ValueBoneIK ik = new ValueBoneIK("ik", new IKControl());
+
+    /** The bone's joint freedom for any IK chain that solves through it (locks, limits, stiffness). */
+    public final ValueJointDoF joint = new ValueJointDoF("joint", new JointDoF());
+
+    /* The physics chain this bone is the root of ({@code physicsEnd} names the chain's last bone
+     * down the hierarchy). The addresses and the simulation's configuration are static; the
+     * animatable scalars (weight, gravity, damping, stiffness, enabled) live in {@link #physics}. */
+    public final ValueString physicsEnd = new ValueString("physics_end", "");
+    public final ValueString physicsTargetBone = new ValueString("physics_target_bone", "");
+    public final ValueInt physicsIterations = new ValueInt("physics_iterations", 4);
+    public final ValueBoolean physicsCollisions = new ValueBoolean("physics_collisions", false);
+    public final ValueFloat physicsRadius = new ValueFloat("physics_radius", 0.1F);
+    public final ValueBoolean physicsRelativeGravity = new ValueBoolean("physics_relative_gravity", false);
+    public final ValueFloat physicsGravityRotateX = new ValueFloat("physics_gravity_rotate_x", 0F);
+    public final ValueFloat physicsGravityRotateY = new ValueFloat("physics_gravity_rotate_y", 0F);
+    public final ValueFloat physicsGravityRotateZ = new ValueFloat("physics_gravity_rotate_z", 0F);
+    public final ValueBonePhysics physics = new ValueBonePhysics("physics", new PhysicsControl());
 
     public FormBone(String id)
     {
         super(id);
 
         this.constraints.invisible();
+        this.ikTarget.invisible();
+        this.ikPoleTarget.invisible();
+        this.ikChainLength.invisible();
+        this.ikTipRotation.invisible();
+        this.ikStretch.invisible();
+        this.ikSquash.invisible();
+        this.ikClassic.invisible();
+        this.ik.invisible();
+        this.joint.invisible();
+        this.physicsEnd.invisible();
+        this.physicsTargetBone.invisible();
+        this.physicsIterations.invisible();
+        this.physicsCollisions.invisible();
+        this.physicsRadius.invisible();
+        this.physicsRelativeGravity.invisible();
+        this.physicsGravityRotateX.invisible();
+        this.physicsGravityRotateY.invisible();
+        this.physicsGravityRotateZ.invisible();
+        this.physics.invisible();
 
         this.add(this.constraints);
+        this.add(this.ikTarget);
+        this.add(this.ikPoleTarget);
+        this.add(this.ikChainLength);
+        this.add(this.ikTipRotation);
+        this.add(this.ikStretch);
+        this.add(this.ikSquash);
+        this.add(this.ikClassic);
+        this.add(this.ik);
+        this.add(this.joint);
+        this.add(this.physicsEnd);
+        this.add(this.physicsTargetBone);
+        this.add(this.physicsIterations);
+        this.add(this.physicsCollisions);
+        this.add(this.physicsRadius);
+        this.add(this.physicsRelativeGravity);
+        this.add(this.physicsGravityRotateX);
+        this.add(this.physicsGravityRotateY);
+        this.add(this.physicsGravityRotateZ);
+        this.add(this.physics);
     }
 
-    /**
-     * Whether every property is neutral — such a bone is skipped when the form persists.
-     *
-     * <p>Holding preserved data counts as not neutral: a bone whose only content is a chain this
-     * build cannot read is not the same as a bone nobody ever touched, and dropping it would drop
-     * the data with it.</p>
-     */
+    /** Whether this bone is the root of a configured physics chain. */
+    public boolean hasPhysicsChain()
+    {
+        return !this.physicsEnd.get().isEmpty();
+    }
+
+    /** Whether this bone is the tip of a configured IK chain. */
+    public boolean hasChain()
+    {
+        return !this.ikTarget.get().isEmpty();
+    }
+
+    /** Whether every property is neutral — such a bone is skipped when the form persists. */
     public boolean isDefault()
     {
-        return this.constraints.get().isDefault() && !this.hasPreservedUnknownKeys();
+        return this.constraints.getOriginalValue().isDefault()
+            && !this.hasChain()
+            && this.ikPoleTarget.getOriginalValue().isEmpty()
+            && this.ikChainLength.getOriginalValue() == 0
+            && !this.ikTipRotation.getOriginalValue()
+            && !this.ikStretch.getOriginalValue()
+            && !this.ikSquash.getOriginalValue()
+            && !this.ikClassic.getOriginalValue()
+            && this.ik.getOriginalValue().isDefault()
+            && this.joint.getOriginalValue().isFree()
+            && !this.hasPhysicsChain()
+            && this.physicsTargetBone.getOriginalValue().isEmpty()
+            && this.physicsIterations.getOriginalValue() == 4
+            && !this.physicsCollisions.getOriginalValue()
+            && this.physicsRadius.getOriginalValue() == 0.1F
+            && !this.physicsRelativeGravity.getOriginalValue()
+            && this.physicsGravityRotateX.getOriginalValue() == 0F
+            && this.physicsGravityRotateY.getOriginalValue() == 0F
+            && this.physicsGravityRotateZ.getOriginalValue() == 0F
+            && this.physics.getOriginalValue().isDefault()
+            && !this.hasPreservedUnknownKeys();
     }
 
-    /**
-     * The bone's own switch: a constraint nobody switched on is neutral, and a neutral child would
-     * otherwise turn every bone that carries only preserved data into a bone that also carries a
-     * full block of default angles — breaking the round trip of a file this build did not write.
-     */
+    /** Persist only authored properties; a chain-only bone does not gain unrelated defaults. */
     @Override
     protected boolean canPersist(BaseValue value)
     {
-        return !(value == this.constraints && this.constraints.get().isDefault());
-    }
+        if (value == this.constraints) return !this.constraints.getOriginalValue().isDefault();
+        if (value == this.ik) return !this.ik.getOriginalValue().isDefault();
+        if (value == this.joint) return !this.joint.getOriginalValue().isFree();
+        if (value == this.physics) return !this.physics.getOriginalValue().isDefault();
 
-    @Override
-    protected Set<String> preservedUnknownKeys()
-    {
-        return PRESERVED_UNKNOWN_KEYS;
+        if (!(value instanceof BaseValueBasic<?> basic)) return true;
+
+        Object original = basic.getOriginalValue();
+
+        if (original instanceof String string) return !string.isEmpty();
+        if (original instanceof Boolean bool) return bool;
+        if (original instanceof Integer integer) return integer != (value == this.physicsIterations ? 4 : 0);
+        if (original instanceof Float number) return number != (value == this.physicsRadius ? 0.1F : 0F);
+
+        return true;
     }
 }

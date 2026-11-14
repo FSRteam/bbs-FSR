@@ -1,230 +1,104 @@
 package mchorse.bbs_mod.film.replays;
 
-import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.film.replays.tracks.TrackId;
+import mchorse.bbs_mod.film.replays.tracks.TrackKind;
 
+/** Legacy FSR address API backed by the shared typed track contract. */
 public class PerLimbService
 {
-    public static final String POSE_BONES = "pose.bones.";
-    public static final String MATERIAL_TEXTURES = "texture.materials.";
-    public static final String IK_TARGETS = "ik_targets";
-    public static final String POLE_TARGETS = "pole_targets";
-    public static final String PHYSICS_TARGETS = "physics_targets";
+    public static final String POSE_BONES = TrackId.BONE_PREFIX;
+    public static final String MATERIAL_TEXTURES = TrackId.MATERIAL_TEXTURE_PREFIX;
+    public static final String IK_TARGETS = TrackId.IK_TARGETS;
+    public static final String POLE_TARGETS = TrackId.POLE_TARGETS;
+    public static final String PHYSICS_TARGETS = TrackId.PHYSICS_TARGETS;
 
-    public static record PoseBonePath(String formPath, String bone)
-    {}
-
-    public static record MaterialTexturePath(String formPath, String material)
-    {}
-
-    public static record IKTargetPath(String formPath, String controller)
-    {}
-
-    public static record PoleTargetPath(String formPath, String controller)
-    {}
-
-    public static record PhysicsTargetPath(String formPath, String rootBone)
-    {}
-
-    /*
-     * Every predicate AND every parser below goes through FormControlKeys.isChannelInNamespace,
-     * which attributes an id to the OUTERMOST namespace it spells. A substring test is not enough
-     * here: the last segment of these ids is a free-text NAME, and a bone called "ik_targets" would
-     * otherwise be read as an IK target track. The parsers use the same rule so that
-     * `isX(id)` and `parseX(id) != null` are the same question; a caller that dispatches on which
-     * parser answered first then cannot be handed a track it does not own. See that method for the
-     * rule and for the ambiguity it leaves.
-     */
+    public record PoseBonePath(String formPath, String bone) {}
 
     public static boolean isPoseBoneChannel(String id)
     {
-        return FormControlKeys.isChannelInNamespace(id, POSE_BONES);
-    }
-
-    public static boolean isMaterialTextureChannel(String id)
-    {
-        return FormControlKeys.isChannelInNamespace(id, MATERIAL_TEXTURES);
-    }
-
-    public static MaterialTexturePath parseMaterialTexturePath(String id)
-    {
-        /* namespaceOffset IS the guard: it answers -1 unless attribution gives this id to this
-         * namespace, and it answers WHERE the rule found that namespace. Asking the predicate and
-         * then searching with indexOf is what let the two disagree. */
-        int index = FormControlKeys.namespaceOffset(id, MATERIAL_TEXTURES);
-
-        if (index < 0)
-        {
-            return null;
-        }
-
-        String material = id.substring(index + MATERIAL_TEXTURES.length());
-        String formPath = id.substring(0, index);
-
-        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
-        {
-            formPath = formPath.substring(0, formPath.length() - 1);
-        }
-
-        return new MaterialTexturePath(formPath, material);
-    }
-
-    public static String toMaterialTextureKey(String formPath, String material)
-    {
-        if (formPath == null || formPath.isEmpty())
-        {
-            return MATERIAL_TEXTURES + material;
-        }
-
-        return formPath + FormUtils.PATH_SEPARATOR + MATERIAL_TEXTURES + material;
-    }
-
-    public static boolean isIKTargetChannel(String id)
-    {
-        return FormControlKeys.isChannelInNamespace(id, IK_TARGETS);
-    }
-
-    public static boolean isPoleTargetChannel(String id)
-    {
-        return FormControlKeys.isChannelInNamespace(id, POLE_TARGETS);
-    }
-
-    public static boolean isPhysicsTargetChannel(String id)
-    {
-        return FormControlKeys.isChannelInNamespace(id, PHYSICS_TARGETS);
+        return TrackId.parse(id, TrackKind.BONE) != null;
     }
 
     public static PoseBonePath parsePoseBonePath(String id)
     {
-        int index = FormControlKeys.namespaceOffset(id, POSE_BONES);
-
-        if (index < 0)
-        {
-            return null;
-        }
-
-        String bone = id.substring(index + POSE_BONES.length());
-        String formPath = id.substring(0, index);
-
-        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
-        {
-            formPath = formPath.substring(0, formPath.length() - 1);
-        }
-
-        return new PoseBonePath(formPath, bone);
+        TrackId track = TrackId.parse(id, TrackKind.BONE);
+        return track == null ? null : new PoseBonePath(track.formPath(), track.subject());
     }
 
     public static String toPoseBoneKey(String formPath, String bone)
     {
-        if (formPath == null || formPath.isEmpty())
-        {
-            return POSE_BONES + bone;
-        }
+        return TrackId.bone(formPath, bone).toKey();
+    }
 
-        return formPath + FormUtils.PATH_SEPARATOR + POSE_BONES + bone;
+    public record MaterialTexturePath(String formPath, String material) {}
+
+    public static boolean isMaterialTextureChannel(String id)
+    {
+        return TrackId.parse(id, TrackKind.MATERIAL_TEXTURE) != null;
+    }
+
+    public static MaterialTexturePath parseMaterialTexturePath(String id)
+    {
+        TrackId track = TrackId.parse(id, TrackKind.MATERIAL_TEXTURE);
+        return track == null ? null : new MaterialTexturePath(track.formPath(), track.subject());
+    }
+
+    public static String toMaterialTextureKey(String formPath, String material)
+    {
+        return TrackId.materialTexture(formPath, material).toKey();
+    }
+
+    public record IKTargetPath(String formPath, String controller) {}
+
+    public static boolean isIKTargetChannel(String id)
+    {
+        return TrackId.parse(id, TrackKind.IK_TARGET) != null;
     }
 
     public static IKTargetPath parseIKTargetPath(String id)
     {
-        int index = FormControlKeys.namespaceOffset(id, IK_TARGETS);
-
-        if (index < 0)
-        {
-            return null;
-        }
-
-        String controller = id.substring(index + IK_TARGETS.length());
-        if (controller.startsWith(FormUtils.PATH_SEPARATOR))
-        {
-            controller = controller.substring(FormUtils.PATH_SEPARATOR.length());
-        }
-
-        String formPath = id.substring(0, index);
-
-        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
-        {
-            formPath = formPath.substring(0, formPath.length() - 1);
-        }
-
-        return new IKTargetPath(formPath, controller);
+        TrackId track = TrackId.parse(id, TrackKind.IK_TARGET);
+        return track == null ? null : new IKTargetPath(track.formPath(), track.subject());
     }
 
     public static String toIKTargetKey(String formPath, String controller)
     {
-        if (formPath == null || formPath.isEmpty())
-        {
-            return IK_TARGETS + FormUtils.PATH_SEPARATOR + controller;
-        }
+        return TrackId.ikTarget(formPath, controller).toKey();
+    }
 
-        return formPath + FormUtils.PATH_SEPARATOR + IK_TARGETS + FormUtils.PATH_SEPARATOR + controller;
+    public record PoleTargetPath(String formPath, String controller) {}
+
+    public static boolean isPoleTargetChannel(String id)
+    {
+        return TrackId.parse(id, TrackKind.POLE_TARGET) != null;
     }
 
     public static PoleTargetPath parsePoleTargetPath(String id)
     {
-        int index = FormControlKeys.namespaceOffset(id, POLE_TARGETS);
-
-        if (index < 0)
-        {
-            return null;
-        }
-
-        String controller = id.substring(index + POLE_TARGETS.length());
-        if (controller.startsWith(FormUtils.PATH_SEPARATOR))
-        {
-            controller = controller.substring(FormUtils.PATH_SEPARATOR.length());
-        }
-
-        String formPath = id.substring(0, index);
-
-        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
-        {
-            formPath = formPath.substring(0, formPath.length() - 1);
-        }
-
-        return new PoleTargetPath(formPath, controller);
+        TrackId track = TrackId.parse(id, TrackKind.POLE_TARGET);
+        return track == null ? null : new PoleTargetPath(track.formPath(), track.subject());
     }
 
     public static String toPoleTargetKey(String formPath, String controller)
     {
-        if (formPath == null || formPath.isEmpty())
-        {
-            return POLE_TARGETS + FormUtils.PATH_SEPARATOR + controller;
-        }
+        return TrackId.poleTarget(formPath, controller).toKey();
+    }
 
-        return formPath + FormUtils.PATH_SEPARATOR + POLE_TARGETS + FormUtils.PATH_SEPARATOR + controller;
+    public record PhysicsTargetPath(String formPath, String rootBone) {}
+
+    public static boolean isPhysicsTargetChannel(String id)
+    {
+        return TrackId.parse(id, TrackKind.PHYSICS_TARGET) != null;
     }
 
     public static PhysicsTargetPath parsePhysicsTargetPath(String id)
     {
-        int index = FormControlKeys.namespaceOffset(id, PHYSICS_TARGETS);
-
-        if (index < 0)
-        {
-            return null;
-        }
-
-        String rootBone = id.substring(index + PHYSICS_TARGETS.length());
-        if (rootBone.startsWith(FormUtils.PATH_SEPARATOR))
-        {
-            rootBone = rootBone.substring(FormUtils.PATH_SEPARATOR.length());
-        }
-
-        String formPath = id.substring(0, index);
-
-        if (formPath.endsWith(FormUtils.PATH_SEPARATOR))
-        {
-            formPath = formPath.substring(0, formPath.length() - 1);
-        }
-
-        return new PhysicsTargetPath(formPath, rootBone);
+        TrackId track = TrackId.parse(id, TrackKind.PHYSICS_TARGET);
+        return track == null ? null : new PhysicsTargetPath(track.formPath(), track.subject());
     }
 
     public static String toPhysicsTargetKey(String formPath, String rootBone)
     {
-        if (formPath == null || formPath.isEmpty())
-        {
-            return PHYSICS_TARGETS + FormUtils.PATH_SEPARATOR + rootBone;
-        }
-
-        return formPath + FormUtils.PATH_SEPARATOR + PHYSICS_TARGETS + FormUtils.PATH_SEPARATOR + rootBone;
+        return TrackId.physicsTarget(formPath, rootBone).toKey();
     }
 }

@@ -17,8 +17,8 @@ public final class OrbitFilmCameraMissingRendererSourceTest
         Path root = findProjectRoot();
         String source = compact(Files.readString(root.resolve(ORBIT_CONTROLLER)));
         String orbitTarget = section(source,
-            "private OrbitTarget getOrbitTarget(float transition)",
-            "private boolean canStart(UIContext context)");
+            "private Vector3d getOrbitTarget(float transition)",
+            "private Vector3f getPoseCenter(MatrixCache map)");
 
         check(orbitTarget.contains("FormRenderer<?> renderer = FormUtilsClient.getRenderer(form);"),
             "orbit target no longer resolves an optional form renderer");

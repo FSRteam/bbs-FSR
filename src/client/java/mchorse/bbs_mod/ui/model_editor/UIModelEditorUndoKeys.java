@@ -1,16 +1,13 @@
 package mchorse.bbs_mod.ui.model_editor;
 
-import mchorse.bbs_mod.ui.Keys;
-import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIUndoKeys;
 
-public class UIModelEditorUndoKeys extends UIElement
+/** Compatibility name; active editors use the shared undo owner. */
+@Deprecated
+public class UIModelEditorUndoKeys extends UIUndoKeys
 {
     public UIModelEditorUndoKeys(UIModelEditorPanel panel)
     {
-        this.keys().ignoreFocus();
-        this.keys().register(Keys.UNDO, panel::undo).strict().category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
-        this.keys().register(Keys.REDO, panel::redo).strict().category(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_TITLE);
-        this.noCulling();
+        super(panel::undo, panel::redo);
     }
 }

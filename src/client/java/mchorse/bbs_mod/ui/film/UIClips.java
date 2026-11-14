@@ -26,6 +26,8 @@ import mchorse.bbs_mod.ui.film.markers.UIMarkerOverlayPanel;
 import mchorse.bbs_mod.ui.film.markers.UIMarkersController;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITimelineCanvas;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
@@ -61,7 +63,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Supplier;
 
-public class UIClips extends UIElement
+public class UIClips extends UITimelineCanvas
 {
     /* Constants */
     public static final IKey KEYS_CATEGORY = UIKeys.CAMERA_EDITOR_KEYS_CLIPS_TITLE;
@@ -80,7 +82,7 @@ public class UIClips extends UIElement
     private IFactory<Clip, ClipFactoryData> factory;
 
     /* Navigation */
-    public Scale scale = new Scale(this.area, ScrollDirection.HORIZONTAL);
+    public Scale scale = this.xAxis;
     public Scroll vertical = new Scroll(new Area());
 
     private boolean canGrab;
@@ -93,10 +95,6 @@ public class UIClips extends UIElement
     private List<Clip> gestureSelection = Collections.emptyList();
     private Clip gestureClip;
     private Clips gestureClips;
-    private int lastX;
-    private int lastY;
-    private int initialX;
-    private int initialY;
     private int grabMode;
 
     /* Looping */
@@ -136,24 +134,7 @@ public class UIClips extends UIElement
      * Render cursor that displays the full duration of the camera work,
      * and also current tick within the camera work.
      */
-    public static void renderCursor(UIContext context, String label, Area area, int x)
-    {
-        /* Draw the marker */
-        FontRenderer font = context.batcher.getFont();
-        int width = font.getWidth(label) + 3;
-        int color = BBSSettings.accentColorRGB();
 
-        context.batcher.box(x, area.y, x + 1, area.ey(), color | Colors.A100);
-
-        /* Move the tick line left, so it won't overflow the timeline */
-        if (x + 1 + width > area.ex())
-        {
-            x -= width + 1;
-        }
-
-        /* Draw the tick label */
-        context.batcher.textCard(label, x + 3, area.ey() - 2 - font.getHeight(), BBSSettings.textColor(), Colors.setA(color, 0.78F), 2);
-    }
 
     public UIClips(IUIClipsDelegate delegate, IFactory<Clip, ClipFactoryData> factory)
     {
@@ -239,7 +220,7 @@ public class UIClips extends UIElement
                 this.copyPasteController.openPresets(context, context.mouseX, context.mouseY);
                 UIUtils.playClick();
             }
-        }).category(KEYS_CATEGORY).active(canUseKeybinds);
+        }).inside().category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_CUT, this::cut).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_SHIFT, this::shiftToCursor).category(KEYS_CATEGORY).active(canUseKeybinds);
         this.keys().register(Keys.CLIP_DURATION, this::shiftDurationToCursor).strict().category(KEYS_CATEGORY).active(canUseKeybindsSelected);
@@ -334,7 +315,7 @@ public class UIClips extends UIElement
 
     private void showAddsAtCursor(UIContext context, int mouseX, int mouseY)
     {
-        this.showAddClips(context, this.checkSize(this.fromGraphX(mouseX), this.fromLayerY(mouseY), BBSSettings.getDefaultDuration()));
+        this.showAddClips(context, this.checkSize(this.fromGraphTick(mouseX), this.fromLayerY(mouseY), BBSSettings.getDefaultDuration()));
     }
 
     private void showAddsAtTick()
@@ -471,7 +452,7 @@ public class UIClips extends UIElement
 
     private void pasteClips(MapType data, int mouseX, int mouseY)
     {
-        this.pasteClips(data, this.fromGraphX(mouseX));
+        this.pasteClips(data, this.fromGraphTick(mouseX));
     }
 
     /**
@@ -692,7 +673,7 @@ public class UIClips extends UIElement
                         )
                     );
 
-                    this.addClip(clip, this.fromGraphX(mouseX), this.fromLayerY(mouseY), (int) size);
+                    this.addClip(clip, this.fromGraphTick(mouseX), this.fromLayerY(mouseY), (int) size);
                 });
             }
         });
@@ -1177,33 +1158,19 @@ public class UIClips extends UIElement
         }
     }
 
-    public int fromGraphX(int mouseX)
+    public int fromGraphTick(int mouseX)
     {
-        return (int) Math.round(this.scale.from(mouseX));
+        return (int) Math.round(super.fromGraphX(mouseX));
     }
 
-    public boolean isSnappingToTicks()
-    {
-        return BBSSettings.editorSnapToTicks.get() && !Window.isShiftPressed();
-    }
+
 
     /** Cursor scrubbing uses the shared tick grid, with Shift temporarily bypassing it. */
-    public float fromGraphCursor(int mouseX)
-    {
-        double tick = this.scale.from(mouseX);
 
-        return (float) (this.isSnappingToTicks() ? Math.round(tick) : tick);
-    }
 
-    public double getZoomSpeed()
-    {
-        return Window.isShiftPressed() && Window.isCtrlPressed() ? 3D : 1D;
-    }
 
-    public int toGraphX(double value)
-    {
-        return (int) (this.scale.to(value));
-    }
+
+
 
     public void setLoopMin()
     {
@@ -1259,7 +1226,7 @@ public class UIClips extends UIElement
 
         if (marker == null)
         {
-            int tick = Math.max(0, this.fromGraphX(mouseX));
+            int tick = Math.max(0, this.fromGraphTick(mouseX));
 
             menu.action(Icons.ADD, UIKeys.FILM_MARKERS_ADD, () -> this.editMarker(markers.addMarker(tick)));
         }
@@ -1355,11 +1322,7 @@ public class UIClips extends UIElement
         this.vertical.clamp();
     }
 
-    private void setMouse(int x, int y)
-    {
-        this.lastX = this.initialX = x;
-        this.lastY = this.initialY = y;
-    }
+
 
     @Override
     protected boolean subMouseClicked(UIContext context)
@@ -1535,7 +1498,7 @@ public class UIClips extends UIElement
         else if (alt)
         {
             this.selectingLoop = 0;
-            this.loopMin = this.fromGraphX(mouseX);
+            this.loopMin = this.fromGraphTick(mouseX);
             this.verifyLoopMinMax();
 
             return true;
@@ -1576,7 +1539,7 @@ public class UIClips extends UIElement
             boolean same = this.loopMin == this.loopMax;
 
             this.selectingLoop = 1;
-            this.loopMax = this.fromGraphX(mouseX);
+            this.loopMax = this.fromGraphTick(mouseX);
 
             if (same)
             {
@@ -1636,7 +1599,7 @@ public class UIClips extends UIElement
         {
             if (context.mouseWheelHorizontal != 0D)
             {
-                this.scale.setShift(this.scale.getShift() - (25F * BBSSettings.scrollingSensitivityHorizontal.get() * context.mouseWheelHorizontal) / this.scale.getZoom());
+                this.panTime(context.mouseWheelHorizontal);
             }
             else if (Window.isAltPressed() && context.mouseWheel != 0D)
             {
@@ -1656,7 +1619,7 @@ public class UIClips extends UIElement
             }
             else if (context.mouseWheel != 0D)
             {
-                this.scale.animateZoom(Scale.getAnchorX(context, this.area), context.mouseWheel, this.getZoomSpeed());
+                this.zoomTimeAt(context, context.mouseWheel);
             }
 
             return true;
@@ -1911,10 +1874,18 @@ public class UIClips extends UIElement
 
         if (this.clips != null && !this.hasEmbeddedView())
         {
-            this.vertical.drag(context);
-            this.handleInput(context.mouseX, context.mouseY);
-            this.handleScrolling(context.mouseX, context.mouseY);
-            this.renderCameraWork(context);
+            BBSProfiler.begin(BBSProfiler.Timer.UI_TIMELINE);
+            try
+            {
+                this.vertical.drag(context);
+                this.handleInput(context.mouseX, context.mouseY);
+                this.handleScrolling(context.mouseX, context.mouseY);
+                this.renderCameraWork(context);
+            }
+            finally
+            {
+                BBSProfiler.end(BBSProfiler.Timer.UI_TIMELINE);
+            }
         }
 
         super.render(context);
@@ -1932,7 +1903,7 @@ public class UIClips extends UIElement
     {
         if (this.markers.isDragging())
         {
-            this.markers.dragTo(this.fromGraphX(mouseX));
+            this.markers.dragTo(this.fromGraphTick(mouseX));
         }
         else if (this.scrubbing)
         {
@@ -1940,11 +1911,11 @@ public class UIClips extends UIElement
         }
         else if (this.selectingLoop == 0)
         {
-            this.loopMin = MathUtils.clamp(this.fromGraphX(mouseX), 0, this.loopMax);
+            this.loopMin = MathUtils.clamp(this.fromGraphTick(mouseX), 0, this.loopMax);
         }
         else if (this.selectingLoop == 1)
         {
-            this.loopMax = MathUtils.clamp(this.fromGraphX(mouseX), this.loopMin, Integer.MAX_VALUE);
+            this.loopMax = MathUtils.clamp(this.fromGraphTick(mouseX), this.loopMin, Integer.MAX_VALUE);
         }
         else if (this.selecting)
         {
@@ -1972,7 +1943,7 @@ public class UIClips extends UIElement
     private void dragClips(int mouseX, int mouseY)
     {
         List<Clip> others = Window.isAltPressed() ? Collections.emptyList() : this.otherClips;
-        int dx = this.fromGraphX(mouseX) - this.fromGraphX(this.initialX);
+        int dx = this.fromGraphTick(mouseX) - this.fromGraphTick(this.initialX);
         int dy = this.fromLayerY(mouseY) - this.fromLayerY(this.initialY);
 
         if (this.grabMode != 0 && Window.isShiftPressed())
@@ -2081,7 +2052,7 @@ public class UIClips extends UIElement
         Vector3i data = this.grabbedData.get(this.grabbedData.size() - 1);
         int tick = data.x();
         int duration = data.z();
-        int mouse = this.fromGraphX(mouseX);
+        int mouse = this.fromGraphTick(mouseX);
 
         /* Pin the clip to its original bounds — an earlier frame may have resized it. */
         this.setClipData(clip, tick, data.y(), duration);
@@ -2252,7 +2223,7 @@ public class UIClips extends UIElement
     {
         if (this.scrolling)
         {
-            this.scale.setShift(this.scale.getShift() - (mouseX - this.lastX) / this.scale.getZoom());
+            this.dragTimeBy(mouseX - this.lastX);
             this.vertical.scrollBy(this.lastY - mouseY);
             this.vertical.clamp();
 
@@ -2454,7 +2425,7 @@ public class UIClips extends UIElement
     {
         if (this.selecting)
         {
-            UISelectionRenderer.renderMarquee(context, this.lastX, this.lastY, context.mouseX, context.mouseY);
+            this.renderMarquee(context, this.lastX, this.lastY);
         }
     }
 

@@ -1,49 +1,32 @@
 package mchorse.bbs_mod.ui.framework.elements.buttons;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
-import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
-import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.ui.framework.tooltips.ITooltip;
-import mchorse.bbs_mod.ui.framework.tooltips.LabelTooltip;
-import mchorse.bbs_mod.ui.utils.Area;
-import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
-import mchorse.bbs_mod.utils.Direction;
-import mchorse.bbs_mod.utils.colors.Colors;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Consumer;
 
 /**
  * A horizontal row of selectable icons — an icon-based alternative to {@link UICirculate}. Each item
- * is an icon with its own tooltip; clicking an icon selects it (the active one is highlighted), and
- * the icon currently under the cursor shows its tooltip. Items split the element width evenly.
+ * is an icon with its own tooltip; clicking an icon selects it (the active one is highlighted, the
+ * rest are dimmed), and the icon currently under the cursor shows its tooltip.
+ *
+ * <p>Layout, hit-testing and painting live in {@link UIIconStrip}; all this adds is that exactly
+ * one item is active at a time.
  */
-public class UIIcons extends UIClickable<UIIcons>
+public class UIIcons extends UIIconStrip<UIIcons>
 {
-    protected List<Item> items = new ArrayList<>();
     protected int value;
-    private int pendingValue = -1;
 
     public UIIcons(Consumer<UIIcons> callback)
     {
         super(callback);
-
-        this.h(UIConstants.CONTROL_HEIGHT);
     }
 
     public UIIcons add(Icon icon, IKey tooltip)
     {
-        this.items.add(new Item(icon, tooltip));
+        this.addItem(icon, tooltip);
 
         return this;
-    }
-
-    public int getCount()
-    {
-        return this.items.size();
     }
 
     public int getValue()
@@ -66,161 +49,27 @@ public class UIIcons extends UIClickable<UIIcons>
     }
 
     @Override
-    public boolean subMouseClicked(UIContext context)
+    protected boolean isActive(int index)
     {
-        if (this.isEnabled() && context.mouseButton == 0 && this.area.isInside(context) && !this.items.isEmpty())
-        {
-            int index = this.indexAt(context.mouseX);
-
-            if (index != this.value)
-            {
-                this.pendingValue = index;
-
-                try
-                {
-                    return super.subMouseClicked(context);
-                }
-                finally
-                {
-                    this.pendingValue = -1;
-                }
-            }
-
-            return true;
-        }
-
-        return super.subMouseClicked(context);
+        return index == this.value;
     }
 
     @Override
-    protected void click(int mouseButton)
+    protected boolean pick(int index)
     {
-        if (this.pendingValue >= 0)
+        if (index == this.value)
         {
-            this.value = this.pendingValue;
+            return false;
         }
 
-        super.click(mouseButton);
-    }
+        this.value = index;
 
-    private int indexAt(int mouseX)
-    {
-        int count = this.items.size();
-        int index = (int) ((mouseX - this.area.x) / (this.area.w / (float) count));
-
-        return Math.max(0, Math.min(index, count - 1));
+        return true;
     }
 
     @Override
-    protected void renderSkin(UIContext context)
+    protected boolean canPick(int index)
     {
-        this.tooltip = null;
-
-        int count = this.items.size();
-
-        if (count == 0)
-        {
-            this.renderLockedArea(context);
-
-            return;
-        }
-
-        float cellW = this.area.w / (float) count;
-        int hovered = this.hover ? this.indexAt(context.mouseX) : -1;
-        int radius = BBSSettings.cornerWidget();
-
-        if (radius > 0)
-        {
-            int fill = BBSSettings.fieldFillColor();
-            int border = BBSSettings.fieldBorderColor();
-
-            context.batcher.roundedFrame(
-                this.area.x,
-                this.area.y,
-                this.area.w,
-                this.area.h,
-                radius,
-                1F,
-                border == 0 ? BBSSettings.dividerColor() : border,
-                fill == 0 ? BBSSettings.deepSurface() : fill
-            );
-        }
-        else
-        {
-            this.area.render(context.batcher, BBSSettings.deepSurface());
-        }
-
-        for (int i = 0; i < count; i++)
-        {
-            int x1 = this.area.x + (int) (i * cellW);
-            int x2 = i == count - 1 ? this.area.ex() : this.area.x + (int) ((i + 1) * cellW);
-            boolean active = i == this.value;
-            boolean cellHover = i == hovered;
-
-            if (active)
-            {
-                Area.SHARED.set(x1, this.area.y, x2 - x1, this.area.h);
-                UIDashboardPanels.renderHighlight(context.batcher, Area.SHARED, Direction.BOTTOM);
-            }
-            else if (cellHover)
-            {
-                if (radius > 0)
-                {
-                    context.batcher.roundedBox(x1, this.area.y, x2 - x1, this.area.h, radius, BBSSettings.chromeSurface());
-                }
-                else
-                {
-                    context.batcher.box(x1, this.area.y, x2, this.area.ey(), BBSSettings.chromeSurface());
-                }
-            }
-
-            int stateFill = 0;
-
-            if (!this.isEnabled())
-            {
-                stateFill = BBSSettings.iconDisabledColor();
-            }
-            else if (this.pressed && cellHover)
-            {
-                stateFill = BBSSettings.iconPressedColor();
-            }
-
-            if (stateFill != 0)
-            {
-                if (radius > 0)
-                {
-                    context.batcher.roundedBox(x1, this.area.y, x2 - x1, this.area.h, radius, stateFill);
-                }
-                else
-                {
-                    context.batcher.box(x1, this.area.y, x2, this.area.ey(), stateFill);
-                }
-            }
-
-            int iconColor = !this.isEnabled()
-                ? Colors.setA(Colors.WHITE, 0.35F)
-                : (active ? Colors.WHITE : (cellHover ? Colors.LIGHTEST_GRAY : Colors.setA(Colors.WHITE, 0.6F)));
-
-            context.batcher.icon(this.items.get(i).icon, iconColor, (x1 + x2) / 2, this.area.my(), 0.5F, 0.5F);
-        }
-
-        if (hovered >= 0)
-        {
-            this.tooltip = this.items.get(hovered).tooltip;
-        }
-
-        this.renderLockedArea(context);
-    }
-
-    private static class Item
-    {
-        public final Icon icon;
-        public final ITooltip tooltip;
-
-        public Item(Icon icon, IKey tooltip)
-        {
-            this.icon = icon;
-            this.tooltip = new LabelTooltip(tooltip, Direction.TOP);
-        }
+        return index != this.value;
     }
 }

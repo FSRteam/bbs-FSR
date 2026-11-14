@@ -56,7 +56,7 @@ public class UIStringKeyframeFactory extends UIKeyframeFactory<String>
             value = "";
         }
 
-        this.editor.getGraph().setValue(value, true);
+        this.setValue(value);
         this.string.setText(value);
     }
 
@@ -65,7 +65,7 @@ public class UIStringKeyframeFactory extends UIKeyframeFactory<String>
     {
         super.update();
 
-        this.string.setText(this.keyframe.getValue());
+        this.string.setText(this.getDisplayValue());
     }
 
     public static interface IStringKeyframeDecorator

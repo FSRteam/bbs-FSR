@@ -33,7 +33,9 @@ public class FormCategories implements IWatchDogListener
      */
     private static final List<Function<FormCategories, FormSection>> EXTRA_SECTIONS = new ArrayList<>();
 
+    /** Compatibility alias; both APIs share the same category preferences. */
     public final VisibilityManager visibility = new VisibilityManager();
+    public final CategoryPreferences preferences = this.visibility;
 
     private List<FormSection> sections = new ArrayList<>();
     private RecentFormSection recentForms = new RecentFormSection(this);
@@ -100,7 +102,7 @@ public class FormCategories implements IWatchDogListener
         BBSMod.events.post(new RegisterFormCategoriesEvent(this::addExtraForm));
 
         this.markDirty();
-        this.visibility.read();
+        this.preferences.read();
         LOGGER.info("[bbs-form-categories] setup completed with {} category group(s)", this.getAllCategories().size());
     }
 

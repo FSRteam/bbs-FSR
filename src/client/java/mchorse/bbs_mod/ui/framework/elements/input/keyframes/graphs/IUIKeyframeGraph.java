@@ -6,6 +6,7 @@ import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.interps.Interpolation;
@@ -21,6 +22,31 @@ public interface IUIKeyframeGraph
     public static final int TOP_MARGIN = 25;
 
     public void resetView();
+
+    public default UIKeyframes getKeyframes()
+    {
+        return null;
+    }
+
+    public default Float getAutoKeyframeTick()
+    {
+        UIKeyframes editor = this.getKeyframes();
+        return editor == null ? null : editor.getAutoKeyframeTick();
+    }
+
+    public default <T> Keyframe<T> getEditTarget(Keyframe<T> original)
+    {
+        Float tick = this.getAutoKeyframeTick();
+        UIKeyframeSheet sheet = tick == null ? null : this.getSheet(original);
+        if (sheet == null)
+        {
+            return original;
+        }
+
+        Keyframe<T> target = sheet.ensureKeyframe(tick);
+
+        return target == null ? original : target;
+    }
 
     public UIKeyframeSheet getLastSheet();
 
@@ -114,6 +140,13 @@ public interface IUIKeyframeGraph
 
     public UIKeyframeSheet getSheet(int mouseY);
 
+    public default UIKeyframeSheet getFirstTrackSheet()
+    {
+        List<UIKeyframeSheet> sheets = this.getSheets();
+
+        return sheets.isEmpty() ? null : sheets.get(0);
+    }
+
     public boolean addKeyframe(int mouseX, int mouseY);
 
     /** Create at exact time without converting the playhead through a screen pixel. */
@@ -145,13 +178,13 @@ public interface IUIKeyframeGraph
                 value = segment.createInterpolated();
                 extra = segment.a;
             }
-            else if (property != null)
-            {
-                value = sheet.channel.getFactory().copy(property.get());
-            }
             else if (sheet.seed != null)
             {
                 value = sheet.seed.get();
+            }
+            else if (property != null)
+            {
+                value = sheet.channel.getFactory().copy(property.get());
             }
             else
             {
@@ -226,7 +259,10 @@ public interface IUIKeyframeGraph
     public default void onCallback(Keyframe keyframe)
     {}
 
-    public void pickKeyframe(Keyframe keyframe);
+    public default void pickKeyframe(Keyframe keyframe)
+    {
+        this.getKeyframes().pickKeyframe(keyframe);
+    }
 
     public void selectKeyframe(Keyframe keyframe);
 
@@ -264,6 +300,22 @@ public interface IUIKeyframeGraph
         }
     }
 
+    public default void setMotionShift(float shift, boolean dirty)
+    {
+        for (UIKeyframeSheet sheet : this.getSheets())
+        {
+            for (Keyframe keyframe : sheet.selection.getSelected())
+            {
+                if (keyframe.supportsMotionShift())
+                {
+                    keyframe.setMotionShift(shift, dirty);
+                }
+            }
+        }
+
+        this.getKeyframes().triggerChange();
+    }
+
     public default void setInterpolation(Interpolation interpolation)
     {
         for (UIKeyframeSheet sheet : this.getSheets())
@@ -280,6 +332,11 @@ public interface IUIKeyframeGraph
      */
     public default void setValue(Object value, boolean unmergeable)
     {
+        this.setValue(value, unmergeable, false);
+    }
+
+    public default void setValue(Object value, boolean unmergeable, boolean fromEditor)
+    {
         Keyframe selected = this.getSelected();
 
         if (selected == null)
@@ -288,13 +345,33 @@ public interface IUIKeyframeGraph
         }
 
         IKeyframeFactory factory = selected.getFactory();
-        Object keyframe = factory.copy(selected.getValue());
+
+        this.applyValue(factory, value, selected, unmergeable, fromEditor);
+    }
+
+    /** Apply one edit to matching selected tracks, using the actual auto-key target as the baseline. */
+    public default void applyValue(IKeyframeFactory factory, Object value, Keyframe primary, boolean unmergeable, boolean fromEditor)
+    {
+        Float tick = fromEditor ? this.getAutoKeyframeTick() : null;
+        Object before = factory.copy((tick == null ? primary : this.getEditTarget(primary)).getValue());
 
         for (UIKeyframeSheet sheet : this.getSheets())
         {
             if (sheet.channel.getFactory() == factory)
             {
-                sheet.setValue(value, keyframe, unmergeable);
+                if (tick == null)
+                {
+                    sheet.setValue(value, before, unmergeable);
+                }
+                else if (!sheet.selection.getSelected().isEmpty())
+                {
+                    Keyframe target = sheet.ensureKeyframe(tick);
+
+                    if (target != null)
+                    {
+                        sheet.setValueOn(target, value, before, unmergeable);
+                    }
+                }
             }
         }
     }

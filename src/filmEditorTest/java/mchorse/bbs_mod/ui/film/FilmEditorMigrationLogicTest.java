@@ -10,6 +10,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
+import mchorse.bbs_mod.settings.values.ui.EditorLayoutPersistenceTest;
 import mchorse.bbs_mod.test.HeadlessClientTestBootstrap;
 import mchorse.bbs_mod.ui.film.replays.PoseNavigationLogicTest;
 import mchorse.bbs_mod.utils.interps.Interpolations;
@@ -39,6 +40,8 @@ public final class FilmEditorMigrationLogicTest
             testAnchorTransformInterpolation();
             testFilmControllerContextReset();
             testValueOrderDefaultInsertion();
+            EditorLayoutPersistenceTest.runAll();
+            SettingsMigrationTest.runAll();
             FilmDockInitialStateSourceTest.runAll();
             testLenientPresetComparison();
             PoseNavigationLogicTest.runAll();

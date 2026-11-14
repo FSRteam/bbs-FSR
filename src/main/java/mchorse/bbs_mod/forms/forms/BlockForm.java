@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.forms.forms;
 
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import net.minecraft.core.registries.BuiltInRegistries;
 import mchorse.bbs_mod.settings.values.mc.ValueBlockState;
 import mchorse.bbs_mod.settings.values.core.ValueColor;
@@ -7,6 +9,8 @@ import mchorse.bbs_mod.utils.colors.Color;
 
 public class BlockForm extends Form
 {
+    public static final Icon ICON = Icons.BLOCK;
+
     public final ValueBlockState blockState = new ValueBlockState("block_state");
     public final ValueColor color = new ValueColor("color", Color.white());
 
@@ -26,5 +30,11 @@ public class BlockForm extends Form
     public boolean supportsGlint()
     {
         return true;
+    }
+
+    @Override
+    public Icon getIcon()
+    {
+        return ICON;
     }
 }

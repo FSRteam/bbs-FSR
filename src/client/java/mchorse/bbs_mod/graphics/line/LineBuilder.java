@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
@@ -94,7 +95,12 @@ public class LineBuilder <T>
                 renderer.render(builder, matrix, point);
             }
 
-            BufferUploader.drawWithShader(builder.buildOrThrow());
+            MeshData mesh = builder.build();
+
+            if (mesh != null)
+            {
+                BufferUploader.drawWithShader(mesh);
+            }
         }
     }
 }

@@ -4,6 +4,7 @@
     "compatibilityLevel": "JAVA_21",
     "client": [
         "BackgroundRendererMixin",
+        "ReceivingLevelScreenMixin",
         "CameraMixin",
         "GameRendererCameraAccessor",
         "GameRendererMixin",
@@ -21,6 +22,8 @@
         "LivingEntityMixin",
         "LivingEntityFilmUseMixin",
         "ClientPlayerEntityFilmUseMixin",
+        "PlayerEntityFilmPoseMixin",
+        "ClientPlayerEntityFilmPoseMixin",
         "LivingEntityUpdateMixin",
         "LivingEntityRendererAccessor",
         "ModelPartMixin",
@@ -46,10 +49,7 @@
         "KeyboardMixin",
         "KeyMappingAccessor",
         "EntityRenderersAccessor",
-        "BlockEntityRenderersAccessor",
-        "CameraInvoker",
-        "ParticleEngineInvoker",
-        "ParticleMixin"
+        "BlockEntityRenderersAccessor"
     ],
     "injectors": {
         "defaultRequire": 1

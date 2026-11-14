@@ -45,6 +45,8 @@ public class UIPluginsPanel extends UIDashboardPanel
     {
         super(dashboard);
 
+        this.onAppear(this::onPanelAppeared);
+
         this.rescan = new UIIcon(Icons.REFRESH, (b) ->
         {
             BBSMod.rescanPlugins();
@@ -95,11 +97,8 @@ public class UIPluginsPanel extends UIDashboardPanel
         this.markContainer();
     }
 
-    @Override
-    public void appear()
+    private void onPanelAppeared()
     {
-        super.appear();
-
         this.autoApply.setValue(BBSMod.isPluginAutoApply());
         this.refresh();
     }

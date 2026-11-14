@@ -1,5 +1,12 @@
 package mchorse.bbs_mod.film;
 
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
+import mchorse.bbs_mod.api.client.events.FilmEvents;
+import mchorse.bbs_mod.client.compat.BBSWorldRenderContext;
+import mchorse.bbs_mod.film.replays.tracks.TrackBehaviours;
+import mchorse.bbs_mod.film.replays.tracks.TrackContext;
+import mchorse.bbs_mod.film.replays.tracks.TrackKind;
+
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.client.renderer.ItemUseEffects;
 import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
@@ -21,6 +28,9 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
+import mchorse.bbs_mod.mixin.EntityInvoker;
+import mchorse.bbs_mod.mixin.LivingEntityRollAccessor;
+import mchorse.bbs_mod.forms.entities.EntityState;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
@@ -117,6 +127,7 @@ public abstract class BaseFilmController
             }
         }
 
+        FilmEvents.CREATED.invoker().onFilmCreated(this);
     }
 
     /**
@@ -145,6 +156,13 @@ public abstract class BaseFilmController
     }
 
     protected void updateEntities(int ticks)
+    {
+        FilmEvents.TICK_BEFORE.invoker().onFilmTick(this, ticks);
+        this.updateScene(ticks);
+        FilmEvents.TICK_AFTER.invoker().onFilmTick(this, ticks);
+    }
+
+    protected void updateScene(int ticks)
     {
         Level level = Minecraft.getInstance().level;
 
@@ -267,8 +285,10 @@ public abstract class BaseFilmController
                         double x = replay.keyframes.x.interpolate(replayTick);
                         double y = replay.keyframes.y.interpolate(replayTick);
                         double z = replay.keyframes.z.interpolate(replayTick);
-                        boolean sneaking = replay.keyframes.sneaking.interpolate(replayTick) > 0;
-                        boolean grounded = replay.keyframes.grounded.interpolate(replayTick) > 0;
+                        boolean sneaking = EntityState.isOn(replay.keyframes.sneaking.interpolate(replayTick));
+                        boolean grounded = EntityState.isOn(replay.keyframes.grounded.interpolate(replayTick));
+                        boolean swimming = EntityState.isOn(replay.keyframes.swimming.interpolate(replayTick));
+                        boolean gliding = EntityState.isOn(replay.keyframes.gliding.interpolate(replayTick));
 
                         Vec3 pos = player.position();
 
@@ -278,8 +298,12 @@ public abstract class BaseFilmController
                         player.setPos(x, y, z);
 
                         player.setShiftKeyDown(sneaking);
+                        player.setSwimming(swimming);
+                        ((EntityInvoker) player).bbs$setFlag(EntityState.FALL_FLYING_FLAG, gliding);
+                        player.setPose(EntityState.pose(gliding, swimming, sneaking));
+                        ((LivingEntityRollAccessor) player).bbs$setRoll(replay.keyframes.roll.interpolate(replayTick).intValue());
                         player.setOnGround(grounded);
-                        player.setSprinting(replay.keyframes.sprinting.interpolate(replayTick) > 0);
+                        player.setSprinting(EntityState.isOn(replay.keyframes.sprinting.interpolate(replayTick)));
 
                         /* World first-person playback is driven through the real
                          * client player in this end-of-world phase. Publish the
@@ -555,406 +579,45 @@ public abstract class BaseFilmController
         return entityId == null || level == null ? null : level.getEntity(entityId);
     }
 
-    /**
-     * Phase 1 of a rendered frame for one replay — its own properties and its scalar procedural
-     * controls, laid onto {@code root}. The static seam the out-of-sight bake drives (see
-     * {@code IKBake.Sampler}), so it lays exactly what the render lays and in the same phase.
-     *
-     * <p>{@code FormProperties.applyProperties} alone is not enough: the IK, physics and wind
-     * control tracks are not ordinary properties, so they fall into its "everything else" bucket,
-     * resolve to nothing and do nothing here. Phase 1 is the pair.</p>
-     */
+    /** Values and scalar controls are evaluated for every actor before any spatial anchor. */
     public static void applyReplayChannels(Replay replay, Form root, float tick)
     {
-        if (replay == null || root == null)
-        {
-            return;
-        }
-
+        if (replay == null || root == null) return;
         replay.properties.applyProperties(root, tick);
         applyTargetControls(replay, root, tick);
     }
 
-    /**
-     * Phase 2 of a rendered frame for one replay — its spatial target channels resolved into the
-     * form's override maps. Split from {@link #applyReplayChannels(Replay, Form, float)} on purpose:
-     * a target may be anchored to another replay, so every replay's channels have to be laid before
-     * any target is resolved, or the anchors read a half-updated frame.
-     */
+    /** Spatial anchors read the complete actor frame, preserving multiview and IK bake ordering. */
     public static void applyReplayTargets(Replay replay, Form root, float tick, float transition, Map<String, IEntity> entities)
     {
-        applyTargetOverrides(replay, root, tick, transition, entities);
+        if (replay == null || root == null) return;
+        TrackBehaviours.clearOverrides(root, kind -> kind == TrackKind.IK_TARGET || kind == TrackKind.POLE_TARGET
+            || kind == TrackKind.PHYSICS_TARGET);
+        TrackContext context = TrackContext.frame(root, transition, (anchor, fraction) ->
+        {
+            if (!anchor.hasTarget() || !entities.containsKey(anchor.replay)
+                || FilmMatrices.hasRelativeAnchorTarget(entities, anchor)) return null;
+            Pair<Matrix4f, Float> result = FilmMatrices.getTotalMatrix(entities, anchor, IDENTITY,
+                0D, 0D, 0D, fraction, 0, true, false);
+            return (result.a == null ? IDENTITY : result.a).getTranslation(new Vector3f());
+        });
+        replay.properties.apply(context, tick, 1F, track -> track.kind() == TrackKind.IK_TARGET
+            || track.kind() == TrackKind.POLE_TARGET || track.kind() == TrackKind.PHYSICS_TARGET);
     }
 
     public void update(Replay replay, Form root, float tick, float transition)
     {
         applyTargetControls(replay, root, tick);
-        applyTargetOverrides(replay, root, tick, transition, this.entities);
+        applyReplayTargets(replay, root, tick, transition, this.entities);
     }
 
     private static void applyTargetControls(Replay replay, Form root, float tick)
     {
-        if (replay == null || root == null)
-        {
-            return;
-        }
-
-        clearControlOverrides(root);
-
-        if (replay.properties == null || replay.properties.properties == null || replay.properties.properties.isEmpty())
-        {
-            return;
-        }
-
-        for (KeyframeChannel<?> channel : replay.properties.properties.values())
-        {
-            if (channel == null)
-            {
-                continue;
-            }
-
-            String id = channel.getId();
-
-            if (id == null || id.isEmpty())
-            {
-                continue;
-            }
-
-            if (FormControlKeys.isIKControlChannel(id))
-            {
-                applyIKControls(root, FormControlKeys.parseIKControlFormPath(id), channel, tick);
-                continue;
-            }
-
-            if (FormControlKeys.isPhysicsControlChannel(id))
-            {
-                applyPhysicsControls(root, FormControlKeys.parsePhysicsControlFormPath(id), channel, tick);
-                continue;
-            }
-
-            if (FormControlKeys.isWindControlChannel(id))
-            {
-                applyWindControls(root, FormControlKeys.parseWindControlFormPath(id), channel, tick);
-            }
-        }
-    }
-
-    private static void applyTargetOverrides(Replay replay, Form root, float tick, float transition, Map<String, IEntity> entities)
-    {
-        if (replay == null || root == null)
-        {
-            return;
-        }
-
-        clearSpatialTargetOverrides(root);
-
-        if (replay.properties == null || replay.properties.properties == null || replay.properties.properties.isEmpty())
-        {
-            return;
-        }
-
-        for (KeyframeChannel<?> channel : replay.properties.properties.values())
-        {
-            if (channel == null)
-            {
-                continue;
-            }
-
-            String id = channel.getId();
-
-            if (id == null || id.isEmpty()
-                || FormControlKeys.isIKControlChannel(id)
-                || FormControlKeys.isPhysicsControlChannel(id)
-                || FormControlKeys.isWindControlChannel(id))
-            {
-                continue;
-            }
-
-            PerLimbService.IKTargetPath ikPath = PerLimbService.parseIKTargetPath(id);
-
-            if (ikPath != null)
-            {
-                applyOverride(root, ikPath.formPath(), ikPath.controller(), channel, tick, transition, TargetKind.IK, entities);
-                continue;
-            }
-
-            PerLimbService.PoleTargetPath polePath = PerLimbService.parsePoleTargetPath(id);
-
-            if (polePath != null)
-            {
-                applyOverride(root, polePath.formPath(), polePath.controller(), channel, tick, transition, TargetKind.POLE, entities);
-                continue;
-            }
-
-            PerLimbService.PhysicsTargetPath physicsPath = PerLimbService.parsePhysicsTargetPath(id);
-
-            if (physicsPath != null)
-            {
-                applyPhysicsTarget(root, physicsPath.formPath(), physicsPath.rootBone(), channel, tick, transition, entities);
-            }
-        }
-    }
-
-    private static void applyIKControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
-    {
-        Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
-
-        if (!(form instanceof ModelForm modelForm))
-        {
-            return;
-        }
-
-        KeyframeSegment<?> segment = channel.find(tick);
-
-        if (segment == null)
-        {
-            return;
-        }
-
-        Object value = segment.createInterpolated();
-
-        if (!(value instanceof IKControls controls))
-        {
-            return;
-        }
-
-        for (Map.Entry<String, IKControl> entry : controls.controls.entrySet())
-        {
-            modelForm.ikControlOverrides.computeIfAbsent(entry.getKey(), (k) -> new IKControl()).copy(entry.getValue());
-        }
-    }
-
-    private static void applyPhysicsControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
-    {
-        Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
-
-        if (!(form instanceof ModelForm modelForm))
-        {
-            return;
-        }
-
-        KeyframeSegment<?> segment = channel.find(tick);
-
-        if (segment == null)
-        {
-            return;
-        }
-
-        Object value = segment.createInterpolated();
-
-        if (!(value instanceof PhysicsControls controls))
-        {
-            return;
-        }
-
-        for (Map.Entry<String, PhysicsControl> entry : controls.controls.entrySet())
-        {
-            modelForm.physicsControlOverrides.computeIfAbsent(entry.getKey(), (k) -> new PhysicsControl()).copy(entry.getValue());
-        }
-    }
-
-    private static void applyWindControls(Form root, String formPath, KeyframeChannel<?> channel, float tick)
-    {
-        Form form = formPath == null || formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
-
-        if (!(form instanceof ModelForm modelForm))
-        {
-            return;
-        }
-
-        KeyframeSegment<?> segment = channel.find(tick);
-
-        if (segment == null)
-        {
-            return;
-        }
-
-        Object value = segment.createInterpolated();
-
-        if (!(value instanceof WindControl control))
-        {
-            return;
-        }
-
-        if (modelForm.windControlOverride == null)
-        {
-            modelForm.windControlOverride = new WindControl();
-        }
-
-        modelForm.windControlOverride.copy(control);
-    }
-
-    private enum TargetKind
-    {
-        IK, POLE
-    }
-
-    private static void applyOverride(Form root, String formPath, String targetId, KeyframeChannel<?> channel, float tick, float transition, TargetKind kind, Map<String, IEntity> entities)
-    {
-        Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
-
-        if (!(form instanceof ModelForm modelForm))
-        {
-            return;
-        }
-
-        KeyframeSegment<?> segment = channel.find(tick);
-
-        if (segment == null || !(segment.createInterpolated() instanceof Anchor anchor))
-        {
-            return;
-        }
-
-        Map<String, Vector3f> overrides = switch (kind)
-        {
-            case IK -> modelForm.ikTargetOverrides;
-            case POLE -> modelForm.poleTargetOverrides;
-        };
-        Map<String, Float> weights = switch (kind)
-        {
-            case IK -> modelForm.ikTargetWeights;
-            case POLE -> modelForm.poleTargetWeights;
-        };
-
-        /* Resolve the BOUND side at its full position with a 0..1 fade weight, mirroring
-         * applyPhysicsTarget: feeding the fading anchor straight to getTotalMatrix would
-         * lerp the position from world origin across a "None" key, yanking the pole/target
-         * to (0,0,0). The applier eases the override in/out from the config position by the
-         * weight instead, so a fade glides from where the bone already is. */
-        Anchor resolve;
-        float weight;
-
-        if (anchor.previous != null && anchor.isFadeIn())
-        {
-            resolve = anchor.copy();
-            weight = anchor.x;
-        }
-        else if (anchor.previous != null && anchor.isFadeOut())
-        {
-            resolve = anchor.previous;
-            weight = 1F - anchor.x;
-        }
-        else
-        {
-            resolve = anchor;
-            weight = 1F;
-        }
-
-        IEntity targetEntity = entities.get(resolve.replay);
-
-        if (weight <= 0F || !resolve.hasTarget() || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(entities, resolve))
-        {
-            return;
-        }
-
-        Pair<Matrix4f, Float> matrix = FilmMatrices.getTotalMatrix(entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true, false);
-        Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
-        Vector3f position = resolved.getTranslation(TEMP_VECTOR);
-
-        overrides.computeIfAbsent(targetId, (k) -> new Vector3f()).set(position);
-        weights.put(targetId, weight);
-    }
-
-    /**
-     * Physics target override with fade support. Unlike the IK/pole targets this also resolves a fade
-     * <em>weight</em>: when the binding crosses a no-target keyframe the shared anchor interpolation lerps the
-     * resolved matrix from world origin, which yanks the chain to (0,0,0). Instead we resolve the bound side at
-     * its full position and hand the physics solver a 0..1 weight so it can ease the chain in/out from its own
-     * tip (see {@link ModelPhysicsRuntime}).
-     */
-    private static void applyPhysicsTarget(Form root, String formPath, String rootBone, KeyframeChannel<?> channel, float tick, float transition, Map<String, IEntity> entities)
-    {
-        Form form = formPath.isEmpty() ? root : FormUtils.getForm(root, formPath);
-
-        if (!(form instanceof ModelForm modelForm))
-        {
-            return;
-        }
-
-        KeyframeSegment<?> segment = channel.find(tick);
-
-        if (segment == null || !(segment.createInterpolated() instanceof Anchor anchor))
-        {
-            return;
-        }
-
-        /* Pick the bound side and how present it is. Fade in/out blends to/from "no target"; a straight switch
-         * between two real targets keeps the anchor's own lerp at full weight. */
-        Anchor resolve;
-        float weight;
-
-        if (anchor.previous != null && anchor.isFadeIn())
-        {
-            resolve = anchor.copy();
-            weight = anchor.x;
-        }
-        else if (anchor.previous != null && anchor.isFadeOut())
-        {
-            resolve = anchor.previous;
-            weight = 1F - anchor.x;
-        }
-        else
-        {
-            resolve = anchor;
-            weight = 1F;
-        }
-
-        IEntity targetEntity = entities.get(resolve.replay);
-
-        if (weight <= 0F || !resolve.hasTarget() || targetEntity == null || FilmMatrices.hasRelativeAnchorTarget(entities, resolve))
-        {
-            return;
-        }
-
-        Pair<Matrix4f, Float> matrix = FilmMatrices.getTotalMatrix(entities, resolve, IDENTITY, 0D, 0D, 0D, transition, 0, true, false);
-        Matrix4f resolved = matrix.a != null ? matrix.a : IDENTITY;
-        Vector3f position = resolved.getTranslation(TEMP_VECTOR);
-
-        modelForm.physicsTargetOverrides.computeIfAbsent(rootBone, (k) -> new Vector3f()).set(position);
-        modelForm.physicsTargetWeights.put(rootBone, weight);
-    }
-
-    private static void clearControlOverrides(Form form)
-    {
-        if (form instanceof ModelForm modelForm)
-        {
-            modelForm.ikControlOverrides.clear();
-            modelForm.physicsControlOverrides.clear();
-            modelForm.windControlOverride = null;
-        }
-
-        for (BodyPart part : form.parts.getAllTyped())
-        {
-            Form child = part.getForm();
-
-            if (child != null)
-            {
-                clearControlOverrides(child);
-            }
-        }
-    }
-
-    private static void clearSpatialTargetOverrides(Form form)
-    {
-        if (form instanceof ModelForm modelForm)
-        {
-            modelForm.ikTargetOverrides.clear();
-            modelForm.poleTargetOverrides.clear();
-            modelForm.ikTargetWeights.clear();
-            modelForm.poleTargetWeights.clear();
-            modelForm.physicsTargetOverrides.clear();
-            modelForm.physicsTargetWeights.clear();
-        }
-
-        for (BodyPart part : form.parts.getAllTyped())
-        {
-            Form child = part.getForm();
-
-            if (child != null)
-            {
-                clearSpatialTargetOverrides(child);
-            }
-        }
+        if (replay == null || root == null) return;
+        TrackBehaviours.clearOverrides(root, kind -> kind == TrackKind.IK_CONTROLS
+            || kind == TrackKind.PHYSICS_CONTROLS || kind == TrackKind.WIND_CONTROLS);
+        replay.properties.apply(TrackContext.frame(root, 0F, null), tick, 1F, track -> track.kind() == TrackKind.IK_CONTROLS
+            || track.kind() == TrackKind.PHYSICS_CONTROLS || track.kind() == TrackKind.WIND_CONTROLS);
     }
 
     protected float getTransition(IEntity entity, float transition)
@@ -978,6 +641,25 @@ public abstract class BaseFilmController
     }
 
     public void render(IBbsWorldRenderContext context)
+    {
+        BBSProfiler.begin(BBSProfiler.Timer.WORLD_FORMS);
+
+        try
+        {
+            this.renderScene(context);
+        }
+        finally
+        {
+            BBSProfiler.end(BBSProfiler.Timer.WORLD_FORMS);
+        }
+
+        if (FilmEvents.RENDER_AFTER.hasListeners())
+        {
+            FilmEvents.RENDER_AFTER.invoker().onFilmRender(this, BBSWorldRenderContext.bridge(context));
+        }
+    }
+
+    protected void renderScene(IBbsWorldRenderContext context)
     {
         RenderSystem.enableDepthTest();
 
@@ -1048,6 +730,17 @@ public abstract class BaseFilmController
         }
 
         FilmEntityRenderer.renderEntity(filmContext);
+
+        if (replay.actor.get())
+        {
+            Map<String, Integer> actors = this.getActors();
+            Integer actorId = actors == null ? null : actors.get(replay.getId());
+            Level level = Minecraft.getInstance().level;
+            Entity actor = actorId == null || level == null ? null : level.getEntity(actorId);
+
+            /* The world entity owns the body; the replay still owns its label. */
+            FilmEntityRenderer.renderActorNameTag(filmContext, actor, context.tickDelta());
+        }
     }
 
     protected FilmControllerContext getFilmControllerContext(IBbsWorldRenderContext context, Replay replay, IEntity entity)
@@ -1069,7 +762,14 @@ public abstract class BaseFilmController
 
     public void shutdown()
     {
-        this.releaseFormPlayback();
+        try
+        {
+            FilmEvents.SHUTDOWN.invoker().onFilmShutdown(this);
+        }
+        finally
+        {
+            this.releaseFormPlayback();
+        }
     }
 
     private void releaseFormPlayback()

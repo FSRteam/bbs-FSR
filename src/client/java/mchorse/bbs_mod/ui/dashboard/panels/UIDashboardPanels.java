@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.dashboard.panels;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -10,6 +11,9 @@ import mchorse.bbs_mod.ui.framework.elements.events.UIEvent;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
+import mchorse.bbs_mod.ui.framework.tooltips.LabelTooltip;
+import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
@@ -25,6 +29,7 @@ import java.util.List;
 public class UIDashboardPanels extends UIElement
 {
     private static final int TASKBAR_HEIGHT = 20;
+    public static final Direction[] SIDES = {Direction.BOTTOM, Direction.TOP, Direction.LEFT, Direction.RIGHT};
     private static final int REVEAL_STRIP = 16;
     private static final long REVEAL_HOVER_MS = 350L;
 
@@ -44,6 +49,7 @@ public class UIDashboardPanels extends UIElement
     private long taskbarLastPointerOverMs = System.currentTimeMillis();
     private long revealStripEnteredMs;
     private int lastDashboardSlide = -1;
+    private Direction side = Direction.BOTTOM;
 
     /**
      * @deprecated Kept for backward compatibility. Use {@link #renderHighlight(Batcher2D, Area, Direction)}
@@ -71,48 +77,7 @@ public class UIDashboardPanels extends UIElement
      */
     public static void renderHighlight(Batcher2D batcher, Area area, Direction direction)
     {
-        int radius = BBSSettings.cornerWidget();
-
-        if (radius > 0)
-        {
-            int line = BBSSettings.tabActiveLineColor();
-            int fill = BBSSettings.tabActiveGradientColor();
-
-            if (fill == 0)
-            {
-                fill = BBSSettings.primaryColor(Colors.A50);
-            }
-
-            batcher.roundedFrame(area.x, area.y, area.w, area.h, radius, 1F, line, fill);
-
-            return;
-        }
-
-        int color = BBSSettings.accentColorRGB();
-        int bar = Colors.A100 | color;
-        int near = Colors.A75 | color;
-        int far = color;
-        int t = 2;
-
-        switch (direction)
-        {
-            case TOP:
-                batcher.box(area.x, area.y, area.ex(), area.y + t, bar);
-                batcher.gradientVBox(area.x, area.y + t, area.ex(), area.ey(), near, far);
-                break;
-            case BOTTOM:
-                batcher.box(area.x, area.ey() - t, area.ex(), area.ey(), bar);
-                batcher.gradientVBox(area.x, area.y, area.ex(), area.ey() - t, far, near);
-                break;
-            case LEFT:
-                batcher.box(area.x, area.y, area.x + t, area.ey(), bar);
-                batcher.gradientHBox(area.x + t, area.y, area.ex(), area.ey(), near, far);
-                break;
-            case RIGHT:
-                batcher.box(area.ex() - t, area.y, area.ex(), area.ey(), bar);
-                batcher.gradientHBox(area.x, area.y, area.ex() - t, area.ey(), far, near);
-                break;
-        }
+        batcher.highlight(area, direction);
     }
 
     public UIDashboardPanels()
@@ -126,24 +91,92 @@ public class UIDashboardPanels extends UIElement
         this.panelButtons.relative(this.pinned).x(1F, 5).h(20).wTo(this.taskBar.area, 1F).column(0).scroll();
         this.panelButtons.scroll.cancelScrolling().noScrollbar();
         this.panelButtons.scroll.scrollSpeed = 5;
-        this.panelButtons.preRender((context) ->
-        {
-            for (int i = 0, c = this.panels.size(); i < c; i++)
-            {
-                UIIcon button = (UIIcon) this.panelButtons.getChildren().get(i);
-                boolean active = this.panel == this.panels.get(i);
-
-                button.active(active);
-
-                if (active && BBSSettings.cornerWidget() <= 0)
-                {
-                    renderHighlight(context.batcher, button.area, Direction.BOTTOM);
-                }
-            }
-        });
 
         this.taskBar.add(new UIRenderable(this::renderBackground), this.pinned, this.panelButtons);
+        this.taskBar.context(this::fillSideMenu);
         this.add(this.taskBar);
+    }
+
+    public static Direction getSettingsSide()
+    {
+        int index = BBSSettings.taskbarSide == null ? 0 : BBSSettings.taskbarSide.get();
+
+        return SIDES[MathUtils.clamp(index, 0, SIDES.length - 1)];
+    }
+
+    public static IKey[] getSideLabels()
+    {
+        return new IKey[] {UIKeys.DASHBOARD_TASKBAR_SIDE_BOTTOM, UIKeys.DASHBOARD_TASKBAR_SIDE_TOP,
+            UIKeys.DASHBOARD_TASKBAR_SIDE_LEFT, UIKeys.DASHBOARD_TASKBAR_SIDE_RIGHT};
+    }
+
+    public Direction getSide()
+    {
+        return this.side;
+    }
+
+    public void setSide(Direction side)
+    {
+        if (this.side == side)
+        {
+            return;
+        }
+
+        this.side = side;
+        this.taskBar.resetFlex().relative(this);
+        this.pinned.resetFlex().relative(this.taskBar);
+        this.panelButtons.resetFlex().relative(this.pinned);
+
+        if (side.isVertical())
+        {
+            this.pinned.h(TASKBAR_HEIGHT).row(0).resize();
+            this.panelButtons.x(1F, 5).h(TASKBAR_HEIGHT).wTo(this.taskBar.area, 1F).row(0).scroll();
+            this.panelButtons.scroll.direction = ScrollDirection.HORIZONTAL;
+        }
+        else
+        {
+            this.pinned.w(TASKBAR_HEIGHT).column(0).vertical();
+            this.panelButtons.y(1F, 5).w(TASKBAR_HEIGHT).hTo(this.taskBar.area, 1F).column(0).vertical().scroll();
+            this.panelButtons.scroll.direction = ScrollDirection.VERTICAL;
+        }
+
+        for (UIIcon icon : this.taskBar.getChildren(UIIcon.class))
+        {
+            if (icon.tooltip instanceof LabelTooltip tooltip)
+            {
+                tooltip.direction = side.opposite();
+            }
+        }
+
+        for (UIIcon icon : this.panelButtons.getChildren(UIIcon.class))
+        {
+            icon.highlight(() -> icon.isActive() && BBSSettings.cornerWidget() <= 0, side);
+        }
+
+        this.panelButtons.scroll.setScroll(0);
+        int slide = Math.max(0, this.lastDashboardSlide);
+
+        this.lastDashboardSlide = -1;
+        this.applyTaskbarSlide(slide);
+    }
+
+    private void fillSideMenu(ContextMenuManager menu)
+    {
+        IKey[] labels = getSideLabels();
+
+        for (int i = 0; i < SIDES.length; i++)
+        {
+            int index = i;
+            Direction side = SIDES[i];
+
+            menu.action(switch (side)
+            {
+                case TOP -> Icons.ARROW_UP;
+                case LEFT -> Icons.ARROW_LEFT;
+                case RIGHT -> Icons.ARROW_RIGHT;
+                default -> Icons.ARROW_DOWN;
+            }, labels[i], this.side == side, () -> BBSSettings.taskbarSide.set(index));
+        }
     }
 
     public <T> T getPanel(Class<T> clazz)
@@ -277,9 +310,17 @@ public class UIDashboardPanels extends UIElement
         panel.setDashboardChromeHiddenAmount(slide / (float) TASKBAR_HEIGHT);
     }
 
-    private void setPanelPlacement(UIDashboardPanel panel, int bottomInset)
+    private void setPanelPlacement(UIDashboardPanel panel, int inset)
     {
-        panel.resetFlex().relative(this).w(1F).h(1F, -bottomInset);
+        panel.resetFlex().relative(this).w(1F).h(1F);
+
+        switch (this.side)
+        {
+            case TOP -> panel.y(inset).h(1F, -inset);
+            case LEFT -> panel.x(inset).w(1F, -inset);
+            case RIGHT -> panel.w(1F, -inset);
+            default -> panel.h(1F, -inset);
+        }
     }
 
     public UIIcon registerPanel(UIDashboardPanel panel, IKey tooltip, Icon icon)
@@ -430,9 +471,18 @@ public class UIDashboardPanels extends UIElement
 
     private UIIcon createPanelButton(UIDashboardPanel panel, IKey tooltip, Icon icon)
     {
-        UIIcon button = new UIIcon(icon, (b) -> this.setPanel(panel));
+        UIIcon button = new UIIcon(icon, (b) -> this.setPanel(panel))
+        {
+            @Override
+            public void render(UIContext context)
+            {
+                this.active(UIDashboardPanels.this.panel == panel);
+                super.render(context);
+            }
+        };
 
-        button.tooltip(tooltip, Direction.TOP);
+        button.highlight(() -> this.panel == panel && BBSSettings.cornerWidget() <= 0, this.side);
+        button.tooltip(tooltip, this.side.opposite());
 
         return button;
     }
@@ -461,12 +511,20 @@ public class UIDashboardPanels extends UIElement
         Area a = this.pinned.area;
 
         context.batcher.box(area.x, area.y, area.ex(), area.ey(), BBSSettings.chromeSurface());
-        context.batcher.box(a.ex() + 2, a.y + 3, a.ex() + 3, a.ey() - 3, BBSSettings.color(BBSSettings.dividerColor(), Colors.A50));
+        if (this.side.isVertical())
+        {
+            context.batcher.box(a.ex() + 2, a.y + 3, a.ex() + 3, a.ey() - 3, BBSSettings.color(BBSSettings.dividerColor(), Colors.A50));
+        }
+        else
+        {
+            context.batcher.box(a.x + 3, a.ey() + 2, a.ex() - 3, a.ey() + 3, BBSSettings.color(BBSSettings.dividerColor(), Colors.A50));
+        }
     }
 
     @Override
     public void render(UIContext context)
     {
+        this.setSide(getSettingsSide());
         this.updateTaskbarAutoHide(context);
         super.render(context);
 
@@ -517,7 +575,15 @@ public class UIDashboardPanels extends UIElement
                 && context.mouseY < this.area.y + REVEAL_STRIP;
             boolean overBottomReveal = insideX && context.mouseY >= this.area.ey() - REVEAL_STRIP
                 && context.mouseY < this.area.ey();
-            boolean overReveal = overTopReveal || overBottomReveal;
+            boolean insideY = context.mouseY >= this.area.y && context.mouseY < this.area.ey();
+            boolean overSideReveal = insideY && switch (this.side)
+            {
+                case LEFT -> context.mouseX >= this.area.x && context.mouseX < this.area.x + REVEAL_STRIP;
+                case RIGHT -> context.mouseX >= this.area.ex() - REVEAL_STRIP && context.mouseX < this.area.ex();
+                case TOP -> overTopReveal;
+                default -> overBottomReveal;
+            };
+            boolean overReveal = overTopReveal || overSideReveal;
 
             if (overBar)
             {
@@ -567,7 +633,15 @@ public class UIDashboardPanels extends UIElement
         }
 
         this.lastDashboardSlide = slide;
-        this.taskBar.relative(this).y(1F, -TASKBAR_HEIGHT + slide).w(1F).h(TASKBAR_HEIGHT);
+        this.taskBar.resetFlex().relative(this);
+
+        switch (this.side)
+        {
+            case TOP -> this.taskBar.y(-slide).w(1F).h(TASKBAR_HEIGHT);
+            case LEFT -> this.taskBar.x(-slide).w(TASKBAR_HEIGHT).h(1F);
+            case RIGHT -> this.taskBar.x(1F, -TASKBAR_HEIGHT + slide).w(TASKBAR_HEIGHT).h(1F);
+            default -> this.taskBar.y(1F, -TASKBAR_HEIGHT + slide).w(1F).h(TASKBAR_HEIGHT);
+        }
 
         if (this.panel != null)
         {

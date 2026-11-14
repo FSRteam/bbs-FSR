@@ -10,12 +10,15 @@ import mchorse.bbs_mod.data.types.MapType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class Window
 {
@@ -28,6 +31,15 @@ public class Window
     private static long lastScroll;
     private static final Map<Integer, Long> standardCursors = new HashMap<>();
     private static int currentCursorShape = -1;
+    private static final Set<Object> cursorHolders = new HashSet<>();
+    private static final GLFWErrorCallback clipboardErrorPrint = GLFWErrorCallback.createPrint(System.err);
+    private static final GLFWErrorCallback clipboardErrorCallback = GLFWErrorCallback.create((error, description) ->
+    {
+        if (error != GLFW.GLFW_FORMAT_UNAVAILABLE)
+        {
+            clipboardErrorPrint.invoke(error, description);
+        }
+    });
 
     private static long lastLocalShiftPress;
     private static long lastLocalCtrlPress;
@@ -145,6 +157,8 @@ public class Window
 
     public static String getClipboard()
     {
+        GLFWErrorCallback previous = GLFW.glfwSetErrorCallback(clipboardErrorCallback);
+
         try
         {
             String string = GLFW.glfwGetClipboardString(getWindow());
@@ -153,6 +167,10 @@ public class Window
         }
         catch (Exception e)
         {}
+        finally
+        {
+            GLFW.glfwSetErrorCallback(previous);
+        }
 
         return "";
     }
@@ -223,6 +241,34 @@ public class Window
     public static void moveCursor(int x, int y)
     {
         GLFW.glfwSetCursorPos(getWindow(), x, y);
+    }
+
+    /** Each local input owner releases only its own request. Remote input never captures GLFW. */
+    public static void setCursorHidden(Object holder, boolean hidden)
+    {
+        if (hidden && !BBSUiRemoteHeldState.isActive())
+        {
+            cursorHolders.add(holder);
+        }
+        else
+        {
+            cursorHolders.remove(holder);
+        }
+
+        boolean hide = !cursorHolders.isEmpty() && !BBSUiRemoteHeldState.isActive();
+
+        if (!hide && Minecraft.getInstance().screen == null)
+        {
+            return;
+        }
+
+        long window = getWindow();
+        int mode = hide ? GLFW.GLFW_CURSOR_DISABLED : GLFW.GLFW_CURSOR_NORMAL;
+
+        if (GLFW.glfwGetInputMode(window, GLFW.GLFW_CURSOR) != mode)
+        {
+            GLFW.glfwSetInputMode(window, GLFW.GLFW_CURSOR, mode);
+        }
     }
 
     public static void setStandardCursor(int shape)

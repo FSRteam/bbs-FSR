@@ -35,16 +35,8 @@ public interface RigBone
     Transform getBoneTransform();
 
     /**
-     * Where the bone sits before anything poses it, in its parent's frame.
-     *
-     * <p>Upstream declares this abstract and returns {@code initial.translate} on a cubic group.
-     * FSR keeps it a {@code default} that returns {@code null} on purpose: the only consumer
-     * R5-3 brings (the bake) never calls it, and the BOBJ skeleton has no rest translation to
-     * return — its rest pose is encoded in the {@code boneMat} / {@code relBoneMat} /
-     * {@code invBoneMat} matrices rather than in a translation vector. Implementing one for BOBJ
-     * would mean inventing a conversion with no upstream counterpart to check it against, so the
-     * gap is declared here instead of papered over. A later batch that actually needs a rest
-     * translation can give each skeleton its own answer then.
+     * The rest translation in the skeleton's authored frame. External rigs may omit it;
+     * cubic groups and BOBJ bones provide their initial channel/bind-matrix translation.
      */
     default Vector3f getRestTranslation()
     {

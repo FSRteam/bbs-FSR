@@ -78,6 +78,7 @@ public final class InteractionActionSemanticsTest
         bootstrapStandaloneMinecraftRuntime();
 
         settingsDefaultsAreSafeBeforeRegistration();
+        DamageControlOwnershipTest.runAll();
         preservesActionPlayerBinaryApi();
         recordsOnlyConsumedResults();
         recordsOnlyCommittedBlockBreaks();
@@ -137,7 +138,7 @@ public final class InteractionActionSemanticsTest
             BBSSettings.duration = null;
             check(BBSSettings.getDefaultKeyframeShape() == KeyframeShape.SQUARE,
                 "unregistered keyframe shape setting no longer has a safe default");
-            check(BBSSettings.getDefaultDuration() == 30,
+            check(BBSSettings.getDefaultDuration() == 100,
                 "unregistered clip duration setting no longer has its configured default");
         }
         finally

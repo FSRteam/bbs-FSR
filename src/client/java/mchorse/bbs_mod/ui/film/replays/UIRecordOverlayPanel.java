@@ -86,6 +86,7 @@ public class UIRecordOverlayPanel extends UIMessageOverlayPanel
 
         this.bar.relative(this.content).x(0.5F).y(1F, -6).w(1F, -12).anchor(0.5F, 1F).row().resize();
         this.content.add(this.bar);
+        this.bottom = this.bar;
 
         this.keys().register(Keys.RECORDING_GROUP_ALL, this.all::clickItself);
         this.keys().register(Keys.RECORDING_GROUP_LEFT_STICK, this.left::clickItself);

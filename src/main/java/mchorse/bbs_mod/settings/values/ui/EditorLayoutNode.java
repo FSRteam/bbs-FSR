@@ -40,11 +40,12 @@ public abstract class EditorLayoutNode
     /** Return a new tree with panel ids id1 and id2 swapped. */
     public abstract EditorLayoutNode copyWithSwappedIds(String id1, String id2);
 
+    /** Reads a tree; the owning editor chooses the default for unreadable data. */
     public static EditorLayoutNode fromData(BaseType data)
     {
         if (data == null || !data.isMap())
         {
-            return defaultFilmLayout();
+            return null;
         }
 
         MapType map = data.asMap();
@@ -53,13 +54,13 @@ public abstract class EditorLayoutNode
         if (TYPE_SPLITTER.equals(type))
         {
             String dir = map.getString("dir", DIR_V);
-            float ratio = MathUtils.clamp(map.getFloat("ratio", 0.5F), 0.05F, 0.95F);
+            float ratio = MathUtils.clamp(map.getFloat("ratio", 0.5F), MIN_RATIO, MAX_RATIO);
             EditorLayoutNode first = fromData(map.get("first"));
             EditorLayoutNode second = fromData(map.get("second"));
 
             if (first == null || second == null)
             {
-                return defaultFilmLayout();
+                return first == null ? second : first;
             }
 
             return new SplitterNode(DIR_H.equals(dir), ratio, first, second);
@@ -118,32 +119,32 @@ public abstract class EditorLayoutNode
             return new StackNode(panelIds, active);
         }
 
-        return defaultFilmLayout();
+        return null;
     }
 
-    /** Default: vertical 0.66 -> main | (horizontal 0.5 -> preview / editArea). */
+    /** Replay properties/list on the left, preview/timeline in the middle, edit area on the right. */
     public static EditorLayoutNode defaultFilmLayout()
     {
         return new SplitterNode(
             false,
-            0.1819149F,
+            0.7916667F,
             new SplitterNode(
-                true,
-                0.28659794F,
-                new PanelNode("replayProps"),
-                new PanelNode("replaysList")
-            ),
-            new SplitterNode(
-                true,
-                0.6659794F,
+                false,
+                0.25294888F,
                 new SplitterNode(
-                    false,
-                    0.793238F,
-                    new PanelNode("preview"),
-                    new PanelNode("editArea")
+                    true,
+                    0.28479657F,
+                    new PanelNode("replayProps"),
+                    new PanelNode("replaysList")
                 ),
-                new PanelNode("main")
-            )
+                new SplitterNode(
+                    true,
+                    0.6167024F,
+                    new PanelNode("preview"),
+                    new PanelNode("main")
+                )
+            ),
+            new PanelNode("editArea")
         );
     }
 
@@ -191,6 +192,11 @@ public abstract class EditorLayoutNode
         {
             return ((PanelNode) root).getPanelId().equals(leafId) ? newNode : root;
         }
+        if (!(root instanceof SplitterNode))
+        {
+            return root;
+        }
+
         SplitterNode s = (SplitterNode) root;
         EditorLayoutNode f2 = copyWithReplacedLeaf(s.first, leafId, newNode);
         if (f2 != s.first)

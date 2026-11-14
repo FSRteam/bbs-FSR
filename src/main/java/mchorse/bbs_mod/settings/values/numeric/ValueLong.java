@@ -8,6 +8,12 @@ import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 
 public class ValueLong extends BaseValueNumber<Long>
 {
+    @Override
+    public void setNumber(double value)
+    {
+        this.set(Math.round(value));
+    }
+
     public ValueLong(String id, Long defaultValue)
     {
         this(id, defaultValue, Long.MIN_VALUE, Long.MAX_VALUE);

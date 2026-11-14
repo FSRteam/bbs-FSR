@@ -8,6 +8,14 @@ import mchorse.bbs_mod.cubic.render.vao.ModelVAO;
 import mchorse.bbs_mod.cubic.render.vao.ModelVAORenderer;
 import mchorse.bbs_mod.cubic.weld.WeldBinding;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
+import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.utils.FormMaterial;
+import mchorse.bbs_mod.forms.renderers.utils.FormMaterialLevels;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
+import mchorse.bbs_mod.forms.renderers.utils.FormPbr;
+import mchorse.bbs_mod.utils.colors.Color;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.obj.shapes.ShapeKeys;
 import mchorse.bbs_mod.resources.Link;
@@ -121,34 +129,80 @@ public class CubicVAORenderer extends CubicCubeRenderer
             }
         }
 
-        if (groupVaos == null || groupVaos.isEmpty() || !group.visible)
+        if (groupVaos == null || groupVaos.isEmpty() || !group.isVisible())
         {
             return false;
         }
 
-        float r = this.r * group.color.r;
-        float g = this.g * group.color.g;
-        float b = this.b * group.color.b;
-        float a = this.a * group.color.a;
-        int light = this.light;
+        float groupR = this.r * group.color.r;
+        float groupG = this.g * group.color.g;
+        float groupB = this.b * group.color.b;
+        float groupA = this.a * group.color.a;
+        int groupLight = this.light;
 
         if (this.stencilMap != null)
         {
-            light = this.stencilMap.increment ? group.index : 0;
+            groupLight = this.stencilMap.increment ? group.index : 0;
         }
         else
         {
-            int u = (int) Lerps.lerp(light & '\uffff', LightTexture.FULL_BLOCK, MathUtils.clamp(group.lighting, 0F, 1F));
-            int v = light >> 16 & '\uffff';
+            int u = (int) Lerps.lerp(groupLight & '\uffff', LightTexture.FULL_BLOCK, MathUtils.clamp(group.lighting, 0F, 1F));
+            int v = groupLight >> 16 & '\uffff';
 
-            light = u | v << 16;
+            groupLight = u | v << 16;
         }
+
+        ModelForm form = this.model.form instanceof ModelForm modelForm ? modelForm : null;
 
         /* Resolve each material once per model draw. The render pass may visit the same material
          * from many groups, especially in high-face-count multi-texture models. */
         for (Map.Entry<String, ModelVAO> entry : groupVaos.entrySet())
         {
-            Texture texture = this.resolveTexture(entry.getKey());
+            String material = entry.getKey();
+
+            if (!FormMaterialLevels.materialVisible(form, material))
+            {
+                continue;
+            }
+
+            float r = groupR;
+            float g = groupG;
+            float b = groupB;
+            float a = groupA;
+            int light = groupLight;
+            Color overlayColor = null;
+            boolean cull = this.model.isCulling();
+            int culling = FormMaterialLevels.materialCulling(form, material);
+
+            if (culling != FormMaterial.CULLING_MODEL)
+            {
+                cull = culling == FormMaterial.CULLING_ON;
+            }
+
+            if (this.stencilMap == null && form != null)
+            {
+                Color tint = FormMaterialLevels.materialColor(form, material);
+
+                if (tint != null)
+                {
+                    r *= tint.r;
+                    g *= tint.g;
+                    b *= tint.b;
+                    a *= tint.a;
+                }
+
+                float glow = FormMaterialLevels.materialGlow(form, material);
+                int u = (int) Lerps.lerp(light & '\uffff', LightTexture.FULL_BLOCK, glow);
+                light = u | (light >> 16 & '\uffff') << 16;
+                if (this.overlay == OverlayTexture.NO_OVERLAY)
+                {
+                    overlayColor = FormOverlay.combine(form, material, group);
+                }
+            }
+
+            int overlay = overlayColor == null ? this.overlay : 0;
+            int overlayArgb = overlayColor == null ? 0 : overlayColor.getARGBColor();
+            Texture texture = this.resolveTexture(material);
 
             if (texture == null)
             {
@@ -167,11 +221,21 @@ public class CubicVAORenderer extends CubicCubeRenderer
                     BBSModClient.getTextures().bindTexture(texture);
                 }
 
-                FormTranslucentQueue.setPassMode(this.program, FormTranslucentQueue.PASS_OPAQUE);
-                ModelVAORenderer.render(this.program, entry.getValue(), modelView, normalMat, r, g, b, a, light, this.overlay);
-                FormTranslucentQueue.setPassMode(this.program, FormTranslucentQueue.PASS_SINGLE);
+                int previousOverlay = overlayColor == null ? -1 : FormOverlay.bind(overlayColor);
+                try
+                {
+                    this.setCulling(cull);
+                    FormTranslucentQueue.setPassMode(this.program, FormTranslucentQueue.PASS_OPAQUE);
+                    ModelVAORenderer.render(this.program, entry.getValue(), modelView, normalMat, r, g, b, a, light, overlay);
+                }
+                finally
+                {
+                    FormTranslucentQueue.setPassMode(this.program, FormTranslucentQueue.PASS_SINGLE);
+                    this.setCulling(this.model.isCulling());
+                    if (previousOverlay != -1) FormOverlay.unbind(previousOverlay);
+                }
                 FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(), texture,
-                    modelView, normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                    modelView, normalMat, r, g, b, a, light, overlay, cull).overlayColor(overlayColor));
             }
             else if (FormTranslucentQueue.needsWholeDefer(this.program, this.stencilMap, texture, a))
             {
@@ -183,27 +247,27 @@ public class CubicVAORenderer extends CubicCubeRenderer
                 {
                     FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
                         () -> program, FormTranslucentQueue.PASS_TEX_OPAQUE, true, texture, modelView,
-                        normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                        normalMat, r, g, b, a, light, overlay, cull).overlayColor(overlayColor));
                     FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
                         () -> program, FormTranslucentQueue.PASS_TEX_TRANSLUCENT, true, texture, modelView,
-                        normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                        normalMat, r, g, b, a, light, overlay, cull).overlayColor(overlayColor));
                 }
                 else
                 {
                     FormTranslucentQueue.add(new FormTranslucentQueue.ModelVAOCommand(entry.getValue(),
                         () -> program, FormTranslucentQueue.PASS_SINGLE, true, texture, modelView,
-                        normalMat, r, g, b, a, light, this.overlay, this.model.isCulling()));
+                        normalMat, r, g, b, a, light, overlay, cull).overlayColor(overlayColor));
                 }
             }
             else
             {
-                this.immediateDraws.add(new ImmediateDraw(texture,
-                    new ModelVAORenderer.BatchDraw(entry.getValue(), modelView, normalMat, r, g, b, a, light, this.overlay),
+                this.immediateDraws.add(new ImmediateDraw(new Appearance(texture, cull, overlayArgb),
+                    new ModelVAORenderer.BatchDraw(entry.getValue(), modelView, normalMat, r, g, b, a, light, overlay),
                     a >= 1F && (texture == null || !texture.hasTranslucency())));
             }
         }
 
-        this.collectGlint(stack, group, model, groupVaos, light);
+        this.collectGlint(stack, group, model, groupVaos, groupLight);
 
         return false;
     }
@@ -254,6 +318,8 @@ public class CubicVAORenderer extends CubicCubeRenderer
 
         Link link = this.textureResolver.apply(material);
         Texture texture = link == null ? null : BBSModClient.getTextures().getTexture(link);
+        ModelForm form = this.model.form instanceof ModelForm modelForm ? modelForm : null;
+        texture = FormPbr.resolveAlbedo(form, material, link, texture);
 
         this.textureCache.put(material, texture);
 
@@ -285,57 +351,77 @@ public class CubicVAORenderer extends CubicCubeRenderer
 
         if (opaque)
         {
-            Map<Texture, List<ModelVAORenderer.BatchDraw>> batches = new LinkedHashMap<>();
+            Map<Appearance, List<ModelVAORenderer.BatchDraw>> batches = new LinkedHashMap<>();
 
             for (ImmediateDraw draw : this.immediateDraws)
             {
-                batches.computeIfAbsent(draw.texture(), (key) -> new ArrayList<>()).add(draw.draw());
+                batches.computeIfAbsent(draw.appearance(), (key) -> new ArrayList<>()).add(draw.draw());
             }
 
-            for (Map.Entry<Texture, List<ModelVAORenderer.BatchDraw>> entry : batches.entrySet())
+            for (Map.Entry<Appearance, List<ModelVAORenderer.BatchDraw>> entry : batches.entrySet())
             {
-                if (entry.getKey() != null)
-                {
-                    BBSModClient.getTextures().bindTexture(entry.getKey());
-                }
-
-                ModelVAORenderer.renderBatch(this.program, entry.getValue());
+                this.renderImmediateBatch(entry.getKey(), entry.getValue());
             }
         }
         else
         {
-            Texture currentTexture = null;
+            Appearance currentAppearance = null;
             List<ModelVAORenderer.BatchDraw> batch = new ArrayList<>();
 
             for (ImmediateDraw draw : this.immediateDraws)
             {
-                if (!batch.isEmpty() && draw.texture() != currentTexture)
+                if (!batch.isEmpty() && !draw.appearance().equals(currentAppearance))
                 {
-                    this.renderImmediateBatch(currentTexture, batch);
+                    this.renderImmediateBatch(currentAppearance, batch);
                     batch = new ArrayList<>();
                 }
 
-                currentTexture = draw.texture();
+                currentAppearance = draw.appearance();
                 batch.add(draw.draw());
             }
 
-            this.renderImmediateBatch(currentTexture, batch);
+            this.renderImmediateBatch(currentAppearance, batch);
         }
 
         this.immediateDraws.clear();
     }
 
-    private void renderImmediateBatch(Texture texture, List<ModelVAORenderer.BatchDraw> batch)
+    private void setCulling(boolean cull)
     {
-        if (texture != null)
-        {
-            BBSModClient.getTextures().bindTexture(texture);
-        }
-
-        ModelVAORenderer.renderBatch(this.program, batch);
+        if (cull) RenderSystem.enableCull();
+        else RenderSystem.disableCull();
     }
 
-    private static record ImmediateDraw(Texture texture, ModelVAORenderer.BatchDraw draw, boolean opaque)
+    private void renderImmediateBatch(Appearance appearance, List<ModelVAORenderer.BatchDraw> batch)
+    {
+        if (appearance == null || batch.isEmpty())
+        {
+            return;
+        }
+
+        if (appearance.texture() != null)
+        {
+            BBSModClient.getTextures().bindTexture(appearance.texture());
+        }
+
+        int previous = appearance.overlayArgb() == 0 ? -1 : FormOverlay.bind(Color.rgba(appearance.overlayArgb()));
+        this.setCulling(appearance.cull());
+
+        try
+        {
+            ModelVAORenderer.renderBatch(this.program, batch);
+        }
+        finally
+        {
+            this.setCulling(this.model.isCulling());
+            if (previous != -1) FormOverlay.unbind(previous);
+        }
+    }
+
+    private record Appearance(Texture texture, boolean cull, int overlayArgb)
+    {}
+
+    private record ImmediateDraw(Appearance appearance, ModelVAORenderer.BatchDraw draw, boolean opaque)
     {}
 
     /**
@@ -361,8 +447,11 @@ public class CubicVAORenderer extends CubicCubeRenderer
         Matrix4f modelView = ModelVAORenderer.captureModelView(stack);
         Matrix3f normalMat = new Matrix3f(stack.last().normal());
 
-        for (ModelVAO vao : groupVaos.values())
+        for (Map.Entry<String, ModelVAO> entry : groupVaos.entrySet())
         {
+            ModelForm form = this.model.form instanceof ModelForm modelForm ? modelForm : null;
+            if (!FormMaterialLevels.materialVisible(form, entry.getKey())) continue;
+            ModelVAO vao = entry.getValue();
             this.glintCommands.add(new FormTranslucentQueue.GlintVAOCommand(
                 group.glintMode, group.glintSpeed, group.glintColor, group.glintTransform,
                 vao, modelView, normalMat, light, this.overlay));

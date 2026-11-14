@@ -1,7 +1,10 @@
 package mchorse.bbs_mod.forms;
 
+import com.mojang.logging.LogUtils;
+import mchorse.bbs_mod.api.client.events.FormRenderEvents;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
+import mchorse.bbs_mod.forms.forms.VideoForm;
 import mchorse.bbs_mod.forms.forms.BlockForm;
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -19,6 +22,7 @@ import mchorse.bbs_mod.forms.forms.TrailForm;
 import mchorse.bbs_mod.forms.forms.VanillaParticleForm;
 import mchorse.bbs_mod.forms.renderers.AnchorFormRenderer;
 import mchorse.bbs_mod.forms.renderers.BillboardFormRenderer;
+import mchorse.bbs_mod.forms.renderers.VideoFormRenderer;
 import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.BlockFormRenderer;
 import mchorse.bbs_mod.forms.renderers.ExtrudedFormRenderer;
@@ -35,29 +39,36 @@ import mchorse.bbs_mod.forms.renderers.ParticleFormRenderer;
 import mchorse.bbs_mod.forms.renderers.StructureFormRenderer;
 import mchorse.bbs_mod.forms.renderers.TrailFormRenderer;
 import mchorse.bbs_mod.forms.renderers.VanillaParticleFormRenderer;
+import mchorse.bbs_mod.forms.structure.BakedStructure;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.Util;
-
+import org.slf4j.Logger;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedMap;
+import java.util.Set;
 
 public class FormUtilsClient
 {
+    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final Set<String> reportedRenderFailures = new HashSet<>();
+
     private static Map<Class, IFormRendererFactory> map = new HashMap<>();
     private static CustomVertexConsumerProvider customVertexConsumerProvider;
     private static Deque<Form> currentForm = new ArrayDeque<>();
 
-    static
+    private static CustomVertexConsumerProvider createProvider()
     {
         SequencedMap<RenderType, ByteBufferBuilder> sortedMap = Util.make(new LinkedHashMap<>(), map -> {
             assignBufferBuilder(map, Sheets.solidBlockSheet());
@@ -72,26 +83,33 @@ public class FormUtilsClient
             assignBufferBuilder(map, RenderType.cutoutMipped());
             assignBufferBuilder(map, Sheets.bannerSheet());
             assignBufferBuilder(map, Sheets.translucentCullBlockSheet());
+            /* Keep the block overlay beside the translucent layer it replaces. */
+            assignBufferBuilder(map, BlockFormRenderer.OVERLAY_TRANSLUCENT_LAYER);
             assignBufferBuilder(map, Sheets.shieldSheet());
             assignBufferBuilder(map, Sheets.bedSheet());
             assignBufferBuilder(map, Sheets.shulkerBoxSheet());
             assignBufferBuilder(map, Sheets.signSheet());
             assignBufferBuilder(map, Sheets.hangingSignSheet());
             map.put(Sheets.chestSheet(), new ByteBufferBuilder(786432));
-            assignBufferBuilder(map, RenderType.glint());
             assignBufferBuilder(map, RenderType.armorEntityGlint());
-            assignBufferBuilder(map, RenderType.glint());
             assignBufferBuilder(map, RenderType.glint());
             assignBufferBuilder(map, RenderType.glintTranslucent());
             assignBufferBuilder(map, RenderType.entityGlint());
             assignBufferBuilder(map, RenderType.entityGlintDirect());
             assignBufferBuilder(map, RenderType.waterMask());
             ModelBakery.DESTROY_TYPES.forEach(renderLayer -> assignBufferBuilder(map, renderLayer));
+            /* A structure's second color pass must follow all its base geometry. */
+            assignBufferBuilder(map, BakedStructure.OVERLAY_LAYER);
         });
 
-        customVertexConsumerProvider = new CustomVertexConsumerProvider(new ByteBufferBuilder(1536), sortedMap);
+        return new CustomVertexConsumerProvider(new ByteBufferBuilder(1536), sortedMap);
+    }
 
-        register(BillboardForm.class, BillboardFormRenderer::new);
+    /** Register built-in renderers during client setup, before addon registration. */
+    public static void setup()
+    {
+        register(BillboardForm.class, (form) -> new BillboardFormRenderer<>(form));
+        register(VideoForm.class, VideoFormRenderer::new);
         register(ExtrudedForm.class, ExtrudedFormRenderer::new);
         register(LabelForm.class, LabelFormRenderer::new);
         register(ModelForm.class, ModelFormRenderer::new);
@@ -115,6 +133,12 @@ public class FormUtilsClient
 
     public static CustomVertexConsumerProvider getProvider()
     {
+        /* Render layers and their buffers are safe to allocate once the game is ready. */
+        if (customVertexConsumerProvider == null)
+        {
+            customVertexConsumerProvider = createProvider();
+        }
+
         return customVertexConsumerProvider;
     }
 
@@ -220,11 +244,31 @@ public class FormUtilsClient
 
     public static void renderUI(Form form, UIContext context, int x1, int y1, int x2, int y2, boolean selected)
     {
+        BBSProfiler.count(BBSProfiler.Section.UI_PREVIEW_RENDERS);
+        BBSProfiler.begin(BBSProfiler.Timer.UI_PREVIEWS);
+
+        try
+        {
+            FormRenderer renderer = getRenderer(form);
+
+            if (renderer != null)
+            {
+                renderer.renderUI(context, x1, y1, x2, y2, selected);
+            }
+        }
+        finally
+        {
+            BBSProfiler.end(BBSProfiler.Timer.UI_PREVIEWS);
+        }
+    }
+
+    public static void renderPreview(Form form, UIContext context, int x1, int y1, int x2, int y2)
+    {
         FormRenderer renderer = getRenderer(form);
 
         if (renderer != null)
         {
-            renderer.renderUI(context, x1, y1, x2, y2, selected);
+            renderer.renderPreview(context, x1, y1, x2, y2);
         }
     }
 
@@ -245,16 +289,38 @@ public class FormUtilsClient
 
             try
             {
+                FormRenderEvents.BEFORE.invoker().onFormRender(form, context);
                 renderer.render(context);
             }
             catch (Exception e)
             {
-                e.printStackTrace();
+                reportRenderFailure(form, e);
             }
             finally
             {
-                currentForm.pop();
+                try
+                {
+                    FormRenderEvents.AFTER.invoker().onFormRender(form, context);
+                }
+                finally
+                {
+                    currentForm.pop();
+                }
             }
+        }
+    }
+
+    /** Report each distinct render failure once instead of logging it every frame. */
+    private static void reportRenderFailure(Form form, Exception exception)
+    {
+        StackTraceElement[] trace = exception.getStackTrace();
+        String key = form.getClass().getName() + "|" + exception.getClass().getName()
+            + "|" + (trace.length == 0 ? "" : trace[0].toString());
+
+        if (reportedRenderFailures.add(key))
+        {
+            LOGGER.error("[BBS form] {} failed to render - further repeats of this failure are silenced.",
+                form.getClass().getSimpleName(), exception);
         }
     }
 

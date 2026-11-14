@@ -246,7 +246,7 @@ public final class KeyframeInteractionTest
         String commit = section(
             keyframeEditor,
             "privatevoidreplaceEditor(",
-            "publicvoidsetTimelineVisible(booleanvisible)"
+            "publicvoidsetPropertiesVisible(booleanvisible)"
         );
 
         check(keyframeEditor.contains("privatelongeditorGeneration;"),
@@ -255,11 +255,12 @@ public final class KeyframeInteractionTest
                 && !replacement.contains("this.add(replacement)"),
             "pickKeyframe still performs an unpaired deferred remove/add");
         assertOrdered(commit,
-            "if(previous!=null&&previous.getParent()==this){this.remove(previous);}",
+            "if(previous!=null){previous.removeFromParent();}",
             "if(generation!=this.editorGeneration||this.editor!=replacement){return;}",
             "for(UIKeyframeFactorymounted:newArrayList<>(this.getChildren(UIKeyframeFactory.class)))",
             "if(mounted!=replacement&&mounted.getParent()==this){this.remove(mounted);}",
-            "if(replacement!=null&&replacement.getParent()!=this){this.add(replacement);this.moveToFront(this.splitter);}",
+            "this.attachPropertiesPanel(replacement,this.propertiesWidth);",
+            "this.moveToFront(this.splitter);",
             "this.target.resize();",
             "this.resize();",
             "replacement.restoreScroll();",
@@ -267,6 +268,13 @@ public final class KeyframeInteractionTest
         );
         check(commit.contains("generation==this.editorGeneration&&this.editor==replacement"),
             "stale replacement callback can restore a newer property panel");
+        String timelinePanel = compact(read(root.resolve(
+            "src/client/java/mchorse/bbs_mod/ui/framework/elements/utils/UITimelinePanel.java")));
+        check(keyframeEditor.contains("extendsUITimelinePanel")
+                && timelinePanel.contains("(this.target==null?this:this.target).add(panel);")
+                && timelinePanel.contains("panel.removeFromParent();")
+                && timelinePanel.contains("panel.setVisible(visible);"),
+            "shared timeline owner lost property-panel attachment, removal or visibility");
     }
 
     /**
@@ -305,8 +313,8 @@ public final class KeyframeInteractionTest
 
         /* Boolean editor transform-key shortcut. */
         check(booleanFactory.contains("this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE")
-                && booleanFactory.contains("this.setValue(!this.keyframe.getValue());")
-                && booleanFactory.contains("this.toggle.setValue(this.keyframe.getValue());"),
+                && booleanFactory.contains("this.setValue(!this.getDisplayValue());")
+                && booleanFactory.contains("this.toggle.setValue(this.getDisplayValue());"),
             "the boolean keyframe editor does not toggle through the transform-key shortcut");
 
         /* Folded tracks: bulk operations reach every sheet, and a pick reveals the row it selected. */
@@ -332,8 +340,9 @@ public final class KeyframeInteractionTest
         check(keyframes.contains("publicvoidcancelCachedKeyframes()")
                 && keyframes.contains("this.restoreKeyframes();"),
             "cancelling a numeric edit does not restore the captured keyframes silently");
-        check(numericFactory.contains("privatevoidapplyEditingValue(doublevalue)")
-                && numericFactory.contains("setValue(this.keyframe.getValue(),false);")
+        String numericSample = section(numericFactory, "privatevoidapplyEditingValue(doublevalue)", "privateclassAcceptRejectOverlay");
+        check(numericSample.contains("this.editor.getGraph().setValue(this.createValueConverter().convert(value),false,true);")
+                && !numericSample.contains(".preNotify(") && !numericSample.contains(".postNotify(")
                 && !numericFactory.contains("editingInitialValue"),
             "a numeric drag still notifies per sample or writes the initial value back on cancel");
 

@@ -56,4 +56,10 @@ public class ValueLinkList extends BaseValueBasic<List<Link>>
             }
         }
     }
+
+    @Override
+    protected List<Link> copyValue(List<Link> value)
+    {
+        return value == null ? null : new ArrayList<>(value);
+    }
 }

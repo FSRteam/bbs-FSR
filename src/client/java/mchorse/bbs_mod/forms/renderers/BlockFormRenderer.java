@@ -11,17 +11,21 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.BlockForm;
 import mchorse.bbs_mod.forms.renderers.utils.FluidVertexConsumer;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import mchorse.bbs_mod.forms.renderers.utils.SingleBlockRenderView;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.colors.OverlayBlend;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
@@ -35,6 +39,9 @@ import org.joml.Vector3f;
 
 public class BlockFormRenderer extends FormRenderer<BlockForm>
 {
+    /** The culling translucent block shaders omit the overlay sampler. */
+    public static final RenderType OVERLAY_TRANSLUCENT_LAYER = RenderType.entityTranslucent(TextureAtlas.LOCATION_BLOCKS, false);
+
     public static final Color color = new Color();
 
     private final SingleBlockRenderView fluidView = new SingleBlockRenderView();
@@ -45,6 +52,23 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
     public BlockFormRenderer(BlockForm form)
     {
         super(form);
+    }
+
+    private static MultiBufferSource overlayProvider(MultiBufferSource consumers)
+    {
+        return (layer) -> consumers.getBuffer(
+            layer == Sheets.translucentCullBlockSheet() || layer == Sheets.translucentItemSheet()
+                ? OVERLAY_TRANSLUCENT_LAYER : layer);
+    }
+
+    private static void setupOverlay(RenderType layer, Color overlay)
+    {
+        if (layer == OVERLAY_TRANSLUCENT_LAYER)
+        {
+            RenderSystem.enableCull();
+        }
+
+        FormOverlay.bind(overlay);
     }
 
     @Override
@@ -67,15 +91,29 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
 
         Color set = Color.white();
         FormColorBlend.blend(set, this.form.color.get(), this.form.additiveColor.get());
+        Color overlay = this.form.overlayColor.get();
+        boolean overlayActive = OverlayBlend.isActive(overlay);
 
-        consumers.setSubstitute(null);
-        consumers.setUI(true);
-        this.renderBlock(matrices, consumers, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, false);
-        consumers.draw();
-        consumers.setUI(false);
-        consumers.setSubstitute(null);
+        try
+        {
+            if (overlayActive)
+            {
+                CustomVertexConsumerProvider.hijackVertexFormat((layer) -> setupOverlay(layer, overlay));
+            }
 
-        matrices.popPose();
+            consumers.setSubstitute(null);
+            consumers.setUI(true);
+            this.renderBlock(matrices, overlayActive ? overlayProvider(consumers) : consumers,
+                LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, false);
+            consumers.draw();
+        }
+        finally
+        {
+            consumers.setUI(false);
+            consumers.setSubstitute(null);
+            CustomVertexConsumerProvider.clearRunnables();
+            matrices.popPose();
+        }
     }
 
     @Override
@@ -83,6 +121,9 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
     {
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
         int light = context.light;
+        Color overlay = this.form.overlayColor.get();
+        boolean overlayActive = !context.isPicking() && context.overlay == OverlayTexture.NO_OVERLAY
+            && OverlayBlend.isActive(overlay);
 
         context.stack.pushPose();
 
@@ -112,7 +153,11 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
             }
             else
             {
-                CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
+                CustomVertexConsumerProvider.hijackVertexFormat((layer) ->
+                {
+                    RenderSystem.enableBlend();
+                    if (overlayActive) setupOverlay(layer, overlay);
+                });
             }
 
             Color set = Color.white();
@@ -127,11 +172,12 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
                 FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
             }
 
-        /* Keep the vanilla block vertex colors intact. Applying the generic form
-         * tint to chunk/model vertices turns Sodium/Iris block colors black when
-         * the layer does not provide an entity color attribute. */
-        consumers.setSubstitute(null);
-            this.renderBlock(context.stack, consumers, light, context.overlay, context.isPicking());
+            /* Keep the vanilla block vertex colors intact. Applying the generic form
+             * tint to chunk/model vertices turns Sodium/Iris block colors black when
+             * the layer does not provide an entity color attribute. */
+            consumers.setSubstitute(null);
+            this.renderBlock(context.stack, overlayActive ? overlayProvider(consumers) : consumers,
+                light, context.overlay, context.isPicking());
             consumers.draw();
 
             if (!context.isPicking())
@@ -190,7 +236,7 @@ public class BlockFormRenderer extends FormRenderer<BlockForm>
          * on top of its own model below. */
         if (!fluidState.isEmpty())
         {
-            RenderType layer = ItemBlockRenderTypes.getRenderLayer(fluidState);
+            RenderType layer = ItemBlockRenderTypes.getRenderType(fluidState.createLegacyBlock(), false);
             FluidVertexConsumer consumer = new FluidVertexConsumer(consumers.getBuffer(layer), matrices.last(), overlay);
 
             mc.getBlockRenderer().renderLiquid(BlockPos.ZERO, this.fluidView.set(state, light), consumer, state, fluidState);

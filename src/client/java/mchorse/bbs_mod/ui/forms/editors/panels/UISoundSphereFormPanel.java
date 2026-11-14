@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.forms.forms.sound.SoundSphereForm;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
@@ -16,7 +17,7 @@ public class UISoundSphereFormPanel extends UIAbstractSoundFormPanel<SoundSphere
     {
         super(editor);
 
-        this.radius = new UITrackpad((v) -> this.form.radius.set(v.floatValue()));
+        this.radius = UIValues.trackpad(() -> this.form.radius);
         this.radius.tooltip(UIKeys.FORMS_EDITORS_SOUND_RADIUS_TOOLTIP);
 
         this.addSourceOptions();

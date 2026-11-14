@@ -1,173 +1,97 @@
 package mchorse.bbs_mod.ui.particles.sections;
 
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.math.molang.expressions.MolangExpression;
+import mchorse.bbs_mod.particles.components.motion.MotionComponents;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentInitialSpeed;
-import mchorse.bbs_mod.particles.components.motion.ParticleComponentInitialSpin;
-import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotion;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionDynamic;
 import mchorse.bbs_mod.particles.components.motion.ParticleComponentMotionParametric;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcons;
-import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
-import mchorse.bbs_mod.ui.utils.UIConstants;
-import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.particles.utils.UIMolangExpression;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 
-public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<ParticleComponentMotion>
+/**
+ * Position motion: linear acceleration/drag (dynamic) or relative position (parametric), plus the
+ * initial speed. The dynamic/parametric toggle here only affects position — see
+ * {@link UIParticleSchemeRotationSection} for the independent rotation axis.
+ */
+public class UIParticleSchemeMotionSection extends UIParticleSchemeMotionAxisSection
 {
-    public UIElement position;
-    public UITextbox positionSpeed;
-    public UITextbox positionX;
-    public UITextbox positionY;
-    public UITextbox positionZ;
-    public UITextbox positionDrag;
-    public UIElement positionDragRow;
+    public UIMolangExpression speed;
+    public UIMolangExpression x;
+    public UIMolangExpression y;
+    public UIMolangExpression z;
+    public UIMolangExpression drag;
 
-    public UIElement rotation;
-    public UITextbox rotationAngle;
-    public UITextbox rotationRate;
-    public UITextbox rotationAcceleration;
-    public UITextbox rotationDrag;
-    public UIElement rotationDragRow;
-
-    private ParticleComponentInitialSpeed speed;
-    private ParticleComponentInitialSpin spin;
+    private ParticleComponentInitialSpeed initialSpeed;
 
     public UIParticleSchemeMotionSection(UIParticleSchemePanel parent)
     {
         super(parent);
 
-        this.positionSpeed = new UITextbox(10000, (str) ->
+        this.speed = new UIMolangExpression(() -> this.initialSpeed == null ? null : this.initialSpeed.speed,
+            (str) -> this.initialSpeed.speed = this.parse(str, this.initialSpeed.speed));
+        this.speed.editor(parent, "motion.speed");
+        this.speed.icon(Icons.ALL_DIRECTIONS).tooltip(UIKeys.SNOWSTORM_MOTION_POSITION_SPEED);
+        this.x = new UIMolangExpression(() -> this.position(0), (str) -> this.editPosition(0, str));
+        this.x.editor(parent, "motion.x");
+        this.x.icon(Icons.X).barColor(Colors.RED).tooltip(UIKeys.GENERAL_X);
+        this.y = new UIMolangExpression(() -> this.position(1), (str) -> this.editPosition(1, str));
+        this.y.editor(parent, "motion.y");
+        this.y.icon(Icons.Y).barColor(Colors.GREEN).tooltip(UIKeys.GENERAL_Y);
+        this.z = new UIMolangExpression(() -> this.position(2), (str) -> this.editPosition(2, str));
+        this.z.editor(parent, "motion.z");
+        this.z.icon(Icons.Z).barColor(Colors.BLUE).tooltip(UIKeys.GENERAL_Z);
+        this.drag = new UIMolangExpression(() ->
         {
-            this.speed.speed = this.parse(str, this.speed.speed);
-            this.editor.markUndoBoundary();
-        });
-        this.positionSpeed.placeholder(UIKeys.SNOWSTORM_MOTION_POSITION_SPEED);
-        this.positionSpeed.icon(Icons.ALL_DIRECTIONS);
+            ParticleComponentMotionDynamic dynamic = MotionComponents.dynamic(this.scheme);
 
-        this.positionX = new UITextbox(10000, (str) ->
+            return dynamic == null ? null : dynamic.motionDrag;
+        }, (str) ->
         {
-            if (this.component instanceof ParticleComponentMotionDynamic)
-            {
-                ParticleComponentMotionDynamic comp = (ParticleComponentMotionDynamic) this.component;
-                comp.motionAcceleration[0] = this.parse(str, comp.motionAcceleration[0]);
-            }
-            else
-            {
-                ParticleComponentMotionParametric comp = (ParticleComponentMotionParametric) this.component;
-                comp.position[0] = this.parse(str, comp.position[0]);
-            }
-            this.editor.markUndoBoundary();
-        });
-        this.positionX.placeholder(UIKeys.GENERAL_X);
-        this.positionX.icon(Icons.X).barColor(Colors.RED);
+            ParticleComponentMotionDynamic dynamic = MotionComponents.dynamic(this.scheme);
 
-        this.positionY = new UITextbox(10000, (str) ->
+            dynamic.motionDrag = this.parse(str, dynamic.motionDrag);
+        });
+        this.drag.editor(parent, "motion.drag");
+        this.drag.icon(Icons.REVERSE).tooltip(UIKeys.SNOWSTORM_MOTION_POSITION_DRAG);
+    }
+
+    private MolangExpression position(int index)
+    {
+        if (this.scheme == null)
         {
-            if (this.component instanceof ParticleComponentMotionDynamic)
-            {
-                ParticleComponentMotionDynamic comp = (ParticleComponentMotionDynamic) this.component;
-                comp.motionAcceleration[1] = this.parse(str, comp.motionAcceleration[1]);
-            }
-            else
-            {
-                ParticleComponentMotionParametric comp = (ParticleComponentMotionParametric) this.component;
-                comp.position[1] = this.parse(str, comp.position[1]);
-            }
-            this.editor.markUndoBoundary();
-        });
-        this.positionY.placeholder(UIKeys.GENERAL_Y);
-        this.positionY.icon(Icons.Y).barColor(Colors.GREEN);
+            return null;
+        }
 
-        this.positionZ = new UITextbox(10000, (str) ->
+        ParticleComponentMotionParametric parametric = MotionComponents.parametric(this.scheme);
+
+        if (parametric != null && parametric.drivesPosition)
         {
-            if (this.component instanceof ParticleComponentMotionDynamic)
-            {
-                ParticleComponentMotionDynamic comp = (ParticleComponentMotionDynamic) this.component;
-                comp.motionAcceleration[2] = this.parse(str, comp.motionAcceleration[2]);
-            }
-            else
-            {
-                ParticleComponentMotionParametric comp = (ParticleComponentMotionParametric) this.component;
-                comp.position[2] = this.parse(str, comp.position[2]);
-            }
-            this.editor.markUndoBoundary();
-        });
-        this.positionZ.placeholder(UIKeys.GENERAL_Z);
-        this.positionZ.icon(Icons.Z).barColor(Colors.BLUE);
+            return parametric.position[index];
+        }
 
-        this.positionDrag = new UITextbox(10000, (str) ->
+        ParticleComponentMotionDynamic dynamic = MotionComponents.dynamic(this.scheme);
+
+        return dynamic == null ? null : dynamic.motionAcceleration[index];
+    }
+
+    private void editPosition(int index, String string)
+    {
+        if (MotionComponents.isPositionParametric(this.scheme))
         {
-            ParticleComponentMotionDynamic comp = (ParticleComponentMotionDynamic) this.component;
-            comp.motionDrag = this.parse(str, comp.motionDrag);
-            this.editor.markUndoBoundary();
-        });
-        this.positionDrag.placeholder(UIKeys.SNOWSTORM_MOTION_POSITION_DRAG);
-        this.positionDrag.icon(Icons.REVERSE);
+            ParticleComponentMotionParametric parametric = MotionComponents.parametric(this.scheme);
 
-        this.rotationAngle = new UITextbox(10000, (str) ->
+            parametric.position[index] = this.parse(string, parametric.position[index]);
+        }
+        else
         {
-            this.spin.rotation = this.parse(str, this.spin.rotation);
-            this.editor.markUndoBoundary();
-        });
-        this.rotationAngle.placeholder(UIKeys.SNOWSTORM_MOTION_ROTATION_ANGLE);
-        this.rotationAngle.icon(Icons.ARC);
+            ParticleComponentMotionDynamic dynamic = MotionComponents.dynamic(this.scheme);
 
-        this.rotationRate = new UITextbox(10000, (str) ->
-        {
-            this.spin.rate = this.parse(str, this.spin.rate);
-            this.editor.markUndoBoundary();
-        });
-        this.rotationRate.placeholder(UIKeys.SNOWSTORM_MOTION_ROTATION_SPEED);
-        this.rotationRate.icon(Icons.ORBIT);
-
-        this.rotationAcceleration = new UITextbox(10000, (str) ->
-        {
-            if (this.component instanceof ParticleComponentMotionDynamic)
-            {
-                ParticleComponentMotionDynamic comp = (ParticleComponentMotionDynamic) this.component;
-                comp.rotationAcceleration = this.parse(str, comp.rotationAcceleration);
-            }
-            else
-            {
-                ParticleComponentMotionParametric comp = (ParticleComponentMotionParametric) this.component;
-                comp.rotation = this.parse(str, comp.rotation);
-            }
-            this.editor.markUndoBoundary();
-        });
-        this.rotationAcceleration.placeholder(UIKeys.SNOWSTORM_MOTION_ROTATION_ACCELERATION);
-        this.rotationAcceleration.icon(Icons.REFRESH);
-
-        this.rotationDrag = new UITextbox(10000, (str) ->
-        {
-            ParticleComponentMotionDynamic comp = (ParticleComponentMotionDynamic) this.component;
-            comp.rotationDrag = this.parse(str, comp.rotationDrag);
-            this.editor.markUndoBoundary();
-        });
-        this.rotationDrag.placeholder(UIKeys.SNOWSTORM_MOTION_ROTATION_DRAG);
-        this.rotationDrag.icon(Icons.REVERSE);
-
-        this.position = new UIElement();
-        this.position.column(UIConstants.MARGIN).vertical().stretch();
-        this.positionDragRow = this.labeledField(UIKeys.SNOWSTORM_MOTION_POSITION_DRAG, this.positionDrag);
-        this.position.add(UI.label(UIKeys.SNOWSTORM_MOTION_POSITION, 20).labelAnchor(0, 1F));
-        this.position.add(this.labeledField(UIKeys.SNOWSTORM_MOTION_POSITION_SPEED, this.positionSpeed));
-        this.position.add(this.labeledField(UIKeys.GENERAL_X, this.positionX));
-        this.position.add(this.labeledField(UIKeys.GENERAL_Y, this.positionY));
-        this.position.add(this.labeledField(UIKeys.GENERAL_Z, this.positionZ));
-
-        this.rotation = new UIElement();
-        this.rotation.column(UIConstants.MARGIN).vertical().stretch();
-        this.rotationDragRow = this.labeledField(UIKeys.SNOWSTORM_MOTION_ROTATION_DRAG, this.rotationDrag);
-        this.rotation.add(UI.label(UIKeys.SNOWSTORM_MOTION_ROTATION, 20).labelAnchor(0, 1F));
-        this.rotation.add(this.labeledField(UIKeys.SNOWSTORM_MOTION_ROTATION_ANGLE, this.rotationAngle));
-        this.rotation.add(this.labeledField(UIKeys.SNOWSTORM_MOTION_ROTATION_SPEED, this.rotationRate));
-        this.rotation.add(this.labeledField(UIKeys.SNOWSTORM_MOTION_ROTATION_ACCELERATION, this.rotationAcceleration));
-
-        this.fields.add(this.position, this.rotation);
+            dynamic.motionAcceleration[index] = this.parse(string, dynamic.motionAcceleration[index]);
+        }
     }
 
     @Override
@@ -177,75 +101,42 @@ public class UIParticleSchemeMotionSection extends UIParticleSchemeModeSection<P
     }
 
     @Override
-    protected void fillModes(UIIcons button)
+    protected boolean isParametric()
     {
-        button.add(Icons.ALL_DIRECTIONS, UIKeys.SNOWSTORM_MOTION_DYNAMIC);
-        button.add(Icons.GRAPH, UIKeys.SNOWSTORM_MOTION_PARAMETRIC);
+        return MotionComponents.isPositionParametric(this.scheme);
     }
 
     @Override
-    protected Class<ParticleComponentMotion> getBaseClass()
+    protected void applyMode(boolean parametric)
     {
-        return ParticleComponentMotion.class;
+        MotionComponents.setModes(this.scheme, parametric, MotionComponents.isRotationParametric(this.scheme));
     }
 
     @Override
-    protected Class getDefaultClass()
+    protected void fillFields()
     {
-        return ParticleComponentMotionDynamic.class;
-    }
+        this.initialSpeed = this.scheme.getOrCreate(ParticleComponentInitialSpeed.class);
 
-    @Override
-    protected Class getModeClass(int value)
-    {
-        if (value == 1)
+        this.speed.refresh();
+        this.x.refresh();
+        this.y.refresh();
+        this.z.refresh();
+        this.drag.refresh();
+
+        this.speed.removeFromParent();
+        this.x.removeFromParent();
+        this.y.removeFromParent();
+        this.z.removeFromParent();
+        this.drag.removeFromParent();
+
+        if (this.isParametric())
         {
-            return ParticleComponentMotionParametric.class;
-        }
-
-        return ParticleComponentMotionDynamic.class;
-    }
-
-    @Override
-    protected void fillData()
-    {
-        super.fillData();
-
-        this.speed = this.scheme.getOrCreate(ParticleComponentInitialSpeed.class);
-        this.spin = this.scheme.getOrCreate(ParticleComponentInitialSpin.class);
-
-        this.positionSpeed.setText(this.speed.speed == null ? "" : this.speed.speed.toString());
-        this.rotationAngle.setText(this.spin.rotation == null ? "" : this.spin.rotation.toString());
-        this.rotationRate.setText(this.spin.rate == null ? "" : this.spin.rate.toString());
-
-        if (this.component instanceof ParticleComponentMotionDynamic)
-        {
-            ParticleComponentMotionDynamic comp = (ParticleComponentMotionDynamic) this.component;
-            this.positionX.setText(comp.motionAcceleration[0] == null ? "" : comp.motionAcceleration[0].toString());
-            this.positionY.setText(comp.motionAcceleration[1] == null ? "" : comp.motionAcceleration[1].toString());
-            this.positionZ.setText(comp.motionAcceleration[2] == null ? "" : comp.motionAcceleration[2].toString());
-            this.positionDrag.setText(comp.motionDrag == null ? "" : comp.motionDrag.toString());
-            this.rotationAcceleration.setText(comp.rotationAcceleration == null ? "" : comp.rotationAcceleration.toString());
-            this.rotationDrag.setText(comp.rotationDrag == null ? "" : comp.rotationDrag.toString());
+            /* Parametric sets position directly — initial speed and drag don't apply. */
+            this.fields.add(this.x, this.y, this.z);
         }
         else
         {
-            ParticleComponentMotionParametric comp = (ParticleComponentMotionParametric) this.component;
-            this.positionX.setText(comp.position[0] == null ? "" : comp.position[0].toString());
-            this.positionY.setText(comp.position[1] == null ? "" : comp.position[1].toString());
-            this.positionZ.setText(comp.position[2] == null ? "" : comp.position[2].toString());
-            this.rotationAcceleration.setText(comp.rotation == null ? "" : comp.rotation.toString());
+            this.fields.add(this.speed, this.x, this.y, this.z, this.drag);
         }
-
-        this.positionDragRow.removeFromParent();
-        this.rotationDragRow.removeFromParent();
-
-        if (this.component instanceof ParticleComponentMotionDynamic)
-        {
-            this.position.add(this.positionDragRow);
-            this.rotation.add(this.rotationDragRow);
-        }
-
-        this.resizeParent();
     }
 }

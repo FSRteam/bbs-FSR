@@ -6,6 +6,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.context.UISimpleContextMenu;
@@ -19,7 +20,7 @@ import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.context.ContextAction;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.keyframes.factories.ItemStackKeyframeFactory;
+import mchorse.bbs_mod.data.GameRegistries;
 import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.core.component.DataComponents;
@@ -44,6 +45,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.BiConsumer;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.SpawnEggItem;
+import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 
 public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 {
@@ -54,6 +59,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
     private static final List<String> ITEM_IDS = new ArrayList<>();
     private static final List<String> BLOCK_IDS = new ArrayList<>();
+    private static final List<String> MOB_IDS = new ArrayList<>();
 
     private static final Map<String, String> ITEM_LABEL_CACHE = new HashMap<>();
     private static final Map<String, String> BLOCK_LABEL_CACHE = new HashMap<>();
@@ -79,6 +85,8 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             BLOCK_IDS.add(key.toString());
         }
 
+        for (ResourceLocation key : BuiltInRegistries.ENTITY_TYPE.keySet()) MOB_IDS.add(key.toString());
+        MOB_IDS.sort(String::compareToIgnoreCase);
         ITEM_IDS.sort(String::compareToIgnoreCase);
         BLOCK_IDS.sort(String::compareToIgnoreCase);
     }
@@ -137,6 +145,18 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         });
     }
 
+    public static String mobLabel(String id)
+    {
+        try
+        {
+            return BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id)).getDescription().getString();
+        }
+        catch (RuntimeException exception)
+        {
+            return id;
+        }
+    }
+
     private static ItemStack previewStackFor(PickerMode mode, String id)
     {
         return PREVIEW_STACK_CACHE.computeIfAbsent(mode.name() + "\0" + id, (k) ->
@@ -144,6 +164,12 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             try
             {
                 ResourceLocation rid = ResourceLocation.parse(id);
+
+                if (mode == PickerMode.MOB)
+                {
+                    SpawnEggItem egg = SpawnEggItem.byId(BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id)));
+                    return egg == null ? ItemStack.EMPTY : new ItemStack(egg);
+                }
 
                 if (mode == PickerMode.ITEM)
                 {
@@ -165,9 +191,13 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
     public enum PickerMode
     {
         ITEM,
-        BLOCK
+        BLOCK,
+        MOB
     }
 
+    private BiConsumer<String, String> mobCallback;
+    private String mobNbtText = "";
+    private UITextarea mobNbt;
     private final PickerMode mode;
     private final Consumer<ItemStack> itemCallback;
     private final Consumer<BlockState> blockCallback;
@@ -196,9 +226,20 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         return new UIUnifiedPickOverlayPanel(PickerMode.BLOCK, null, callback, ItemStack.EMPTY, current == null ? Blocks.AIR.defaultBlockState() : current);
     }
 
+    public static UIUnifiedPickOverlayPanel forMob(BiConsumer<String, String> callback, String mobID, String mobNBT)
+    {
+        UIUnifiedPickOverlayPanel panel = new UIUnifiedPickOverlayPanel(PickerMode.MOB, null, null, ItemStack.EMPTY, Blocks.AIR.defaultBlockState());
+        panel.mobCallback = callback;
+        panel.selectedId = mobID == null ? "" : mobID;
+        panel.mobNbtText = mobNBT == null ? "" : mobNBT;
+        panel.mobNbt.setText(panel.mobNbtText);
+        panel.refreshEntries();
+        return panel;
+    }
+
     private UIUnifiedPickOverlayPanel(PickerMode mode, Consumer<ItemStack> itemCallback, Consumer<BlockState> blockCallback, ItemStack itemStack, BlockState blockState)
     {
-        super(mode == PickerMode.ITEM ? UIKeys.ACTIONS_ITEM_STACK : UIKeys.FORMS_EDITORS_BLOCK_TITLE);
+        super(mode == PickerMode.MOB ? UIKeys.FORMS_EDITORS_MOB_ENTITIES : mode == PickerMode.ITEM ? UIKeys.ACTIONS_ITEM_STACK : UIKeys.FORMS_EDITORS_BLOCK_TITLE);
 
         this.mode = mode;
         this.itemCallback = itemCallback;
@@ -272,7 +313,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             try
             {
                 CompoundTag nbt = TagParser.parseTag(v.toString());
-                ItemStack parsed = ItemStack.CODEC.parse(ItemStackKeyframeFactory.currentOps(), nbt).result().orElse(ItemStack.EMPTY);
+                ItemStack parsed = ItemStack.CODEC.parse(GameRegistries.nbtOps(), nbt).result().orElse(ItemStack.EMPTY);
 
                 this.acceptItem(parsed);
 
@@ -313,7 +354,22 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             this.blockPanel.add(this.list, this.blockPropertiesWrap, this.hotbar);
         }
 
-        if (mode == PickerMode.ITEM)
+        if (mode == PickerMode.MOB)
+        {
+            UIElement mobPanel = new UIElement();
+            mobPanel.relative(this.content).xy(PADDING, PADDING).w(1F, -PADDING * 2).h(1F, -PADDING * 2);
+            this.list.relative(mobPanel).xy(0, 0).w(0.5F, -GAP).h(1F);
+            this.mobNbt = new UITextarea(value ->
+            {
+                this.mobNbtText = value.toString();
+                if (this.mobCallback != null) this.mobCallback.accept(this.selectedId, this.mobNbtText);
+            }).background();
+            this.mobNbt.wrap();
+            this.mobNbt.relative(mobPanel).x(0.5F, GAP).y(HEADER_HEIGHT).w(0.5F, -GAP).h(1F, -HEADER_HEIGHT);
+            mobPanel.add(this.list, UI.label(UIKeys.SELECTORS_NBT).relative(mobPanel).x(0.5F, GAP).y(0).w(0.5F, -GAP).h(HEADER_HEIGHT), this.mobNbt);
+            this.content.add(mobPanel);
+        }
+        else if (mode == PickerMode.ITEM)
         {
             this.content.add(this.itemPanel);
         }
@@ -329,7 +385,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             this.itemName.setText(this.itemStack.getHoverName().getString());
             this.updateItemNbt();
         }
-        else
+        else if (mode == PickerMode.BLOCK)
         {
             this.selectedId = BuiltInRegistries.BLOCK.getKey(this.blockState.getBlock()).toString();
             this.fillBlockProperties(this.blockState);
@@ -342,7 +398,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
     {
         this.list.list.clear();
 
-        List<String> source = this.mode == PickerMode.ITEM ? ITEM_IDS : BLOCK_IDS;
+        List<String> source = this.mode == PickerMode.MOB ? MOB_IDS : this.mode == PickerMode.ITEM ? ITEM_IDS : BLOCK_IDS;
 
         for (String id : source)
         {
@@ -380,6 +436,10 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             this.itemCount.limit(1, selected.getMaxStackSize(), true).setValue(selected.getCount());
             this.itemName.setText(selected.getHoverName().getString());
             this.updateItemNbt();
+        }
+        else if (this.mode == PickerMode.MOB)
+        {
+            if (this.mobCallback != null) this.mobCallback.accept(id, this.mobNbtText);
         }
         else
         {
@@ -437,7 +497,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
     private void updateItemNbt()
     {
-        this.itemNbt.setText(ItemStack.CODEC.encodeStart(ItemStackKeyframeFactory.currentOps(), this.itemStack).result().map(Tag::getAsString).orElse("{}"));
+        this.itemNbt.setText(ItemStack.CODEC.encodeStart(GameRegistries.nbtOps(), this.itemStack).result().map(Tag::getAsString).orElse("{}"));
     }
 
     private void fillBlockProperties(BlockState state)
@@ -593,22 +653,29 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             {
                 int x = startX + i * (SLOT_SIZE + SLOT_GAP);
                 ItemStack stack = inventory.getItem(i);
-                int border = i == inventory.selected ? Colors.A100 | BBSSettings.accentColorRGB() : Colors.LIGHTER_GRAY;
+                int border = i == inventory.selected ? BBSSettings.primaryColor(Colors.A100) : BBSSettings.dividerColor();
 
                 context.batcher.box(x, y, x + SLOT_SIZE, y + SLOT_SIZE, border);
-                context.batcher.box(x + 1, y + 1, x + SLOT_SIZE - 1, y + SLOT_SIZE - 1, Colors.A50);
+                context.batcher.box(x + 1, y + 1, x + SLOT_SIZE - 1, y + SLOT_SIZE - 1, BBSSettings.inputSurface());
 
                 if (!stack.isEmpty())
                 {
                     PoseStack matrices = context.batcher.getContext().pose();
                     CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
+                    boolean previousUI = consumers.isUI();
 
                     matrices.pushPose();
-                    consumers.setUI(true);
-                    context.batcher.getContext().renderItem(stack, x + 2, y + 2);
-                    context.batcher.getContext().renderItemDecorations(context.batcher.getFont().getRenderer(), stack, x + 2, y + 2);
-                    consumers.setUI(false);
-                    matrices.popPose();
+                    try
+                    {
+                        consumers.setUI(true);
+                        context.batcher.getContext().renderItem(stack, x + 2, y + 2);
+                        context.batcher.getContext().renderItemDecorations(context.batcher.getFont().getRenderer(), stack, x + 2, y + 2);
+                    }
+                    finally
+                    {
+                        consumers.setUI(previousUI);
+                        matrices.popPose();
+                    }
                 }
 
             }
@@ -633,7 +700,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
         private String labelFor(String id)
         {
-            return this.mode == PickerMode.ITEM ? itemLabel(id) : blockLabel(id);
+            return this.mode == PickerMode.MOB ? mobLabel(id) : this.mode == PickerMode.ITEM ? itemLabel(id) : blockLabel(id);
         }
 
         @Override
@@ -645,7 +712,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
         @Override
         protected void renderElementPart(UIContext context, String element, int i, int x, int y, boolean hover, boolean selected)
         {
-            var font = context.batcher.getFont();
+            FontRenderer font = context.batcher.getFont();
             int lineH = font.getHeight();
 
             int iconLeft = x + LIST_ICON_GAP;
@@ -660,13 +727,20 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             {
                 PoseStack matrices = context.batcher.getContext().pose();
                 CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
+                boolean previousUI = consumers.isUI();
 
                 matrices.pushPose();
-                consumers.setUI(true);
-                context.batcher.getContext().renderItem(stack, iconLeft + 1, iconTop + 1);
-                context.batcher.getContext().renderItemDecorations(context.batcher.getFont().getRenderer(), stack, iconLeft + 1, iconTop + 1);
-                consumers.setUI(false);
-                matrices.popPose();
+                try
+                {
+                    consumers.setUI(true);
+                    context.batcher.getContext().renderItem(stack, iconLeft + 1, iconTop + 1);
+                    context.batcher.getContext().renderItemDecorations(context.batcher.getFont().getRenderer(), stack, iconLeft + 1, iconTop + 1);
+                }
+                finally
+                {
+                    consumers.setUI(previousUI);
+                    matrices.popPose();
+                }
             }
 
             int textX = iconLeft + LIST_ICON_SLOT + LIST_ICON_GAP;
@@ -678,8 +752,8 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
 
             String title = font.limitToWidth(this.labelFor(element), maxW);
             String idLine = font.limitToWidth(element, maxW);
-            int colorTitle = hover ? BBSSettings.highlightColor() : BBSSettings.textColor();
-            int colorId = hover ? Colors.LIGHTER_GRAY : Colors.GRAY;
+            int colorTitle = RowStyle.textColor(hover || selected);
+            int colorId = BBSSettings.mutedTextColor();
 
             int padY = (this.scroll.scrollItemSize - (lineH * 2 + 2)) / 2;
             if (padY < 2)

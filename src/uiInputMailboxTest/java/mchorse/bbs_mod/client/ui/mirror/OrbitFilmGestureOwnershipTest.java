@@ -10,6 +10,7 @@ import java.nio.file.Path;
 public final class OrbitFilmGestureOwnershipTest
 {
     private static final String ORBIT = "src/client/java/mchorse/bbs_mod/ui/film/controller/OrbitFilmCameraController.java";
+    private static final String SHARED_ORBIT = "src/client/java/mchorse/bbs_mod/ui/utils/camera/OrbitViewportController.java";
     private static final String CONTROLLER = "src/client/java/mchorse/bbs_mod/ui/film/controller/UIFilmController.java";
     private static final String PREVIEW = "src/client/java/mchorse/bbs_mod/ui/film/UIFilmPreview.java";
     private static final String REPLAYS = "src/client/java/mchorse/bbs_mod/ui/film/replays/UIReplaysEditor.java";
@@ -55,13 +56,14 @@ public final class OrbitFilmGestureOwnershipTest
 
     private static void assertOrbitUsesButtonAndGenerationOwnership()
     {
-        String source = readSource(ORBIT);
+        String source = readSource(SHARED_ORBIT);
         String start = method(source, "public long startGesture(UIContext context)", "public boolean wasDragged()");
         String stop = method(source, "public boolean stop(int mouseButton, long generation)", "public long gestureGeneration()");
 
         check(source.contains("MouseGestureOwnership orbitOwnership")
                 && source.contains("private long orbitGeneration;")
-                && source.contains("public void start(UIContext context)"),
+                && source.contains("public void start(UIContext context)")
+                && readSource(ORBIT).contains("extends OrbitViewportController"),
             "Film orbit has no initiating-button generation owner");
         check(start.contains("this.orbitOwnership.acquireToken(button)")
                 && start.contains("if (generation == 0L)")
@@ -76,7 +78,10 @@ public final class OrbitFilmGestureOwnershipTest
     {
         String source = readSource(REPLAYS);
         String controller = readSource(CONTROLLER);
+        String picker = readSource("src/client/java/mchorse/bbs_mod/ui/film/controller/FilmStencilPicker.java");
         String intent = readSource("src/client/java/mchorse/bbs_mod/ui/film/view/ViewportPickIntent.java");
+        String pickTarget = method(picker, "ViewportPickIntent.Target viewportPickTarget()", "boolean updatePendingViewportPick(UIContext context)");
+        String deferredRelease = method(picker, "public boolean releaseViewportPick(UIContext context, boolean dragged, long orbitGeneration)", "public void cancelViewportPick(long orbitGeneration)");
         String release = method(
             source,
             "public void releaseViewport(UIContext context, boolean dragged, UIFilmController controller, long generation)",
@@ -88,12 +93,14 @@ public final class OrbitFilmGestureOwnershipTest
         String gizmo = readSource("src/client/java/mchorse/bbs_mod/ui/utils/GizmoInteraction.java");
         String gizmoClick = method(gizmo, "public boolean mouseClickedHandle(UIContext context)", "public boolean mouseClickedSphere(UIContext context)");
         String gizmoRelease = method(gizmo, "public boolean mouseReleased(UIContext context)", "public void update(UIContext context)");
-        String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
-        String transformDisable = method(transform, "private void disable()", "public void acceptChanges()");
+        String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/drag/TransformGesture.java");
+        String transformDisable = method(transform, "private void disable()", "public void stopEditing()");
 
         check(source.contains("private long pendingPickGeneration;")
                 && source.contains("private UIFilmController pendingPickOwner;")
-                && controller.contains("new ViewportPickIntent.Target(this.preview, this.panel.getData(), this.getReplay(),")
+                && controller.contains("public final FilmStencilPicker picker = new FilmStencilPicker(this);")
+                && pickTarget.contains("new ViewportPickIntent.Target(this.controller.preview, this.controller.panel.getData(),")
+                && pickTarget.contains("request == null ? this.controller.getReplay() : request")
                 && intent.contains("this.view == other.view && this.film == other.film"),
             "deferred Film viewport pick has no view, Film and orbit generation owner");
         check(release.contains("this.pendingPickGeneration != generation")
@@ -109,8 +116,10 @@ public final class OrbitFilmGestureOwnershipTest
                 && click.contains("this.pendingPickOwner = controller;")
                 && click.contains("controller.deferViewportPick(context, generation);"),
             "viewport pick is armed before the Film orbit owns the press");
-        check(controller.contains("this.pendingPickOrbitGeneration != orbitGeneration")
-                && controller.contains("this.pendingViewportPick.take(generation)")
+        check(controller.contains("return this.picker.releaseViewportPick(context, dragged, orbitGeneration);")
+                && deferredRelease.contains("this.pendingPickOrbitGeneration != orbitGeneration")
+                && deferredRelease.contains("!this.pendingViewportPick.isOwnedBy(context.mouseButton)")
+                && picker.contains("this.pendingViewportPick.take(generation)")
                 && intent.contains("this.generation != generation || !this.isReady()"),
             "deferred stencil completion lost the initiating orbit and click generations");
         check(click.contains("StencilFormFramebuffer stencil = controller.getStencil();")
@@ -127,7 +136,8 @@ public final class OrbitFilmGestureOwnershipTest
                 && gizmoRelease.contains("context.mouseButton == this.pendingButton")
                 && gizmoRelease.contains("this.retireGesture(context.mouseButton, generation)")
                 && gizmoRelease.contains("Gizmo.INSTANCE.stop()")
-                && transformDisable.contains("this.handler.removeFromParent()"),
+                && transformDisable.contains("this.overlay.removeFromParent()")
+                && transformDisable.contains("Gizmo.INSTANCE.clearTrackedGesture(this)"),
             "Gizmo button ownership or transform-handler cleanup is not wired for wheel recovery");
     }
 
@@ -135,7 +145,7 @@ public final class OrbitFilmGestureOwnershipTest
     {
         String source = readSource(CONTROLLER);
         String release = method(source, "protected boolean subMouseReleased(UIContext context)", "protected boolean subKeyPressed(UIContext context)");
-        String pov = method(source, "public void setPov(int pov)", "private int getMouseMode()");
+        String pov = method(source, "public void setPov(int pov)", "public void restorePov(int pov)");
 
         check(release.contains("long orbitGeneration = this.orbit.gestureGeneration();")
                 && release.contains("this.orbit.stop(context.mouseButton, orbitGeneration)")

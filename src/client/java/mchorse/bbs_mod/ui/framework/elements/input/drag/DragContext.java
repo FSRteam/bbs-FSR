@@ -29,7 +29,9 @@ public interface DragContext
     /** A freshly built drag from the host's hotkey supplier, or {@code null}. */
     GizmoDrag freshHotkeyDrag();
 
-    boolean isLocal();
+    default boolean isLocal() { return this.space().isLocal(); }
+
+    default String targetName() { return "?"; }
 
     /** The reference frame this edit operates in (LOCAL is the former {@link #isLocal()}). */
     TransformSpace space();
@@ -51,6 +53,11 @@ public interface DragContext
     }
 
     /** Whether values of the given operation should snap to the configured step. */
+    default boolean rotationChannelOnly()
+    {
+        return false;
+    }
+
     boolean shouldSnap(TransformOp op);
 
     /** Per-pixel step of the additive (non-ray) drag for the given operation. */

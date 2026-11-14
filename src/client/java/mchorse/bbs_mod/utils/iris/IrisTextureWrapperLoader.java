@@ -10,7 +10,7 @@ import net.irisshaders.iris.pbr.loader.PBRTextureLoader;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.server.packs.resources.ResourceManager;
 
-public class IrisTextureWrapperLoader implements PBRTextureLoader
+public class IrisTextureWrapperLoader implements PBRTextureLoader<AbstractTexture>
 {
     public NativeImageBackedSingleColorTexture defaultNormalTexture;
     public NativeImageBackedSingleColorTexture defaultSpecularTexture;

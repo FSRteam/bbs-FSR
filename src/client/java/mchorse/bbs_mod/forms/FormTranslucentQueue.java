@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.shaders.Uniform;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.cubic.render.GlintRenderState;
@@ -23,6 +24,8 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL14;
+import org.lwjgl.opengl.GL30;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,8 +33,9 @@ import java.util.function.Supplier;
 
 /**
  * Frame-local deferred translucent form draws. Commands capture the active model-view matrix
- * and replay at the translucent world boundary in back-to-front order. UI, picking, Iris shadow
- * passes and nested framebuffer renders stay on the immediate path.
+ * and replay at the translucent world boundary in back-to-front order. An explicitly scoped
+ * user-model preview sorts into its own framebuffer. Other UI, picking, Iris shadow passes
+ * and nested framebuffer renders stay on the immediate path.
  *
  * <p>It is the far-to-near sort, not a disabled depth mask, that keeps forms behind a command
  * visible: solid geometry keeps writing depth during the replay, so a model's own semi-transparent
@@ -52,12 +56,28 @@ public final class FormTranslucentQueue
     private static int suspensionDepth;
     private static Vector3f sortOrigin;
     private static GroupCommand group;
+    private static PreviewScope previewScope;
 
     private FormTranslucentQueue() {}
 
     public static boolean isActive()
     {
         return active && suspensionDepth == 0 && !BBSRendering.isIrisShadowPass();
+    }
+
+    /** Only an explicitly opened user-model viewport may defer UI geometry. */
+    public static boolean isPreviewActive()
+    {
+        return previewScope != null && isActive();
+    }
+
+    /**
+     * Isolate the form editor's normal draw from a pending world queue. The
+     * caller must flush while its preview camera and projection are still active.
+     */
+    public static PreviewScope openPreview()
+    {
+        return new PreviewScope();
     }
 
     public static void begin()
@@ -189,7 +209,8 @@ public final class FormTranslucentQueue
                 /* Fabulous clears vanilla's translucent targets and can leave the default
                  * framebuffer bound here. Rebind the main target before replay so the final
                  * Fabulous blit does not overwrite the queued forms. */
-                if (Minecraft.getInstance().options.graphicsMode().get() == GraphicsStatus.FABULOUS)
+                if (previewScope == null
+                    && Minecraft.getInstance().options.graphicsMode().get() == GraphicsStatus.FABULOUS)
                 {
                     Minecraft.getInstance().getMainRenderTarget().bindWrite(false);
                 }
@@ -289,11 +310,95 @@ public final class FormTranslucentQueue
             .cross(full.m10(), full.m11(), full.m12());
     }
 
+    public static final class PreviewScope implements AutoCloseable
+    {
+        private final List<DrawCommand> previousCommands = new ArrayList<>(commands);
+        private final boolean previousActive = active;
+        private final int previousSuspensionDepth = suspensionDepth;
+        private final Vector3f previousOrigin = sortOrigin;
+        private final GroupCommand previousGroup = group;
+        private final PreviewScope previousScope = previewScope;
+        private final int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        private final int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        private final boolean previousCull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+        private final boolean previousBlend = GL11.glIsEnabled(GL11.GL_BLEND);
+        private final boolean previousDepthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+        private final boolean previousDepthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
+        private final int previousDepthFunction = GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
+        private final int previousBlendSource = GL11.glGetInteger(GL14.GL_BLEND_SRC_RGB);
+        private final int previousBlendDestination = GL11.glGetInteger(GL14.GL_BLEND_DST_RGB);
+        private final int previousBlendSourceAlpha = GL11.glGetInteger(GL14.GL_BLEND_SRC_ALPHA);
+        private final int previousBlendDestinationAlpha = GL11.glGetInteger(GL14.GL_BLEND_DST_ALPHA);
+        private boolean closed;
+
+        private PreviewScope()
+        {
+            /* Outer commands keep their buffers and ownership; beginning a
+             * preview must not release or render them into its target. */
+            commands.clear();
+            group = null;
+            sortOrigin = null;
+            suspensionDepth = 0;
+            active = BBSSettings.translucencyQueue.get();
+            previewScope = this;
+        }
+
+        public void flush()
+        {
+            this.restoreFramebuffer();
+            FormTranslucentQueue.flush();
+        }
+
+        private void restoreFramebuffer()
+        {
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, this.previousDrawFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, this.previousReadFramebuffer);
+        }
+
+        @Override
+        public void close()
+        {
+            if (this.closed)
+            {
+                return;
+            }
+
+            this.closed = true;
+
+            try
+            {
+                /* If rendering failed before flush, only the preview's buffers
+                 * are discarded. A successful flush already released them. */
+                release();
+            }
+            finally
+            {
+                commands.clear();
+                commands.addAll(this.previousCommands);
+                active = this.previousActive;
+                suspensionDepth = this.previousSuspensionDepth;
+                sortOrigin = this.previousOrigin;
+                group = this.previousGroup;
+                previewScope = this.previousScope;
+
+                this.restoreFramebuffer();
+                if (this.previousCull) RenderSystem.enableCull(); else RenderSystem.disableCull();
+                if (this.previousBlend) RenderSystem.enableBlend(); else RenderSystem.disableBlend();
+                if (this.previousDepthTest) RenderSystem.enableDepthTest(); else RenderSystem.disableDepthTest();
+                RenderSystem.depthMask(this.previousDepthMask);
+                RenderSystem.depthFunc(this.previousDepthFunction);
+                RenderSystem.blendFuncSeparate(this.previousBlendSource, this.previousBlendDestination,
+                    this.previousBlendSourceAlpha, this.previousBlendDestinationAlpha);
+            }
+        }
+    }
+
     public abstract static class DrawCommand
     {
         final float distanceSq;
         final boolean cull;
         final boolean depthWrite;
+        protected Color colorOverlay;
 
         protected DrawCommand(Vector3f origin, boolean cull, boolean depthWrite)
         {
@@ -318,6 +423,27 @@ public final class FormTranslucentQueue
             this.distanceSq = sortKey;
             this.cull = cull;
             this.depthWrite = depthWrite;
+            this.overlayColor(FormOverlay.active());
+        }
+
+        public DrawCommand overlayColor(Color overlay)
+        {
+            this.colorOverlay = overlay == null ? null : new Color().copy(overlay);
+
+            return this;
+        }
+
+        protected int bindColorOverlay()
+        {
+            return this.colorOverlay == null ? -1 : FormOverlay.bind(this.colorOverlay);
+        }
+
+        protected void restoreColorOverlay(int previous)
+        {
+            if (previous != -1)
+            {
+                FormOverlay.unbind(previous);
+            }
         }
 
         public abstract void draw();
@@ -373,6 +499,7 @@ public final class FormTranslucentQueue
             if (program == null) return;
 
             setupModelSamplers();
+            int previousOverlay = this.bindColorOverlay();
 
             try
             {
@@ -384,6 +511,7 @@ public final class FormTranslucentQueue
             finally
             {
                 setPassMode(program, PASS_SINGLE);
+                this.restoreColorOverlay(previousOverlay);
                 teardownModelSamplers();
             }
         }
@@ -470,6 +598,7 @@ public final class FormTranslucentQueue
         private final Supplier<ShaderInstance> shader;
         private final int passMode;
         private final Matrix4f[] armatureSnapshot;
+        private final boolean[] visibilitySnapshot;
         private final int uploadCount;
         private final Texture texture;
         private final Matrix4f modelView;
@@ -497,6 +626,7 @@ public final class FormTranslucentQueue
             this.shader = shader;
             this.passMode = passMode;
             this.armatureSnapshot = armatureSnapshot;
+            this.visibilitySnapshot = vao.snapshotVisibility();
             this.uploadCount = uploadCount;
             this.texture = texture;
             this.modelView = modelView;
@@ -516,13 +646,14 @@ public final class FormTranslucentQueue
             if (program == null) return;
 
             setupModelSamplers();
+            int previousOverlay = this.bindColorOverlay();
 
             try
             {
                 if (this.texture != null) BBSModClient.getTextures().bindTexture(this.texture);
                 if (this.vao.getUploadCount() != this.uploadCount)
                 {
-                    this.vao.updateMesh(null, this.armatureSnapshot);
+                    this.vao.updateMesh(null, this.armatureSnapshot, this.visibilitySnapshot);
                 }
                 setPassMode(program, this.passMode);
                 this.vao.render(program, this.modelView, this.normalMat, this.r, this.g, this.b,
@@ -531,6 +662,7 @@ public final class FormTranslucentQueue
             finally
             {
                 setPassMode(program, PASS_SINGLE);
+                this.restoreColorOverlay(previousOverlay);
                 teardownModelSamplers();
             }
         }
@@ -570,9 +702,17 @@ public final class FormTranslucentQueue
         public void draw()
         {
             layer.setupRenderState();
+            int previousOverlay = -1;
 
             try
             {
+                /* Vanilla translucent/output shards may select a world target.
+                 * Preview commands must keep drawing into the scoped viewport. */
+                if (previewScope != null)
+                {
+                    previewScope.restoreFramebuffer();
+                }
+
                 /* setupRenderState applied the layer's own write mask — re-assert ours. */
                 RenderSystem.depthMask(depthWrite);
 
@@ -580,6 +720,7 @@ public final class FormTranslucentQueue
                 {
                     this.prepare.run();
                 }
+                previousOverlay = this.bindColorOverlay();
 
                 buffer.bind();
 
@@ -601,7 +742,18 @@ public final class FormTranslucentQueue
             }
             finally
             {
-                layer.clearRenderState();
+                this.restoreColorOverlay(previousOverlay);
+                try
+                {
+                    layer.clearRenderState();
+                }
+                finally
+                {
+                    if (previewScope != null)
+                    {
+                        previewScope.restoreFramebuffer();
+                    }
+                }
             }
         }
 
@@ -623,6 +775,8 @@ public final class FormTranslucentQueue
         private final Runnable preDraw;
         private final Runnable postDraw;
         private final boolean closeBuffer;
+        private final Runnable releaseResource;
+        private boolean released;
 
         /**
          * The flat-form replay: a single quad (billboard, framebuffer screen, a label's parts)
@@ -666,6 +820,15 @@ public final class FormTranslucentQueue
             Vector3f origin, Vector3f planeNormal, boolean cull, Runnable preDraw, Runnable postDraw,
             boolean closeBuffer)
         {
+            this(buffer, shader, passMode, depthWrite, texture, modelView, normalMat, origin,
+                planeNormal, cull, preDraw, postDraw, closeBuffer, null);
+        }
+
+        public VertexBufferCommand(VertexBuffer buffer, Supplier<ShaderInstance> shader,
+            int passMode, boolean depthWrite, Texture texture, Matrix4f modelView, Matrix3f normalMat,
+            Vector3f origin, Vector3f planeNormal, boolean cull, Runnable preDraw, Runnable postDraw,
+            boolean closeBuffer, Runnable releaseResource)
+        {
             super(origin, planeNormal, cull, depthWrite);
             this.buffer = buffer;
             this.shader = shader;
@@ -676,6 +839,7 @@ public final class FormTranslucentQueue
             this.preDraw = preDraw;
             this.postDraw = postDraw;
             this.closeBuffer = closeBuffer;
+            this.releaseResource = releaseResource;
         }
 
         @Override
@@ -685,6 +849,7 @@ public final class FormTranslucentQueue
             if (program == null) return;
 
             setupModelSamplers();
+            int previousOverlay = this.bindColorOverlay();
 
             try
             {
@@ -714,6 +879,7 @@ public final class FormTranslucentQueue
             }
             finally
             {
+                this.restoreColorOverlay(previousOverlay);
                 teardownModelSamplers();
             }
         }
@@ -721,9 +887,26 @@ public final class FormTranslucentQueue
         @Override
         public void release()
         {
-            if (this.closeBuffer)
+            if (this.released)
             {
-                buffer.close();
+                return;
+            }
+
+            this.released = true;
+
+            try
+            {
+                if (this.closeBuffer)
+                {
+                    buffer.close();
+                }
+            }
+            finally
+            {
+                if (this.releaseResource != null)
+                {
+                    this.releaseResource.run();
+                }
             }
         }
     }

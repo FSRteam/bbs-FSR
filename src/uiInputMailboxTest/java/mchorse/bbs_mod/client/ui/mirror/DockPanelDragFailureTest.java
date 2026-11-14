@@ -33,10 +33,10 @@ public final class DockPanelDragFailureTest
         String clips = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIClipsPanel.java");
         String keyframes = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/UIKeyframeEditor.java");
 
-        check(hasRemovalSequence(clips, "this.panel.removeFromParent();"),
-            "UIClipsPanel must remove its externally parented property panel");
-        check(hasRemovalSequence(keyframes, "this.editor.removeFromParent();"),
-            "UIKeyframeEditor must remove its externally parented property panel");
+        String owner = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/utils/UITimelinePanel.java");
+        check(clips.contains("extends UITimelinePanel") && keyframes.contains("extends UITimelinePanel")
+                && hasRemovalSequence(owner, "panel.removeFromParent();"),
+            "timeline inspectors must delegate external panel cleanup to their shared owner");
     }
 
     private static boolean hasRemovalSequence(String source, String removal)
@@ -53,15 +53,15 @@ public final class DockPanelDragFailureTest
     {
         String dock = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/layout/UIDockLayout.java");
         String film = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanel.java");
-        String filmUndo = readSource("src/client/java/mchorse/bbs_mod/ui/film/UIFilmPanelUndoKeys.java");
-        String formUndo = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/UIFormEditorUndoKeys.java");
-        String modelUndo = readSource("src/client/java/mchorse/bbs_mod/ui/model_editor/UIModelEditorUndoKeys.java");
+        String undo = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/utils/UIUndoKeys.java");
+        String form = readSource("src/client/java/mchorse/bbs_mod/ui/forms/editors/UIFormEditor.java");
+        String model = readSource("src/client/java/mchorse/bbs_mod/ui/model_editor/UIModelEditorPanel.java");
 
         check(dock.contains("onLayoutSettled(Runnable onLayoutSettled)")
                 && dock.contains("this.onLayoutSettled.run();")
                 && film.contains(".onLayoutSettled(() -> this.applyPreviewSizeToBBS(\"layoutSettled\"))"),
             "film preview must follow the shared dock's settled-layout callback");
-        check(strictUndo(filmUndo) && strictUndo(formUndo) && strictUndo(modelUndo),
+        check(strictUndo(undo) && film.contains("new UIUndoKeys(") && form.contains("new UIUndoKeys(") && model.contains("new UIUndoKeys("),
             "editor undo overlays must use strict modifier matching");
     }
 

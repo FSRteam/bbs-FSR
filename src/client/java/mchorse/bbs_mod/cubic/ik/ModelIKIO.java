@@ -25,6 +25,7 @@ import java.util.Map;
  * they would land on anyway, the old FABRIK/CCD branches being gone), and
  * the panel marks that fallback right on the toggle.</p>
  */
+@Deprecated
 public final class ModelIKIO
 {
     private static final String KEY_CHAINS = "chains";

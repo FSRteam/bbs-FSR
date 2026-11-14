@@ -117,4 +117,21 @@ public class ModelUV implements IDataSerializable<ListType>
             this.rotation = data.getFloat(4);
         }
     }
+
+    public void flipX()
+    {
+        this.origin.x += this.size.x;
+        this.size.x = -this.size.x;
+    }
+
+    public void flipY()
+    {
+        this.origin.y += this.size.y;
+        this.size.y = -this.size.y;
+    }
+
+    public void rotate90()
+    {
+        this.rotation = (this.rotation + 90F) % 360F;
+    }
 }

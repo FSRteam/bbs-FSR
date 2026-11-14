@@ -99,6 +99,7 @@ public class ModelBlockEntity extends BlockEntity
     public void tick(Level world, BlockPos pos, BlockState state)
     {
         ModelBlockEntityUpdateCallback.EVENT.invoker().update(this);
+        mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback.EVENT.invoker(this);
 
         this.properties.getEquipment().apply(this.entity);
 

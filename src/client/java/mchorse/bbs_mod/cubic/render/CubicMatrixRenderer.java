@@ -38,6 +38,7 @@ public class CubicMatrixRenderer implements ICubicRenderer
     @Override
     public void applyGroupTransformations(PoseStack stack, ModelGroup group)
     {
+        ICubicRenderer.offsetGroup(stack, group);
         ICubicRenderer.translateGroup(stack, group);
 
         this.origins.get(group.index).set(stack.last().pose());
@@ -46,13 +47,14 @@ public class CubicMatrixRenderer implements ICubicRenderer
         ICubicRenderer.rotateGroup(stack, group);
         ICubicRenderer.scaleGroup(stack, group);
         ICubicRenderer.moveBackFromGroupPivot(stack, group);
+
+        /* Hidden geometry still owns attachment, anchor and gizmo frames. */
+        this.matrices.get(group.index).set(stack.last().pose());
     }
 
     @Override
     public boolean renderGroup(BufferBuilder builder, PoseStack stack, ModelGroup group, Model model)
     {
-        this.matrices.get(group.index).set(stack.last().pose());
-
         return false;
     }
 }

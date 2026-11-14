@@ -3,12 +3,13 @@ package mchorse.bbs_mod.cubic.ik;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.IModel;
-import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.DebugOverlay;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.utils.FormBone;
 import mchorse.bbs_mod.settings.values.ui.ValueDebugElement;
 import mchorse.bbs_mod.settings.values.ui.ValueIKDebug;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
@@ -32,16 +33,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Minimal IK overlay: each chain is a clean run of thin wires through round
- * joint dots, the effector picked out in a warm accent, and the target shown as
- * a small dot inside a caged sphere. It reads the model-local pivot frames the
- * renderer already produced — IK is applied to the rig before this runs, so the
- * frames are the solved chain (re-solving would double-apply the pole angle).
- * Gated globally by {@link #enabled}.
+ * IK overlay with marker visibility, color, shape and size controlled by {@link ValueIKDebug}.
+ * It reads the solved model-local pivot frames after IK, including stretch and squash offsets.
  *
  * <p>{@link #renderStencil} mirrors the goal markers into the picking pass so a
- * click on a green target selects its bone, exactly as if its (often mesh-less)
- * bone had been clicked directly.
+     * click on a target selects its bone, using the same visible marker shape and size.
  */
 public final class ModelIKDebug
 {
@@ -51,14 +47,22 @@ public final class ModelIKDebug
 
     public static void render(PoseStack stack, IModel model, MapType ikData, String selectedTip)
     {
+        render(stack, model, ModelIKCache.getFromData(model, ikData), null, selectedTip);
+    }
+
+    public static void render(PoseStack stack, IModel model, ModelForm form, String selectedTip)
+    {
+        render(stack, model, ModelIKCache.compile(model, form), form, selectedTip);
+    }
+
+    private static void render(PoseStack stack, IModel model, ModelIKCache.Compiled compiled, ModelForm modelForm, String selectedTip)
+    {
         ValueIKDebug config = BBSSettings.ikDebug;
 
-        if (!config.enabled.get() || model == null || ikData == null)
+        if (!config.enabled.get() || model == null)
         {
             return;
         }
-
-        ModelIKCache.Compiled compiled = ModelIKCache.getFromData(model, ikData);
 
         if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
         {
@@ -77,7 +81,7 @@ public final class ModelIKDebug
 
         stack.pushPose();
 
-        if (model instanceof BOBJModel)
+        if (model.isFacingFlipped())
         {
             stack.mulPose(Axis.YP.rotation(MathUtils.PI));
         }
@@ -86,6 +90,11 @@ public final class ModelIKDebug
 
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
+            if (!isEnabled(modelForm, chain))
+            {
+                continue;
+            }
+
             drawChain(stack, frames, chain, selectedTip, config, unit);
         }
 
@@ -93,6 +102,19 @@ public final class ModelIKDebug
 
         RenderSystem.enableCull();
         RenderSystem.enableDepthTest();
+    }
+
+    private static boolean isEnabled(ModelForm form, ModelIKCache.CompiledChain chain)
+    {
+        if (form == null)
+        {
+            return true;
+        }
+
+        FormBone bone = form.bones.getBone(chain.tip());
+        IKControl override = form.ikControlOverrides.get(chain.tip());
+
+        return override != null ? override.enabled : bone != null && bone.ik.get().enabled;
     }
 
     private static Map<String, PivotFrame> collectFrames(IModel model, ModelIKCache.Compiled compiled)
@@ -132,16 +154,24 @@ public final class ModelIKDebug
      */
     public static void renderStencil(PoseStack stack, IModel model, MapType ikData, StencilMap stencilMap, Form form)
     {
+        renderStencil(stack, model, ModelIKCache.getFromData(model, ikData), null, stencilMap, form);
+    }
+
+    public static void renderStencil(PoseStack stack, IModel model, ModelForm modelForm, StencilMap stencilMap, Form form)
+    {
+        renderStencil(stack, model, ModelIKCache.compile(model, modelForm), modelForm, stencilMap, form);
+    }
+
+    private static void renderStencil(PoseStack stack, IModel model, ModelIKCache.Compiled compiled, ModelForm modelForm, StencilMap stencilMap, Form form)
+    {
         ValueIKDebug config = BBSSettings.ikDebug;
         boolean targets = config.target.visible.get();
         boolean poles = config.pole.visible.get();
 
-        if (!config.enabled.get() || (!targets && !poles) || model == null || ikData == null || stencilMap == null)
+        if (!config.enabled.get() || (!targets && !poles) || model == null || stencilMap == null)
         {
             return;
         }
-
-        ModelIKCache.Compiled compiled = ModelIKCache.getFromData(model, ikData);
 
         if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
         {
@@ -160,7 +190,7 @@ public final class ModelIKDebug
 
         stack.pushPose();
 
-        if (model instanceof BOBJModel)
+        if (model.isFacingFlipped())
         {
             stack.mulPose(Axis.YP.rotation(MathUtils.PI));
         }
@@ -171,6 +201,11 @@ public final class ModelIKDebug
 
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
+            if (!isEnabled(modelForm, chain))
+            {
+                continue;
+            }
+
             if (targets)
             {
                 Vector3f goal = position(frames, chain.target());

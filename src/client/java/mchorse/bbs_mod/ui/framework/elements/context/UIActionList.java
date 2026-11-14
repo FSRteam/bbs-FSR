@@ -15,6 +15,18 @@ public class UIActionList extends UIList<ContextAction>
     }
 
     @Override
+    protected boolean canScaleRows()
+    {
+        return false;
+    }
+
+    @Override
+    protected String elementToString(UIContext context, int index, ContextAction action)
+    {
+        return action.label.get();
+    }
+
+    @Override
     public void renderListElement(UIContext context, ContextAction element, int i, int x, int y, boolean hover, boolean selected)
     {
         int h = this.scroll.scrollItemSize;

@@ -30,9 +30,16 @@ public class UIShapeKeysKeyframeFactory extends UIKeyframeFactory<ShapeKeys>
 
         if (!shapeKeys.isEmpty())
         {
-            this.shapeKeys.setShapeKeys(model.getPoseGroup(), shapeKeys, keyframe.getValue());
+            this.shapeKeys.setShapeKeys(model.getPoseGroup(), shapeKeys, this.getDisplayValue().copy());
             this.scroll.add(this.shapeKeys);
         }
+    }
+
+    @Override
+    public void update()
+    {
+        super.update();
+        this.shapeKeys.updateShapeKeys(this.getDisplayValue().copy());
     }
 
     public static class UIShapeKeysEditor extends UIShapeKeys
@@ -47,15 +54,17 @@ public class UIShapeKeysKeyframeFactory extends UIKeyframeFactory<ShapeKeys>
         @Override
         protected void changedShapeKeys(Runnable runnable)
         {
+            this.updateShapeKeys(this.editor.getDisplayValue().copy());
             super.changedShapeKeys(runnable);
+            this.editor.setValue(this.getShapeKeys());
         }
 
         @Override
         protected void setValue(float v)
         {
-            this.editor.keyframe.preNotify();
+            this.updateShapeKeys(this.editor.getDisplayValue().copy());
             super.setValue(v);
-            this.editor.keyframe.postNotify();
+            this.editor.setValue(this.getShapeKeys());
         }
     }
 }

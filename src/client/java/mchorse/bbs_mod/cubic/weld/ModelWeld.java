@@ -33,8 +33,14 @@ public class ModelWeld
 
     /** Whether the seam also distributes TWIST (rotation about the bone axis, e.g. a turning wrist) across the band. */
     public final boolean twist;
+    public final boolean smooth;
 
     public ModelWeld(String sourceBone, String sourceFace, String targetBone, String targetFace, float maxAngle, float seamFalloff, float parentShare, boolean twist)
+    {
+        this(sourceBone, sourceFace, targetBone, targetFace, maxAngle, seamFalloff, parentShare, twist, false);
+    }
+
+    public ModelWeld(String sourceBone, String sourceFace, String targetBone, String targetFace, float maxAngle, float seamFalloff, float parentShare, boolean twist, boolean smooth)
     {
         this.sourceBone = sourceBone;
         this.sourceFace = sourceFace;
@@ -44,5 +50,6 @@ public class ModelWeld
         this.seamFalloff = seamFalloff;
         this.parentShare = parentShare;
         this.twist = twist;
+        this.smooth = smooth;
     }
 }

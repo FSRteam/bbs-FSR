@@ -3,7 +3,6 @@ package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.film.utils.keyframes.UIFilmKeyframes;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
@@ -11,26 +10,20 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.TrackpadRecorder;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.utils.UIBezierHandles;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
-import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
-import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Base class for numeric keyframe factories (Double, Float, Integer) with recording support.
+ * Shared numeric keyframe fields and transactional value gestures.
  */
 public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyframeFactory<T>
 {
     protected UITrackpad value;
     protected UIBezierHandles handles;
     
-    private TrackpadRecorder trackpadRecorder;
-    private boolean recordingMode;
-    private boolean recordingInitialized;
     private int lastMouseX;
-    private double lastRecordedValue;
     private boolean editingMode;
     private boolean editingChanged;
     private final UIElement editingOverlay = new AcceptRejectOverlay();
@@ -43,7 +36,7 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
         this.value.setValue(this.getNumericValue(keyframe.getValue()));
         this.handles = new UIBezierHandles(keyframe);
 
-        this.setupRecordingContextMenu();
+
         this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, this::startEditingMode).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
         this.scroll.add(this.value, this.handles.createColumn());
     }
@@ -59,7 +52,7 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
     protected abstract void setKeyframeValue(double value);
     
     /**
-     * Create a value converter for the recorder.
+     * Convert a numeric field value through the factory's existing addon contract.
      */
     protected abstract TrackpadRecorder.ValueConverter createValueConverter();
 
@@ -68,60 +61,11 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
      */
     private void setValue(double value)
     {
-        this.setKeyframeValue(value);
-        this.editor.getGraph().setValue(this.keyframe.getValue(), true);
-    }
-
-    private void setupRecordingContextMenu()
-    {
-        this.value.context((menu) ->
-        {
-            KeyframeChannel<?> channel = this.getKeyframeChannel();
-
-            if (channel != null)
-            {
-                menu.action(Icons.SPHERE, UIKeys.KEYFRAMES_RECORD_VALUE, () -> this.startRecording(channel));
-            }
-        });
-    }
-
-    private KeyframeChannel<?> getKeyframeChannel()
-    {
-        if (this.editor != null && this.editor.getGraph() != null)
-        {
-            for (var sheet : this.editor.getGraph().getSheets())
-            {
-                if (sheet.channel != null && sheet.channel.getKeyframes().contains(this.keyframe))
-                {
-                    return sheet.channel;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private void startRecording(KeyframeChannel<?> channel)
-    {
-        if (this.trackpadRecorder == null)
-        {
-            this.trackpadRecorder = new TrackpadRecorder(channel, this.editor, this.createValueConverter());
-        }
-
-        this.stopEditingMode(false);
-        this.recordingMode = true;
-        this.recordingInitialized = false;
-        
-        this.startPlaybackIfNeeded();
+        this.editor.getGraph().setValue(this.createValueConverter().convert(value), true, true);
     }
 
     private void startEditingMode()
     {
-        if (this.recordingMode)
-        {
-            return;
-        }
-
         UIContext context = this.getContext();
 
         if (context == null || this.editingMode)
@@ -181,8 +125,7 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
      */
     private void applyEditingValue(double value)
     {
-        this.setKeyframeValue(value);
-        this.editor.getGraph().setValue(this.keyframe.getValue(), false);
+        this.editor.getGraph().setValue(this.createValueConverter().convert(value), false, true);
     }
 
     /**
@@ -228,29 +171,6 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
     }
 
     @Override
-    public boolean subMouseClicked(UIContext context)
-    {
-        if (this.recordingMode && context.mouseButton == 0)
-        {
-            return true;
-        }
-
-        return super.subMouseClicked(context);
-    }
-    
-    @Override
-    public boolean subMouseReleased(UIContext context)
-    {
-        if (this.recordingMode && context.mouseButton == 0)
-        {
-            this.recordingMode = false;
-            return true;
-        }
-        
-        return super.subMouseReleased(context);
-    }
-
-    @Override
     public void render(UIContext context)
     {
         super.render(context);
@@ -276,42 +196,6 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
             }
         }
         
-        if (this.recordingMode && this.isPlaybackRunning())
-        {
-            if (!this.recordingInitialized)
-            {
-                this.lastMouseX = context.mouseX;
-                this.lastRecordedValue = this.value.getValue();
-                this.recordingInitialized = true;
-            }
-            
-            int dx = context.mouseX - this.lastMouseX;
-            
-            if (dx != 0)
-            {
-                double valueModifier = this.value.getValueModifier();
-                double newValue = this.lastRecordedValue + (dx * valueModifier);
-                newValue = MathUtils.clamp(newValue, this.value.min, this.value.max);
-                
-                if (this.value.integer)
-                {
-                    newValue = (int) newValue;
-                }
-                
-                this.value.setValue(newValue);
-                
-                this.lastMouseX = context.mouseX;
-                this.lastRecordedValue = newValue;
-            }
-            
-            this.trackpadRecorder.recordValue(this.lastRecordedValue);
-        }
-        else if (this.recordingMode)
-        {
-            this.recordingMode = false;
-            this.recordingInitialized = false;
-        }
-
         if (this.editingMode)
         {
             String label = UIKeys.TRANSFORMS_EDITING.get();
@@ -323,25 +207,15 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
         }
     }
     
-    private UIFilmKeyframes getFilmKeyframes()
+    @Override
+    protected boolean followsPlayhead()
     {
-        return this.editor instanceof UIFilmKeyframes ? (UIFilmKeyframes) this.editor : null;
+        return !this.isBusy() && super.followsPlayhead();
     }
-    
-    private boolean isPlaybackRunning()
+
+    private boolean isBusy()
     {
-        UIFilmKeyframes filmKeyframes = this.getFilmKeyframes();
-        return filmKeyframes != null && filmKeyframes.editor != null && filmKeyframes.editor.isRunning();
-    }
-    
-    private void startPlaybackIfNeeded()
-    {
-        UIFilmKeyframes filmKeyframes = this.getFilmKeyframes();
-        
-        if (filmKeyframes != null && filmKeyframes.editor != null && !filmKeyframes.editor.isRunning())
-        {
-            filmKeyframes.editor.togglePlayback();
-        }
+        return this.editingMode || this.value.isDragging() || this.value.textbox.isFocused();
     }
 
     @Override
@@ -349,7 +223,10 @@ public abstract class UINumericKeyframeFactory<T extends Number> extends UIKeyfr
     {
         super.update();
 
-        this.value.setValue(this.getNumericValue(this.keyframe.getValue()));
+        if (!this.isBusy())
+        {
+            this.value.setValue(this.getNumericValue(this.getDisplayValue()));
+        }
         this.handles.update();
     }
 }

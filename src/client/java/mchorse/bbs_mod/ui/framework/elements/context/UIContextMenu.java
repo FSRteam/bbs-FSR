@@ -30,6 +30,33 @@ public abstract class UIContextMenu extends UIElement
 
     public abstract boolean isEmpty();
 
+    public void dismiss()
+    {
+        UIContext context = this.getContext();
+
+        if (context == null)
+        {
+            this.removeFromParent();
+        }
+        else if (context.contextMenu == this)
+        {
+            context.closeContextMenu();
+        }
+    }
+
+    @Override
+    public void removeFromParent()
+    {
+        UIContext context = this.getContext();
+
+        super.removeFromParent();
+
+        if (context != null)
+        {
+            context.dismissContextMenu(this);
+        }
+    }
+
     /**
      * Set mouse coordinate
      *

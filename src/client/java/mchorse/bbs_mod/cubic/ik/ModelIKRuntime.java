@@ -4,11 +4,13 @@ import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.cubic.constraints.ModelConstraintsRuntime;
-import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.utils.FormBone;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Collections;
@@ -41,9 +43,9 @@ public final class ModelIKRuntime
         IModel model = instance.model;
 
         ModelIKCache.Compiled compiled = null;
-        if (instance.form instanceof ModelForm form && form.ik.get() instanceof MapType map)
+        if (instance.form instanceof ModelForm form)
         {
-            compiled = ModelIKCache.getFromData(model, map);
+            compiled = ModelIKCache.compile(model, form);
         }
 
         if (compiled == null)
@@ -65,7 +67,16 @@ public final class ModelIKRuntime
 
         if (instance.form instanceof ModelForm form)
         {
-            controlOverrides = form.ikControlOverrides;
+            controlOverrides = new HashMap<>();
+            for (ModelIKCache.CompiledChain chain : chains)
+            {
+                FormBone bone = form.bones.getBone(chain.tip());
+
+                if (bone != null) controlOverrides.put(chain.tip(), bone.ik.get());
+            }
+            /* Old FSR aggregate control tracks remain valid; their values apply only for
+             * the current frame, over the same canonical per-bone controls. */
+            controlOverrides.putAll(form.ikControlOverrides);
             targetWeights = form.ikTargetWeights;
             poleWeights = form.poleTargetWeights;
         }
@@ -73,8 +84,8 @@ public final class ModelIKRuntime
         /* FS resolves target and pole positions from the current frame every time.
          * Passing no persistent workspace keeps undo, redo and history jumps a pure
          * function of the restored keyframe data. */
-        ModelIKDlsApplier.apply(model, chains, compiled.bones(), controllerTargets, poleTargets,
-            targetWeights, poleWeights, controlOverrides, null, boneLimits);
+        ModelIKApplier.apply(model, chains, compiled.bones(), controllerTargets, poleTargets,
+            targetWeights, poleWeights, controlOverrides, boneLimits);
     }
 
     /**
@@ -110,7 +121,7 @@ public final class ModelIKRuntime
         List<String> ids = ModelIKCache.chainIdsFor(model, tip, chainLength);
         int size = ids.size();
 
-        if (tipRotation && ModelIKDlsApplier.autoTailId(model, ids) != null)
+        if (tipRotation && ModelIKApplier.autoTailId(model, ids) != null)
         {
             size--;
         }
@@ -141,7 +152,7 @@ public final class ModelIKRuntime
      */
     public static void logGesture(boolean active)
     {
-        ModelIKDlsApplier.setLogging(active);
+        ModelIKApplier.setLogging(active);
     }
 
     /**
@@ -161,12 +172,7 @@ public final class ModelIKRuntime
             return false;
         }
 
-        if (!(form.ik.get() instanceof MapType map))
-        {
-            return false;
-        }
-
-        ModelIKCache.Compiled compiled = ModelIKCache.getFromData(model, map);
+        ModelIKCache.Compiled compiled = ModelIKCache.compile(model, form);
 
         if (compiled == null || compiled.chains() == null)
         {
@@ -175,7 +181,7 @@ public final class ModelIKRuntime
 
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
-            if (chain == null || chain.weight() <= 0F || chain.chainRootToEffector() == null)
+            if (chain == null || chain.chainRootToEffector() == null)
             {
                 continue;
             }
@@ -187,7 +193,13 @@ public final class ModelIKRuntime
              * which is only the target's position-fade weight and never reaches 0. */
             IKControl override = form.ikControlOverrides == null ? null : form.ikControlOverrides.get(chain.tip());
 
-            if (override != null && (!override.enabled || override.weight <= 0F))
+            if (override == null)
+            {
+                FormBone tip = form.bones.getBone(chain.tip());
+                override = tip == null ? null : tip.ik.get();
+            }
+
+            if (override != null ? !override.enabled || override.weight <= 0F : chain.weight() <= 0F)
             {
                 continue;
             }
@@ -249,107 +261,44 @@ public final class ModelIKRuntime
     {
         IKControls controls = new IKControls();
 
-        if (form == null || !(form.ik.get() instanceof MapType map))
+        if (form != null)
         {
-            return controls;
-        }
-
-        ModelIKConfig config = ModelIKIO.fromData(map);
-
-        if (config == null || config.chains() == null)
-        {
-            return controls;
-        }
-
-        for (ModelIKConfig.Chain chain : config.chains())
-        {
-            if (chain == null || !chain.enabled() || chain.tip() == null || chain.tip().isEmpty())
+            for (BaseValue value : form.bones.getAll())
             {
-                continue;
+                if (value instanceof FormBone bone && bone.hasChain() && bone.ik.get().enabled)
+                {
+                    controls.get(bone.getId()).copy(bone.ik.get());
+                }
             }
-
-            IKControl control = controls.get(chain.tip());
-
-            control.weight = chain.weight();
-            control.softness = chain.softness();
-            control.poleAngle = chain.poleAngle();
-            control.pole = chain.pole();
-            control.enabled = chain.enabled();
         }
 
         return controls;
     }
 
-    /**
-     * The compiled config of a form, or null when there is nothing to compile. Both callers
-     * above need the same three guards, and {@link ModelIKCache#getFromData} answers null for a
-     * null model or a null map rather than throwing — so the null has to be carried, not
-     * dereferenced.
-     *
-     * <p>Deliberately {@code getFromData} and not {@code ModelIKCache.compile}: the other two
-     * readers in this class ({@link #isRotationConstrained} and {@link #getControllers}) go
-     * through {@code getFromData} too, and it serves the per-frame {@code WeakHashMap} memo, so
-     * every caller of this class sees the same {@code Compiled} the solver does. That keeps
-     * {@code compile} private.
-     */
     private static ModelIKCache.Compiled compileFor(IModel model, ModelForm form)
     {
-        if (model == null || form == null || !(form.ik.get() instanceof MapType map))
-        {
-            return null;
-        }
-
-        return ModelIKCache.getFromData(model, map);
+        return ModelIKCache.compile(model, form);
     }
 
     public static List<String> getControllers(ModelInstance instance)
     {
-        if (instance == null || instance.model == null)
-        {
-            return Collections.emptyList();
-        }
-
-        IModel model = instance.model;
-
-        ModelIKCache.Compiled compiled = null;
-        if (instance.form instanceof ModelForm form && form.ik.get() instanceof MapType map)
-        {
-            compiled = ModelIKCache.getFromData(model, map);
-        }
-
-        if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
-        {
-            return Collections.emptyList();
-        }
-
-        Set<String> unique = new LinkedHashSet<>();
-
-        for (ModelIKCache.CompiledChain chain : compiled.chains())
-        {
-            if (chain != null && chain.target() != null && !chain.target().isEmpty())
-            {
-                unique.add(chain.target());
-            }
-        }
-
-        return unique.isEmpty() ? Collections.emptyList() : new ArrayList<>(unique);
+        return targetsOf(instance, false);
     }
 
-    /** The pole-target bones of all enabled chains that have one — the film keys a pole anchor sheet off each. */
+    /** Configured pole targets remain discoverable while a scalar track switches the pole off. */
     public static List<String> getPoleControllers(ModelInstance instance)
     {
-        if (instance == null || instance.model == null)
+        return targetsOf(instance, true);
+    }
+
+    private static List<String> targetsOf(ModelInstance instance, boolean pole)
+    {
+        if (instance == null || instance.model == null || !(instance.form instanceof ModelForm form))
         {
             return Collections.emptyList();
         }
 
-        IModel model = instance.model;
-
-        ModelIKCache.Compiled compiled = null;
-        if (instance.form instanceof ModelForm form && form.ik.get() instanceof MapType map)
-        {
-            compiled = ModelIKCache.getFromData(model, map);
-        }
+        ModelIKCache.Compiled compiled = ModelIKCache.compile(instance.model, form);
 
         if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
         {
@@ -360,9 +309,11 @@ public final class ModelIKRuntime
 
         for (ModelIKCache.CompiledChain chain : compiled.chains())
         {
-            if (chain != null && chain.pole() && chain.poleTarget() != null && !chain.poleTarget().isEmpty())
+            String target = pole ? chain.poleTarget() : chain.target();
+
+            if (target != null && !target.isEmpty())
             {
-                unique.add(chain.poleTarget());
+                unique.add(target);
             }
         }
 

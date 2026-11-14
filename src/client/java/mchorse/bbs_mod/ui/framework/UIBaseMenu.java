@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.framework;
 
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
@@ -146,6 +147,17 @@ public abstract class UIBaseMenu
     protected void viewportSet()
     {}
 
+    /** The element that owns mouse input while its hidden pointer controls the view. */
+    public IUIElement getPointerOwner()
+    {
+        return null;
+    }
+
+    public boolean isPointerHidden()
+    {
+        return this.getPointerOwner() != null;
+    }
+
     public boolean mouseClicked(int mouseX, int mouseY, int mouseButton)
     {
         this.context.notePointerGesture();
@@ -153,7 +165,14 @@ public abstract class UIBaseMenu
 
         try (UIContext.PointerEventFrame ignored = this.context.beginPointerEvent(mouseX, mouseY, mouseButton))
         {
-            if (this.root.isEnabled())
+            IUIElement owner = this.getPointerOwner();
+
+            if (owner != null)
+            {
+                this.dispatchPointer(owner::mouseClicked);
+                result = true;
+            }
+            else if (this.root.isEnabled())
             {
                 IFocusedUIElement focused = this.context.activeElement;
                 IUIElement element = this.dispatchPointer(this.root::mouseClicked);
@@ -194,7 +213,14 @@ public abstract class UIBaseMenu
 
         try (UIContext.PointerEventFrame ignored = this.context.beginPointerScrollEvent(x, y, h, v))
         {
-            if (this.root.isEnabled())
+            IUIElement owner = this.getPointerOwner();
+
+            if (owner != null)
+            {
+                this.dispatchPointer(owner::mouseScrolled);
+                result = true;
+            }
+            else if (this.root.isEnabled())
             {
                 IUIElement element = this.dispatchPointer(this.root::mouseScrolled);
 
@@ -211,7 +237,14 @@ public abstract class UIBaseMenu
 
         try (UIContext.PointerEventFrame ignored = this.context.beginPointerEvent(mouseX, mouseY, mouseButton))
         {
-            if (this.root.isEnabled())
+            IUIElement owner = this.getPointerOwner();
+
+            if (owner != null)
+            {
+                this.dispatchPointer(owner::mouseReleased);
+                result = true;
+            }
+            else if (this.root.isEnabled())
             {
                 IUIElement element = this.dispatchPointer(this.root::mouseReleased);
 
@@ -447,38 +480,47 @@ public abstract class UIBaseMenu
 
     public void renderMenu(UIRenderingContext context, int mouseX, int mouseY)
     {
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        BBSProfiler.begin(BBSProfiler.Timer.UI_TOTAL);
 
-        context.batcher.resetAlpha();
-        this.context.resetMatrix();
-        this.context.setMouse(mouseX, mouseY);
-        this.context.resetCursor();
-        InterfaceBlur.beginFrame();
-
-        this.preRenderMenu(context);
-
-        /* One unified re-layout pass for everything invalidated since the last frame */
-        this.context.flushLayout();
-
-        if (this.root.isVisible())
+        try
         {
-            this.context.reset();
-            this.context.pushViewport(this.viewport);
+            RenderSystem.depthFunc(GL11.GL_ALWAYS);
 
-            this.root.render(this.context);
+            context.batcher.resetAlpha();
+            this.context.resetMatrix();
+            this.context.setMouse(mouseX, mouseY);
+            this.context.resetCursor();
+            InterfaceBlur.beginFrame();
 
-            this.context.popViewport();
-            this.context.postRender();
+            this.preRenderMenu(context);
+
+            /* One unified re-layout pass for everything invalidated since the last frame */
+            this.context.flushLayout();
+
+            if (this.root.isVisible())
+            {
+                this.context.reset();
+                this.context.pushViewport(this.viewport);
+
+                this.root.render(this.context);
+
+                this.context.popViewport();
+                this.context.postRender();
+            }
+
+            if (this.main.isVisible())
+            {
+                inputRenderer.render(this, mouseX, mouseY);
+            }
+
+            this.context.applyCursor();
+
+            RenderSystem.depthFunc(GL11.GL_LEQUAL);
         }
-
-        if (this.main.isVisible())
+        finally
         {
-            inputRenderer.render(this, mouseX, mouseY);
+            BBSProfiler.end(BBSProfiler.Timer.UI_TOTAL);
         }
-
-        this.context.applyCursor();
-
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
     }
 
     protected void preRenderMenu(UIRenderingContext context)

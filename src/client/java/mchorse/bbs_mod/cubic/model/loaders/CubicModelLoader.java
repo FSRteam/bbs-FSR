@@ -23,6 +23,7 @@ import mchorse.bbs_mod.utils.resources.LinkUtils;
 
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -117,6 +118,12 @@ public class CubicModelLoader implements IModelLoader
         }
 
         newModel.model = theModel;
+        if (compile.isEmpty())
+        {
+            File source = models.provider.getFile(modelBBS);
+            if (source != null && source.isFile()) newModel.setModelFile(modelBBS);
+        }
+
 
         for (Animation animation : this.tryLoadingExternalAnimations(models, config).getAll())
         {

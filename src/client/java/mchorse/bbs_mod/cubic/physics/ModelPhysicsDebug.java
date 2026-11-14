@@ -3,12 +3,13 @@ package mchorse.bbs_mod.cubic.physics;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.IModel;
-import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.DebugOverlay;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.forms.utils.FormBone;
 import mchorse.bbs_mod.settings.values.ui.ValueDebugElement;
 import mchorse.bbs_mod.settings.values.ui.ValuePhysicsDebug;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
@@ -62,14 +63,22 @@ public final class ModelPhysicsDebug
 
     public static void render(PoseStack stack, IModel model, MapType physicsData, int age, String selectedRoot)
     {
+        render(stack, model, ModelPhysicsCache.getFromData(model, physicsData), null, age, selectedRoot);
+    }
+
+    public static void render(PoseStack stack, IModel model, ModelForm form, int age, String selectedRoot)
+    {
+        render(stack, model, ModelPhysicsCache.compile(model, form), form, age, selectedRoot);
+    }
+
+    private static void render(PoseStack stack, IModel model, ModelPhysicsCache.Compiled compiled, ModelForm modelForm, int age, String selectedRoot)
+    {
         ValuePhysicsDebug config = BBSSettings.physicsDebug;
 
-        if (!config.enabled.get() || model == null || physicsData == null)
+        if (!config.enabled.get() || model == null)
         {
             return;
         }
-
-        ModelPhysicsCache.Compiled compiled = ModelPhysicsCache.getFromData(model, physicsData);
 
         if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
         {
@@ -88,7 +97,7 @@ public final class ModelPhysicsDebug
 
         stack.pushPose();
 
-        if (model instanceof BOBJModel)
+        if (model.isFacingFlipped())
         {
             stack.mulPose(Axis.YP.rotation(MathUtils.PI));
         }
@@ -96,8 +105,17 @@ public final class ModelPhysicsDebug
         /* The wind is one field for the whole model: resolve its world direction and base magnitude once,
          * plus the inverse of the current draw matrix so the world-space force can be carried back into the
          * overlay's local drawing space for each arrow. */
+        ModelPhysicsConfig.Wind wind = compiled.wind();
+
+        if (modelForm != null)
+        {
+            WindControl control = modelForm.windControlOverride == null ? modelForm.wind.get() : modelForm.windControlOverride;
+            wind = new ModelPhysicsConfig.Wind(control.strength, control.x, control.y, control.z,
+                control.turbulence, control.turbulenceSpeed, control.turbulenceScale, control.local);
+        }
+
         Vector3f windDir = new Vector3f();
-        float windMagnitude = config.wind.visible.get() ? PhysicsForces.prepareWind(compiled.wind(), 1F, windDir) : 0F;
+        float windMagnitude = config.wind.visible.get() ? PhysicsForces.prepareWind(wind, 1F, windDir) : 0F;
         Matrix4f matrix = new Matrix4f(stack.last().pose());
         Matrix4f inverse = windMagnitude > 0F ? new Matrix4f(matrix).invert() : null;
 
@@ -105,11 +123,16 @@ public final class ModelPhysicsDebug
 
         for (ModelPhysicsCache.CompiledChain chain : compiled.chains())
         {
+            if (!isEnabled(modelForm, chain))
+            {
+                continue;
+            }
+
             drawChain(stack, model, frames, chain, selectedRoot, config, unit);
 
             if (inverse != null)
             {
-                drawWind(stack, model, frames, chain, selectedRoot, compiled.wind(), windDir, windMagnitude, age, matrix, inverse, config, unit);
+                drawWind(stack, model, frames, chain, selectedRoot, wind, windDir, windMagnitude, age, matrix, inverse, config, unit);
             }
         }
 
@@ -117,6 +140,19 @@ public final class ModelPhysicsDebug
 
         RenderSystem.enableCull();
         RenderSystem.enableDepthTest();
+    }
+
+    private static boolean isEnabled(ModelForm form, ModelPhysicsCache.CompiledChain chain)
+    {
+        if (form == null)
+        {
+            return true;
+        }
+
+        FormBone bone = form.bones.getBone(chain.attach());
+        PhysicsControl override = form.physicsControlOverrides.get(chain.attach());
+
+        return override != null ? override.enabled : bone != null && bone.physics.get().enabled;
     }
 
     private static Map<String, PivotFrame> collectFrames(IModel model, ModelPhysicsCache.Compiled compiled)
@@ -148,14 +184,22 @@ public final class ModelPhysicsDebug
      */
     public static void renderStencil(PoseStack stack, IModel model, MapType physicsData, StencilMap stencilMap, Form form)
     {
+        renderStencil(stack, model, ModelPhysicsCache.getFromData(model, physicsData), null, stencilMap, form);
+    }
+
+    public static void renderStencil(PoseStack stack, IModel model, ModelForm modelForm, StencilMap stencilMap, Form form)
+    {
+        renderStencil(stack, model, ModelPhysicsCache.compile(model, modelForm), modelForm, stencilMap, form);
+    }
+
+    private static void renderStencil(PoseStack stack, IModel model, ModelPhysicsCache.Compiled compiled, ModelForm modelForm, StencilMap stencilMap, Form form)
+    {
         ValuePhysicsDebug config = BBSSettings.physicsDebug;
 
-        if (!config.enabled.get() || !config.attach.visible.get() || model == null || physicsData == null || stencilMap == null)
+        if (!config.enabled.get() || !config.attach.visible.get() || model == null || stencilMap == null)
         {
             return;
         }
-
-        ModelPhysicsCache.Compiled compiled = ModelPhysicsCache.getFromData(model, physicsData);
 
         if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
         {
@@ -174,7 +218,7 @@ public final class ModelPhysicsDebug
 
         stack.pushPose();
 
-        if (model instanceof BOBJModel)
+        if (model.isFacingFlipped())
         {
             stack.mulPose(Axis.YP.rotation(MathUtils.PI));
         }
@@ -185,6 +229,11 @@ public final class ModelPhysicsDebug
 
         for (ModelPhysicsCache.CompiledChain chain : compiled.chains())
         {
+            if (!isEnabled(modelForm, chain))
+            {
+                continue;
+            }
+
             if (chain.targetBone() == null || chain.targetBone().isEmpty())
             {
                 continue;

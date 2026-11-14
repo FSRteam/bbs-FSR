@@ -9,6 +9,7 @@ public final class FilmReplayFirstPersonSyncSourceTest
 {
     private static final Path FILM_UNDO_HANDLER = Path.of("src/client/java/mchorse/bbs_mod/ui/film/utils/UIFilmUndoHandler.java");
     private static final Path REPLAY = Path.of("src/main/java/mchorse/bbs_mod/film/replays/Replay.java");
+    private static final Path FILM = Path.of("src/main/java/mchorse/bbs_mod/film/Film.java");
     private static final Path CLIENT_NETWORK = Path.of("src/client/java/mchorse/bbs_mod/network/ClientNetwork.java");
     private static final Path SERVER_NETWORK = Path.of("src/main/java/mchorse/bbs_mod/network/ServerNetwork.java");
     private static final Path ACTION_PLAYER = Path.of("src/main/java/mchorse/bbs_mod/actions/ActionPlayer.java");
@@ -30,6 +31,7 @@ public final class FilmReplayFirstPersonSyncSourceTest
         Path root = findProjectRoot();
         String undo = compact(Files.readString(root.resolve(FILM_UNDO_HANDLER)));
         String replay = compact(Files.readString(root.resolve(REPLAY)));
+        String film = compact(Files.readString(root.resolve(FILM)));
         String clientNetwork = compact(Files.readString(root.resolve(CLIENT_NETWORK)));
         String serverNetwork = compact(Files.readString(root.resolve(SERVER_NETWORK)));
         String actionPlayer = compact(Files.readString(root.resolve(ACTION_PLAYER)));
@@ -38,11 +40,11 @@ public final class FilmReplayFirstPersonSyncSourceTest
 
         check(replay.contains("new ValueBoolean(\"fp\", false)"),
             "Replay no longer exposes the first-person value used by the editor");
-        check(undo.contains("path.endsWith(\"/fp\")"),
-            "first-person Replay edits no longer enter the live action sync path");
+        check(film.contains("this.replays.synced()"),
+            "Replay subtree no longer declares live synchronization for first-person edits");
         assertOrdered(undo,
-            "if (this.isReplayActions(value))",
-            "this.syncData.add(value)",
+            "if (value.isSynced())",
+            "this.syncData.add(getSyncValue(value))",
             "this.actionsTimer.mark()",
             "ClientNetwork.sendSyncData");
         assertOrdered(clientNetwork,
@@ -59,12 +61,12 @@ public final class FilmReplayFirstPersonSyncSourceTest
             "grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D",
             "actor.move(MoverType.SELF",
             "actor.setOnGround(grounded)",
-            "actor.setSprinting(replay.keyframes.sprinting.interpolate(tick) > 0)");
+            "actor.setSprinting(EntityState.isOn(replay.keyframes.sprinting.interpolate(tick)))");
         assertOrdered(baseFilmController,
             "grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D",
             "player.move(MoverType.SELF",
             "player.setOnGround(grounded)",
-            "player.setSprinting(replay.keyframes.sprinting.interpolate(replayTick) > 0)");
+            "player.setSprinting(EntityState.isOn(replay.keyframes.sprinting.interpolate(replayTick)))");
     }
 
     private static Path findProjectRoot()

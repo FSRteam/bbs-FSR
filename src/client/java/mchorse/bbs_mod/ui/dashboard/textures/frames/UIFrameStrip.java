@@ -14,6 +14,7 @@ import mchorse.bbs_mod.ui.utils.GridLayout;
 import mchorse.bbs_mod.ui.utils.cells.CellPainter;
 import mchorse.bbs_mod.ui.utils.cells.CellState;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 
@@ -179,7 +180,7 @@ public class UIFrameStrip extends UIItemGrid<TextureAnimation.Frame>
 
         if (frame == null)
         {
-            menu.action(Icons.ADD, UIKeys.TEXTURES_FRAMES_ADD, () -> this.panel.insert(visible.size()));
+            menu.icon(MenuVerb.ADD, () -> this.panel.insert(visible.size())).label(UIKeys.TEXTURES_FRAMES_ADD);
 
             return;
         }
@@ -207,13 +208,7 @@ public class UIFrameStrip extends UIItemGrid<TextureAnimation.Frame>
         menu.action(Icons.FLIP_VERTICAL, UIKeys.TEXTURES_MACROS_FLIP_V, () -> this.panel.macro(PixelMacro.FLIP_VERTICAL, group));
         menu.action(Icons.TIME, UIKeys.TEXTURES_FRAMES_TIME, () -> this.panel.askTime(group));
 
-        /* FSR's ContextAction can't grey itself out, so removal only shows when it can happen;
-         * asking to remove the last frame anyway (a pick spanning the whole order) is answered
-         * by the panel's error notification */
-        if (visible.size() > group.size())
-        {
-            menu.action(Icons.REMOVE, UIKeys.GENERAL_REMOVE, () -> this.panel.remove(group));
-        }
+        menu.icon(MenuVerb.REMOVE, () -> this.panel.remove(group)).label(UIKeys.GENERAL_REMOVE).enabled(visible.size() > group.size());
     }
 
     /* Rendering */

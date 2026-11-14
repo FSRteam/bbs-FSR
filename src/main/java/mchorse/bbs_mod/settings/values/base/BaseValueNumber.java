@@ -72,4 +72,6 @@ public abstract class BaseValueNumber <T extends Number> extends BaseKeyframeFac
     }
 
     protected abstract T clamp(T value);
+
+    public abstract void setNumber(double value);
 }

@@ -6,7 +6,6 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.panels.UIMobFormPanel;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
-import mchorse.bbs_mod.ui.utils.icons.Icons;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
@@ -22,7 +21,7 @@ public class UIMobForm extends UIPoseForm<MobForm>
         this.setupPosePanel(this.mobPanel);
         this.defaultPanel = this.mobPanel;
 
-        this.registerPanel(this.defaultPanel, UIKeys.FORMS_EDITORS_MOB_TITLE, Icons.MORPH);
+        this.registerPanel(this.defaultPanel, UIKeys.FORMS_EDITORS_MOB_TITLE, MobForm.ICON);
         this.registerDefaultPanels();
     }
 

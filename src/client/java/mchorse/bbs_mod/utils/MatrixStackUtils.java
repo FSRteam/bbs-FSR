@@ -80,7 +80,14 @@ public class MatrixStackUtils
         Matrix4fStack renderStack = RenderSystem.getModelViewStack();
 
         renderStack.popMatrix();
+
+        /* UI passes can apply a matrix independently of the stack's top. Restore that matrix
+         * through a temporary level while leaving the caller's original stack untouched. */
+        renderStack.pushMatrix();
+        renderStack.identity();
+        renderStack.mul(oldMV);
         RenderSystem.applyModelViewMatrix();
+        renderStack.popMatrix();
     }
 
     public static void applyTransform(PoseStack stack, Transform transform)

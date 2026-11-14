@@ -208,15 +208,12 @@ public class UIStructureSavePanel extends UIOverlayPanel
         StructureManager.setPreview(data);
         this.form.structure.set(data == null ? "" : id);
 
-        /* The whole thing in view: the pivot sits under the middle of its footprint, so the
-         * camera looks at half its height from far enough to fit its longest side. FSR's preview
-         * renderer takes its distance through a quadratic Factor (value = x^2 / 100), so the
-         * block distance goes in as its square root. */
+        /* Keep the pivot at half height and fit the longest side in world units. */
         float extent = Math.max(size.getX(), Math.max(size.getY(), size.getZ()));
         float distance = Math.max(3F, extent * 1.1F + 1.5F);
 
         this.renderer.setPosition(0, size.getY() / 2F, 0);
-        this.renderer.setDistance((int) Math.round(Math.sqrt(distance) * 10F));
+        this.renderer.setDistance(distance);
     }
 
     /**

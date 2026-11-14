@@ -109,7 +109,7 @@ public class Model implements IMapSerializable, IModel
 
         for (String key : this.getAllGroupKeys())
         {
-            PoseTransform poseTransform = pose.get(key);
+            PoseTransform poseTransform = pose.getOrCreate(key);
             ModelGroup group = this.getGroup(key);
 
             poseTransform.copy(group.current);
@@ -130,6 +130,24 @@ public class Model implements IMapSerializable, IModel
         for (ModelGroup orderedGroup : this.orderedGroups)
         {
             orderedGroup.reset();
+        }
+    }
+
+    @Override
+    public void snapshotChannels()
+    {
+        for (ModelGroup orderedGroup : this.orderedGroups)
+        {
+            orderedGroup.snapshotChannels();
+        }
+    }
+
+    @Override
+    public void restoreChannels()
+    {
+        for (ModelGroup orderedGroup : this.orderedGroups)
+        {
+            orderedGroup.restoreChannels();
         }
     }
 
@@ -160,6 +178,8 @@ public class Model implements IMapSerializable, IModel
                 group.orient = null;
             }
 
+            group.poseVisible &= transform.visible;
+            group.overlay.copy(transform.overlay);
             group.lighting = transform.lighting;
             group.color.copy(transform.color);
             /* Interpolation snaps glint mode between discrete values, so this is always a
@@ -248,6 +268,12 @@ public class Model implements IMapSerializable, IModel
             groups.add(child.id);
             this.collectChildrenKeys(child, groups);
         }
+    }
+
+    @Override
+    public Collection<ModelGroup> getRigBones()
+    {
+        return this.orderedGroups;
     }
 
     @Override
@@ -398,33 +424,109 @@ public class Model implements IMapSerializable, IModel
         texture.addInt(this.textureWidth);
         texture.addInt(this.textureHeight);
 
-        Map<String, String> parents = new HashMap<>();
-        Collection<ModelGroup> allGroups = this.getAllGroups();
+        /* The groups go out in tree order — parents before children, siblings as they stand — into an
+         * ordered map: the file's order is the order they come back in, so a save must not shuffle
+         * the tree. */
+        MapType groups = new MapType(false);
 
-        for (ModelGroup parent : allGroups)
-        {
-            for (ModelGroup child : parent.children)
-            {
-                parents.put(child.id, parent.id);
-            }
-        }
-
-        MapType groups = new MapType();
-
-        for (ModelGroup group : allGroups)
-        {
-            MapType groupData = group.toData();
-            String parentId = parents.get(group.id);
-
-            if (parentId != null)
-            {
-                groupData.putString("parent", parentId);
-            }
-
-            groups.put(group.id, groupData);
-        }
+        this.writeGroups(this.topGroups, null, groups);
 
         data.put("texture", texture);
         data.put("groups", groups);
+    }
+
+    public void reload(MapType data)
+    {
+        this.topGroups.clear();
+        this.fromData(data);
+        this.initialize();
+    }
+
+    public void refreshGeometry(Collection<ModelGroup> groups)
+    {
+        for (ModelGroup group : groups)
+        {
+            group.generateQuads(this.textureWidth, this.textureHeight);
+        }
+    }
+
+    public void regenerateQuads()
+    {
+        this.refreshGeometry(this.orderedGroups);
+    }
+
+    public void setTextureSize(int width, int height)
+    {
+        this.textureWidth = width;
+        this.textureHeight = height;
+
+        this.regenerateQuads();
+    }
+
+    public void shiftGroup(ModelGroup group, Vector3f delta)
+    {
+        group.initial.translate.add(delta);
+
+        /* The pose rides along, so the bone doesn't jump by the delta over the frames between here
+         * and the next reset — which copies the rest into it again. */
+        group.current.translate.add(delta);
+
+        for (ModelCube cube : group.cubes)
+        {
+            cube.shift(delta);
+        }
+
+        /* A mesh moves by its vertices alone, and its origin — the point it turns about — stays.
+         * ModelMesh reads its vertices relative to that origin and writes them back absolute, so an
+         * origin this editor moved off zero would shift the mesh again on every reload; the pivot of
+         * a mesh is left to whatever authored it. */
+        for (ModelMesh mesh : group.meshes)
+        {
+            for (Vector3f vertex : mesh.baseData.vertices)
+            {
+                vertex.add(delta);
+            }
+
+            for (ModelData shapeKey : mesh.data.values())
+            {
+                for (Vector3f vertex : shapeKey.vertices)
+                {
+                    vertex.add(delta);
+                }
+            }
+        }
+
+        for (ModelGroup child : group.children)
+        {
+            this.shiftGroup(child, delta);
+        }
+    }
+
+    public List<ModelGroup> collectSubtree(ModelGroup group, List<ModelGroup> out)
+    {
+        out.add(group);
+
+        for (ModelGroup child : group.children)
+        {
+            this.collectSubtree(child, out);
+        }
+
+        return out;
+    }
+
+    private void writeGroups(List<ModelGroup> list, ModelGroup parent, MapType groups)
+    {
+        for (ModelGroup group : list)
+        {
+            MapType groupData = group.toData();
+
+            if (parent != null)
+            {
+                groupData.putString("parent", parent.id);
+            }
+
+            groups.put(group.id, groupData);
+            this.writeGroups(group.children, group, groups);
+        }
     }
 }

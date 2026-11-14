@@ -4,9 +4,12 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.utils.resizers.ChildResizer;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -24,6 +27,10 @@ public class UISection extends UIElement
 {
     private static final int HEADER_HEIGHT = 10;
     private static final int ARROW_SIZE = 8;
+    private static final int ICON_WIDTH = 20;
+    private static final int PADDING = 4;
+    private static final Area HEADER = new Area();
+    private static final Area HOVER = new Area();
 
     public UILabel title;
     public UIElement fields;
@@ -53,7 +60,7 @@ public class UISection extends UIElement
         this.fields = new UIElement();
         this.fields.column().stretch().vertical().height(20);
 
-        this.column(UIConstants.MARGIN).stretch().vertical().padding(4);
+        this.column(UIConstants.MARGIN).stretch().vertical().padding(PADDING);
         this.add(this.title, this.fields);
     }
 
@@ -135,20 +142,39 @@ public class UISection extends UIElement
             return;
         }
 
-        UIElement element = parent;
+        UIElement scroll = parent;
 
-        while (element != null && !(element instanceof UIScrollView))
+        while (scroll != null && !(scroll instanceof UIScrollView))
         {
-            element = element.getParent();
+            scroll = scroll.getParent();
         }
 
-        (element == null ? parent : element).resize();
+        if (scroll != null)
+        {
+            scroll.resize();
+
+            return;
+        }
+
+        while (parent.getParent() != null && parent.resizer() instanceof ChildResizer)
+        {
+            parent = parent.getParent();
+        }
+
+        parent.resize();
     }
 
     @Override
     public void render(UIContext context)
     {
         context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), BBSSettings.raisedSurface());
+
+        Area header = this.headerArea();
+
+        if (header.isInside(context))
+        {
+            RowStyle.hover(context.batcher, header.x, header.y, header.w, header.h, 0);
+        }
 
         /* The block is the raised (light) surface, so inputs inside it drop to the deep surface to
          * stay readable - mirroring how the film editor scopes lightInputs for its dark panels. */
@@ -169,33 +195,63 @@ public class UISection extends UIElement
     private void renderHeader(UIContext context, UILabel title)
     {
         Area header = title.area;
-        FontRenderer font = context.batcher.getFont();
 
-        this.renderArrow(context, header.ex() - ARROW_SIZE / 2F, header.my());
-
-        String label = font.limitToWidth(title.label.get(), header.w - ARROW_SIZE - 2);
-
-        context.batcher.textShadow(label, header.x, header.my() - font.getHeight() / 2, title.color);
+        HEADER.set(header.x, header.y, header.w, header.h + 1);
+        renderHeader(context, HEADER, title.label, null, this.expanded,
+            title.color == Colors.WHITE ? BBSSettings.textColor() : title.color);
     }
 
-    /**
-     * Draw {@link Icons#ARROW_SMALL} centred at {@code cx}/{@code cy}, rotated for the open state.
-     */
-    private void renderArrow(UIContext context, float cx, float cy)
+    private Area headerArea()
+    {
+        HOVER.set(this.area.x, this.area.y, this.area.w, this.title.area.ey() + PADDING - this.area.y);
+
+        return HOVER;
+    }
+
+    /** Shared section heading, with an optional leading icon and trailing fold arrow. */
+    public static void renderHeader(UIContext context, Area area, IKey title, Icon icon, Boolean expanded, int color)
+    {
+        FontRenderer font = context.batcher.getFont();
+        int x = area.x;
+        int right = area.ex();
+
+        if (icon != null)
+        {
+            context.batcher.icon(icon, Colors.WHITE, x, area.my(), 0F, 0.5F);
+            x += ICON_WIDTH;
+        }
+
+        if (expanded != null)
+        {
+            renderArrow(context, right - ARROW_SIZE / 2F, area.my(), expanded, color);
+            right -= ARROW_SIZE + 2;
+        }
+
+        String label = font.limitToWidth(title.get(), right - x);
+
+        context.batcher.textShadow(label, x, area.my(font.getHeight()), color);
+    }
+
+    public static void renderArrow(UIContext context, float cx, float cy, boolean expanded)
+    {
+        renderArrow(context, cx, cy, expanded, Colors.WHITE);
+    }
+
+    public static void renderArrow(UIContext context, float cx, float cy, boolean expanded, int color)
     {
         PoseStack matrices = context.batcher.getContext().pose();
 
         matrices.pushPose();
         matrices.translate(cx, cy, 0F);
-        matrices.rotateAround(Axis.ZP.rotationDegrees(this.expanded ? 90F : 0F), 0F, 0F, 0F);
-        context.batcher.icon(Icons.ARROW_SMALL, Colors.WHITE, 0, 0, 0.5F, 0.5F);
+        matrices.rotateAround(Axis.ZP.rotationDegrees(expanded ? 90F : 0F), 0F, 0F, 0F);
+        context.batcher.icon(Icons.ARROW_SMALL, color, 0, 0, 0.5F, 0.5F);
         matrices.popPose();
     }
 
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (context.mouseButton == 0 && this.title.area.isInside(context))
+        if (context.mouseButton == 0 && this.headerArea().isInside(context))
         {
             this.toggle();
 

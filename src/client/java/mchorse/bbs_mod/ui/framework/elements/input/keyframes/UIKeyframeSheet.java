@@ -1,8 +1,13 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.film.replays.tracks.TrackDescriptor;
+import mchorse.bbs_mod.film.replays.tracks.TrackKind;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.forms.IPosedForm;
+import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
 import mchorse.bbs_mod.forms.forms.sound.SoundConeForm;
 import mchorse.bbs_mod.l10n.L10n;
@@ -16,6 +21,7 @@ import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.utils.interps.Interpolation;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
+import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +35,8 @@ public class UIKeyframeSheet extends UIKeyframeElement
     public final IKey defaultTitle;
     public final int defaultColor;
     private final String filterKey;
+    /** The catalog track behind this row; curated replay channels keep a null descriptor. */
+    public final TrackDescriptor descriptor;
 
     /** Display-only grouping for dope-sheet sections: never a channel, selection, or filter entry. */
     public record Section(String id, IKey title, Icon icon, int color) {}
@@ -36,7 +44,7 @@ public class UIKeyframeSheet extends UIKeyframeElement
     /** Display-only grouping slot, set by the replay editor (see B7a-3 dope-sheet sections). */
     public Section section;
 
-    /** Tree hierarchy for collapsible timeline rows (see B7a-3 A). Additive; existing flat rendering is untouched. */
+    /** The row this track folds under and the rows that fold under it. */
     public UIKeyframeSheet parent;
     public final List<UIKeyframeSheet> children = new ArrayList<>();
 
@@ -74,7 +82,7 @@ public class UIKeyframeSheet extends UIKeyframeElement
         return depth;
     }
 
-    /** Whether any ancestor is folded away (the fold state lives in the rendering layer, populated via setParent). */
+    /** Compatibility view of the current fold snapshot; the dope sheet owns the shared state. */
     public boolean isFolded()
     {
         UIKeyframeSheet current = this.parent;
@@ -92,7 +100,7 @@ public class UIKeyframeSheet extends UIKeyframeElement
         return false;
     }
 
-    /** Fold flag, owned by the dope-sheet rendering layer (B7a-3 B); additive so existing code ignores it. */
+    /** Compatibility snapshot populated from the dope sheet's shared fold state. */
     public boolean folded;
 
 
@@ -113,6 +121,33 @@ public class UIKeyframeSheet extends UIKeyframeElement
      */
     public Supplier<Object> seed;
 
+    public UIKeyframeSheet(TrackDescriptor track)
+    {
+        this(track.key(), track.title(), track.color(), track.channel(), track.property(), track.kind() == TrackKind.BONE, track);
+        this.icon(track.icon()).form(track.owner()).seed(track.seed());
+    }
+
+    public UIKeyframeSheet(int color, KeyframeChannel channel, BaseValueBasic property)
+    {
+        this(color, false, channel, property);
+    }
+
+    public UIKeyframeSheet(String id, IKey title, int color, KeyframeChannel channel, BaseValueBasic property)
+    {
+        this(id, title, color, false, channel, property);
+    }
+
+    public UIKeyframeSheet(String id, IKey title, int color, KeyframeChannel channel, BaseValueBasic property, boolean isBoneTrack)
+    {
+        this(id, title, color, false, channel, property, isBoneTrack);
+    }
+
+    public UIKeyframeSheet(String id, IKey title, int color, KeyframeChannel channel, BaseValueBasic property, boolean isBoneTrack, TrackDescriptor descriptor)
+    {
+        this(id, title, color, false, channel, property, isBoneTrack, descriptor);
+    }
+
+    /** Legacy constructor descriptors retain the optional separator for addon compatibility. */
     public UIKeyframeSheet(int color, boolean separator, KeyframeChannel channel, BaseValueBasic property)
     {
         this(channel.getId(), getTrackTitle(channel, property), color, separator, channel, property, false);
@@ -125,8 +160,14 @@ public class UIKeyframeSheet extends UIKeyframeElement
 
     public UIKeyframeSheet(String id, IKey title, int color, boolean separator, KeyframeChannel channel, BaseValueBasic property, boolean isBoneTrack)
     {
+        this(id, title, color, separator, channel, property, isBoneTrack, null);
+    }
+
+    public UIKeyframeSheet(String id, IKey title, int color, boolean separator, KeyframeChannel channel, BaseValueBasic property, boolean isBoneTrack, TrackDescriptor descriptor)
+    {
         super(title, color);
 
+        this.descriptor = descriptor;
         this.id = id;
         this.separator = separator;
 
@@ -136,7 +177,11 @@ public class UIKeyframeSheet extends UIKeyframeElement
         this.isBoneTrack = isBoneTrack;
         this.defaultTitle = title;
         this.defaultColor = color;
-        if (isBoneTrack)
+        if (descriptor != null)
+        {
+            this.filterKey = descriptor.filterKey();
+        }
+        else if (isBoneTrack)
         {
             PerLimbService.PoseBonePath path = PerLimbService.parsePoseBonePath(id);
             this.filterKey = path == null ? title.get() : (path.formPath().isEmpty() ? path.bone() : path.formPath() + "/" + path.bone());
@@ -147,6 +192,27 @@ public class UIKeyframeSheet extends UIKeyframeElement
         }
 
         this.applyStyle();
+    }
+
+    /** The model owned by this whole-pose track, including a nested body part's pose. */
+    public ModelForm getPoseForm()
+    {
+        return this.getPosedForm() instanceof ModelForm modelForm ? modelForm : null;
+    }
+
+    /** Whole-pose operations also apply to mobs and addon forms with a pose capability. */
+    public IPosedForm getPosedForm()
+    {
+        boolean pose = this.channel.getFactory() == KeyframeFactories.POSE
+            && (this.id.equals("pose") || this.id.endsWith(FormUtils.PATH_SEPARATOR + "pose"))
+            && !this.id.contains("pose_overlay");
+
+        if (!pose || this.property == null)
+        {
+            return null;
+        }
+
+        return FormUtils.getForm(this.property) instanceof IPosedForm posedForm ? posedForm : null;
     }
 
     public String getFilterKey()
@@ -280,7 +346,7 @@ public class UIKeyframeSheet extends UIKeyframeElement
     {
         for (Keyframe keyframe : this.selection.getSelected())
         {
-            keyframe.setTick(keyframe.getTick() + diff, dirty);
+            keyframe.setTick(this.channel.constrainKeyframeTick(keyframe, keyframe.getTick() + diff), dirty);
         }
     }
 
@@ -292,33 +358,42 @@ public class UIKeyframeSheet extends UIKeyframeElement
         }
     }
 
+    public <T> Keyframe<T> ensureKeyframe(float tick)
+    {
+        this.channel.preNotify(IValueListener.FLAG_UNMERGEABLE | IValueListener.FLAG_BATCH);
+        return UIReplaysEditorUtils.ensureKeyframe(this, tick);
+    }
+
     public void setValue(Object value, Object selectedValue, boolean dirty)
     {
-        Number valueNumber = value instanceof Number ? (Number) value : 0D;
+        for (Keyframe keyframe : this.selection.getSelected()) this.setValueOn(keyframe, value, selectedValue, dirty);
+    }
 
-        for (Keyframe keyframe : this.selection.getSelected())
+    public void setValueOn(Keyframe keyframe, Object value, Object selectedValue, boolean dirty)
+    {
+        if (keyframe == null) return;
+        Number valueNumber = value instanceof Number ? (Number) value : 0D;
+        if (selectedValue instanceof Double)
         {
-            if (selectedValue instanceof Double)
-            {
-                keyframe.setValue((double) keyframe.getValue() + valueNumber.doubleValue() - (double) selectedValue, dirty);
-            }
-            else if (selectedValue instanceof Float)
-            {
-                keyframe.setValue((float) keyframe.getValue() + valueNumber.floatValue() - (float) selectedValue, dirty);
-            }
-            else if (selectedValue instanceof Integer)
-            {
-                keyframe.setValue((int) keyframe.getValue() + valueNumber.intValue() - (int) selectedValue, dirty);
-            }
-            else if (selectedValue instanceof Long)
-            {
-                keyframe.setValue((long) keyframe.getValue() + valueNumber.longValue() - (long) selectedValue, dirty);
-            }
-            else
-            {
-                keyframe.setValue(this.channel.getFactory().copy(value), dirty);
-            }
+            keyframe.setValue((double) keyframe.getValue() + valueNumber.doubleValue() - (double) selectedValue, dirty);
         }
+        else if (selectedValue instanceof Float)
+        {
+            keyframe.setValue((float) keyframe.getValue() + valueNumber.floatValue() - (float) selectedValue, dirty);
+        }
+        else if (selectedValue instanceof Integer)
+        {
+            keyframe.setValue((int) keyframe.getValue() + valueNumber.intValue() - (int) selectedValue, dirty);
+        }
+        else if (selectedValue instanceof Long)
+        {
+            keyframe.setValue((long) keyframe.getValue() + valueNumber.longValue() - (long) selectedValue, dirty);
+        }
+        else
+        {
+            keyframe.setValue(this.channel.getFactory().copy(value), dirty);
+        }
+
     }
 
     public void setInterpolation(Interpolation interpolation)

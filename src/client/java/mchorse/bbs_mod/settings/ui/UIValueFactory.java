@@ -82,6 +82,7 @@ public class UIValueFactory
         trackpad.limit(value.getMin(), value.getMax(), true);
         trackpad.delayedInput();
         trackpad.setValue(value.get());
+        trackpad.valueBinding(() -> trackpad.setValue(value.get()));
         trackpad.tooltip(L10n.lang(getValueCommentKey(value)));
 
         return trackpad;
@@ -114,6 +115,7 @@ public class UIValueFactory
         }
 
         color.setColor(value.get());
+        color.valueBinding(() -> color.setColor(value.get()));
 
         return color;
     }
@@ -129,6 +131,7 @@ public class UIValueFactory
         trackpad.limit(value.getMin(), value.getMax());
         trackpad.delayedInput();
         trackpad.setValue(value.get());
+        trackpad.valueBinding(() -> trackpad.setValue(value.get()));
         trackpad.tooltip(L10n.lang(getValueCommentKey(value)));
 
         return trackpad;
@@ -144,7 +147,8 @@ public class UIValueFactory
 
         trackpad.limit(value.getMin(), value.getMax());
         trackpad.delayedInput();
-        trackpad.setValue(value.get().floatValue());
+        trackpad.setValue(value.get());
+        trackpad.valueBinding(() -> trackpad.setValue(value.get()));
         trackpad.tooltip(L10n.lang(getValueCommentKey(value)));
 
         return trackpad;
@@ -159,6 +163,7 @@ public class UIValueFactory
         });
 
         textbox.setText(value.get());
+        textbox.valueBinding(() -> textbox.setText(value.get()));
         textbox.tooltip(L10n.lang(getValueLabelKey(value)));
 
         return textbox;

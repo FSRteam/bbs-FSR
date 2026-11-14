@@ -91,6 +91,7 @@ public class Keys
     public static final KeyCombo FORMS_PICK_TEXTURE = new KeyCombo("pick_texture", UIKeys.FORMS_EDITOR_MODEL_PICK_TEXTURE, GLFW.GLFW_KEY_P, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("forms");
     public static final KeyCombo FORMS_OPEN_STATES_EDITOR = new KeyCombo("open_states_editor", UIKeys.FORMS_EDITOR_STATES_OPEN, GLFW.GLFW_KEY_BACKSLASH).categoryKey("forms");
     public static final KeyCombo FORMS_TOGGLE_BODY_PART_GIZMO = new KeyCombo("toggle_body_part_gizmo", UIKeys.FORMS_EDITOR_BODY_PART_GIZMO, GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("forms");
+    public static final KeyCombo FORMS_CENTER_CAMERA = new KeyCombo("center_camera", UIKeys.FORMS_EDITOR_KEYS_CENTER_CAMERA, GLFW.GLFW_KEY_C).categoryKey("forms");
 
     /* Pixel editor */
     public static final KeyCombo PIXEL_SWAP = new KeyCombo("swap", UIKeys.TEXTURES_KEYS_SWAP, GLFW.GLFW_KEY_X).categoryKey("pixels");
@@ -141,6 +142,7 @@ public class Keys
     public static final KeyCombo TRANSFORMATIONS_TRANSLATE = new KeyCombo("translate", UIKeys.TRANSFORMS_TRANSLATE, GLFW.GLFW_KEY_G).categoryKey("transformations");
     public static final KeyCombo TRANSFORMATIONS_SCALE = new KeyCombo("scale", UIKeys.TRANSFORMS_SCALE, GLFW.GLFW_KEY_S).categoryKey("transformations");
     public static final KeyCombo TRANSFORMATIONS_ROTATE = new KeyCombo("rotate", UIKeys.TRANSFORMS_ROTATE, GLFW.GLFW_KEY_R).categoryKey("transformations");
+    public static final KeyCombo TRANSFORMATIONS_RESET = new KeyCombo("reset", UIKeys.TRANSFORMS_CONTEXT_RESET, GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("transformations");
     public static final KeyCombo TRANSFORMATIONS_COMBINED = new KeyCombo("combined", UIKeys.TRANSFORMS_COMBINED, GLFW.GLFW_KEY_T).categoryKey("transformations");
     public static final KeyCombo TRANSFORMATIONS_X = new KeyCombo("x", UIKeys.GENERAL_X, GLFW.GLFW_KEY_X).categoryKey("transformations");
     public static final KeyCombo TRANSFORMATIONS_Y = new KeyCombo("y", UIKeys.GENERAL_Y, GLFW.GLFW_KEY_Y).categoryKey("transformations");
@@ -209,6 +211,8 @@ public class Keys
     public static final KeyCombo MODEL_BLOCKS_TELEPORT_ORBIT = new KeyCombo("teleport_orbit_block", UIKeys.MODEL_BLOCKS_KEYS_TELEPORT_ORBIT, GLFW.GLFW_KEY_C).categoryKey("model_blocks");
 
     /* Model editor */
+    public static final KeyCombo MODEL_EDITOR_NEXT_TAB = new KeyCombo("next_tab", UIKeys.MODEL_EDITOR_KEYS_CYCLE_TABS, GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
+    public static final KeyCombo MODEL_EDITOR_PREV_TAB = new KeyCombo("prev_tab", UIKeys.MODEL_EDITOR_KEYS_CYCLE_TABS, GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
     public static final KeyCombo MODEL_EDITOR_EXPAND_ALL = new KeyCombo("expand_all", UIKeys.MODEL_EDITOR_KEYS_EXPAND_ALL, GLFW.GLFW_KEY_E, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
     public static final KeyCombo MODEL_EDITOR_COLLAPSE_ALL = new KeyCombo("collapse_all", UIKeys.MODEL_EDITOR_KEYS_COLLAPSE_ALL, GLFW.GLFW_KEY_E, GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("model_editor");
     public static final KeyCombo MODEL_EDITOR_FIND_BONE = new KeyCombo("find_bone", UIKeys.MODEL_EDITOR_KEYS_FIND_BONE, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
@@ -219,4 +223,11 @@ public class Keys
 
     /* Particle editor */
     public static final KeyCombo PARTICLE_PLAUSE = new KeyCombo("particle_plause", UIKeys.SNOWSTORM_PLAUSE, GLFW.GLFW_KEY_SPACE).categoryKey("particle");
+
+    public static final KeyCombo MODEL_EDITOR_CUBE_ADD = new KeyCombo("cube_add", UIKeys.MODEL_EDITOR_MODEL_CUBE_ADD, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("model_editor");
+    public static final KeyCombo MODEL_EDITOR_GROUP_ADD = new KeyCombo("group_add", UIKeys.MODEL_EDITOR_MODEL_GROUP_ADD, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("model_editor");
+    public static final KeyCombo MODEL_EDITOR_GROUP_DUPE = new KeyCombo("group_dupe", UIKeys.MODEL_EDITOR_MODEL_DUPLICATE, GLFW.GLFW_KEY_D, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
+    public static final KeyCombo MODEL_EDITOR_GROUP_IK_BONES = new KeyCombo("group_ik_bones", UIKeys.MODEL_EDITOR_MODEL_GROUP_IK_BONES, GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
+    public static final KeyCombo MODEL_EDITOR_GROUP_RENAME = new KeyCombo("group_rename", UIKeys.MODEL_EDITOR_MODEL_GROUP_RENAME, GLFW.GLFW_KEY_F2).categoryKey("model_editor");
+    public static final KeyCombo MODEL_EDITOR_PIVOT_ONLY = new KeyCombo("pivot_only", UIKeys.MODEL_EDITOR_MODEL_PIVOT_ONLY, GLFW.GLFW_KEY_P).categoryKey("model_editor");
 }

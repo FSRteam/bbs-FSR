@@ -16,6 +16,11 @@ final class UIExtensionDashboardPanel extends UIDashboardPanel
     {
         super(dashboard);
 
+        this.onOpen(this::onPanelOpened);
+        this.onClose(this::onPanelClosed);
+        this.onAppear(this::onPanelAppeared);
+        this.onDisappear(this::onPanelDisappeared);
+
         this.contribution = contribution;
         this.content = contribution.factory().create();
 
@@ -68,26 +73,22 @@ final class UIExtensionDashboardPanel extends UIDashboardPanel
         return this.query("refresh", this.content::canRefresh, true);
     }
 
-    @Override
-    public void appear()
+    private void onPanelAppeared()
     {
         this.invoke("appear", this.content::onAppear);
     }
 
-    @Override
-    public void disappear()
+    private void onPanelDisappeared()
     {
         this.invoke("disappear", this.content::onDisappear);
     }
 
-    @Override
-    public void open()
+    private void onPanelOpened()
     {
         this.invoke("open", this.content::onOpen);
     }
 
-    @Override
-    public void close()
+    private void onPanelClosed()
     {
         this.invoke("close", this.content::onClose);
     }

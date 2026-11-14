@@ -11,6 +11,7 @@ import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.tooltips.ITooltip;
 import mchorse.bbs_mod.ui.framework.tooltips.LabelTooltip;
@@ -49,7 +50,6 @@ public class UIBoneTreeList extends UIStringList
 {
     public static final int INDENT = 8;
 
-    private static final int GUIDE_COLOR = Colors.A25 | 0xFFFFFF;
     private static final int MARKER = 4;
     private static final int MARKER_GAP = 2;
 
@@ -342,9 +342,8 @@ public class UIBoneTreeList extends UIStringList
     /**
      * A form's representation at its parent's level: the form row (when its own key is
      * in the set) with its model bones and sub-forms nested under it — or, for a form
-     * the matrix cache doesn't list, those children hoisted in place. The body part
-     * index must advance for every part, even form-less ones — that is how
-     * collectMatrices numbers the paths.
+     * the matrix cache doesn't list, those children hoisted in place. Body parts
+     * use their stable ids, matching the matrix cache even after a reorder.
      */
     private static List<Node> formNodes(Form form, String path, Set<String> keys)
     {
@@ -368,18 +367,14 @@ public class UIBoneTreeList extends UIStringList
             children.addAll(formBoneHierarchyNodes(FormUtilsClient.getBoneHierarchy(form), path, keys));
         }
 
-        int i = 0;
-
         for (BodyPart part : form.parts.getAllTyped())
         {
             Form child = part.getForm();
 
             if (child != null)
             {
-                children.addAll(formNodes(child, StringUtils.combinePaths(path, String.valueOf(i)), keys));
+                children.addAll(formNodes(child, StringUtils.combinePaths(path, part.getId()), keys));
             }
-
-            i += 1;
         }
 
         if (!keys.contains(path))
@@ -486,7 +481,7 @@ public class UIBoneTreeList extends UIStringList
             /* This node's connector column keeps its vertical running through the
              * whole subtree unless the node closed the level as its last sibling.
              * Roots have no column, so nothing to continue. */
-            int childLines = !last && depth > 0 ? lines | (1 << (depth - 1)) : lines;
+            int childLines = childGuideLines(lines, depth, last);
 
             this.emit(node.children, depth + 1, childLines, fill);
         }
@@ -500,43 +495,42 @@ public class UIBoneTreeList extends UIStringList
         return meta == null ? this.labels.getOrDefault(element, element) : meta.fullLabel;
     }
 
+    private Meta shownMeta(String element)
+    {
+        return this.flat || this.isFiltering() ? null : this.metas.get(element);
+    }
+
+    @Override
+    protected int indent(String element)
+    {
+        Meta meta = this.shownMeta(element);
+
+        return meta == null ? 0 : meta.depth * INDENT;
+    }
+
+    @Override
+    protected int indentStep()
+    {
+        return INDENT;
+    }
+
     @Override
     protected void renderElementPart(UIContext context, String element, int i, int x, int y, boolean hover, boolean selected)
     {
-        /* Search results render flat with their full label — branches without the
-         * parent rows above them are just a lie about structure. */
-        boolean filtering = this.flat || this.isFiltering();
-        Meta meta = filtering ? null : this.metas.get(element);
-        int depth = meta == null ? 0 : meta.depth;
-        int h = this.scroll.scrollItemSize;
+        Meta meta = this.shownMeta(element);
+        int h = this.rowHeight();
 
-        if (meta != null && depth > 0)
+        if (meta != null)
         {
-            int mid = y + h / 2;
-            int textX = x + 4 + depth * INDENT;
-
-            for (int level = 0; level < depth - 1; level++)
-            {
-                if ((meta.lines & (1 << level)) != 0)
-                {
-                    int lx = columnX(x, level);
-
-                    context.batcher.box(lx, y, lx + 1, y + h, GUIDE_COLOR);
-                }
-            }
-
-            /* The connector: a tee for a middle child, a corner for the last one. */
-            int lx = columnX(x, depth - 1);
-
-            context.batcher.box(lx, y, lx + 1, meta.last ? mid + 1 : y + h, GUIDE_COLOR);
-            context.batcher.box(lx + 1, mid, textX - 2, mid + 1, GUIDE_COLOR);
+            this.renderTreeGuides(context, x, y, meta.depth, meta.lines, meta.last, x + this.rowContentX(element));
         }
 
         String label = meta == null
             ? this.elementToString(context, i, element)
             : meta.treeLabel;
-        int color = this.isDisabled(element) ? Colors.GRAY : (hover ? Colors.HIGHLIGHT : Colors.WHITE);
-        int textX = x + 4 + depth * INDENT;
+        boolean lit = hover || selected;
+        int color = this.isDisabled(element) ? RowStyle.textColor(lit, Colors.GRAY) : RowStyle.textColor(lit);
+        int textX = x + this.rowContentX(element);
         int right = this.renderMarkers(context, element, x, y, h);
 
         if (right < x + this.area.w)
@@ -584,11 +578,6 @@ public class UIBoneTreeList extends UIStringList
         }
 
         return this.markerLaneX;
-    }
-
-    private static int columnX(int x, int level)
-    {
-        return x + 4 + level * INDENT + 2;
     }
 
     private class MarkerLegend implements ITooltip

@@ -155,7 +155,7 @@ public class PanelVideoExportSession extends VideoExportSession
             this.width,
             this.height,
             BBSRendering.getVideoFrameRate(),
-            film == null ? 0 : film.camera.calculateDuration()
+            film == null ? 0 : film.calculateDuration()
         );
 
         return base;

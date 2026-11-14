@@ -127,7 +127,7 @@ public abstract class BaseManager <T extends ValueGroup> extends FolderManager<T
      *
      * @return whether the document may be read at all
      */
-    private boolean upgrade(String id, MapType data)
+    protected final boolean upgrade(String id, MapType data)
     {
         int version = SaveVersion.read(data);
 

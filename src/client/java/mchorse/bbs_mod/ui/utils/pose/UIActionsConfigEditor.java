@@ -92,6 +92,11 @@ public class UIActionsConfigEditor extends UIElement
         {
             runnable.run();
         }
+
+        if (runnable == this.preCallback && this.config != null)
+        {
+            this.configs.actions.put(this.actions.getCurrentFirst(), this.config);
+        }
     }
 
     public void setConfigs(ActionsConfig configs, ModelForm form)
@@ -132,18 +137,31 @@ public class UIActionsConfigEditor extends UIElement
         }
     }
 
+    public ActionsConfig getConfigs()
+    {
+        return this.configs;
+    }
+
+    public void updateConfigs(ActionsConfig configs)
+    {
+        this.bindConfigs(configs);
+        String current = this.actions.getCurrentFirst();
+
+        if (current != null) this.pickAction(current, false);
+    }
+
+    public void bindConfigs(ActionsConfig configs)
+    {
+        this.configs = configs;
+        String current = this.actions.getCurrentFirst();
+        if (current != null) this.config = configs.getConfig(current);
+    }
+
     private void pickAction(String key, boolean select)
     {
         ActionsConfig config = this.configs;
 
-        this.config = config.actions.get(key);
-
-        if (this.config == null)
-        {
-            this.config = new ActionConfig(key);
-
-            config.actions.put(key, this.config);
-        }
+        this.config = config.getConfig(key);
 
         this.animations.list.setCurrentScroll(this.config.name);
 

@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.forms.forms;
 
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.forms.forms.utils.ParticleSettings;
 import mchorse.bbs_mod.forms.values.ValueParticleSettings;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
@@ -8,6 +10,8 @@ import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 
 public class VanillaParticleForm extends Form
 {
+    public static final Icon ICON = Icons.PARTICLE;
+
     public final ValueParticleSettings settings = new ValueParticleSettings("settings", new ParticleSettings());
     public final ValueBoolean paused = new ValueBoolean("paused", false);
     public final ValueBoolean local = new ValueBoolean("local", false);
@@ -37,5 +41,11 @@ public class VanillaParticleForm extends Form
         this.add(this.offsetX);
         this.add(this.offsetY);
         this.add(this.offsetZ);
+    }
+
+    @Override
+    public Icon getIcon()
+    {
+        return ICON;
     }
 }

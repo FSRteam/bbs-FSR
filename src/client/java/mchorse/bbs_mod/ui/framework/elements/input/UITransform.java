@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input;
 
+import mchorse.bbs_mod.ui.utils.icons.Icon;
+import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -690,5 +692,43 @@ public abstract class UITransform extends UIElement
         }
 
         return super.subKeyPressed(context);
+    }
+
+    public void setRotationEnabled(boolean enabled)
+    {
+        UIUtils.setEnabledDeep(this.rotateRow, enabled);
+    }
+
+    public void setScaleEnabled(boolean enabled)
+    {
+        UIUtils.setEnabledDeep(this.scaleRow, enabled);
+    }
+
+    public void labels(IKey translate, IKey scale, IKey rotate)
+    {
+        IKey raw = IKey.constant("%s (%s)");
+
+        this.tx.tooltip(raw.format(translate, UIKeys.GENERAL_X));
+        this.ty.tooltip(raw.format(translate, UIKeys.GENERAL_Y));
+        this.tz.tooltip(raw.format(translate, UIKeys.GENERAL_Z));
+        this.sx.tooltip(raw.format(scale, UIKeys.GENERAL_X));
+        this.sy.tooltip(raw.format(scale, UIKeys.GENERAL_Y));
+        this.sz.tooltip(raw.format(scale, UIKeys.GENERAL_Z));
+        this.rx.tooltip(raw.format(rotate, UIKeys.GENERAL_X));
+        this.ry.tooltip(raw.format(rotate, UIKeys.GENERAL_Y));
+        this.rz.tooltip(raw.format(rotate, UIKeys.GENERAL_Z));
+    }
+
+    public void translateAction(IKey tooltip, Runnable action)
+    {
+        this.iconT.callback = (b) -> action.run();
+        this.iconT.tooltip(tooltip);
+        this.iconT.setEnabled(true);
+    }
+
+    public void translateAction(IKey tooltip, Icon icon, Runnable action)
+    {
+        this.iconT.both(icon);
+        this.translateAction(tooltip, action);
     }
 }

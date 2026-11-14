@@ -4,6 +4,7 @@ import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.CameraUtils;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.utils.Axis;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Matrix3f;
@@ -72,6 +73,10 @@ public class GizmoDrag
      * doesn't have to know which model type it's editing.
      */
     public final Matrix3f rotateAxes = new Matrix3f();
+    public final Matrix3f localWorldAxes = new Matrix3f();
+    public final Matrix3f parentWorldAxes = new Matrix3f();
+    private boolean hasFrameAxes;
+    public boolean hasRotateAxes;
 
     /**
      * World-space orthonormal basis {@link TransformSpace#GLOBAL} aligns to.
@@ -295,8 +300,8 @@ public class GizmoDrag
      * (mapped into the bone's parent frame via
      * {@link mchorse.bbs_mod.ui.framework.elements.input.drag.RotationDragMath#parentInverse}),
      * so the bone always follows the ring the user grabbed. PARENT rings
-     * instead bump the driven channel directly — the deliberate pre-spaces
-     * behaviour (see {@link TransformSpace#PARENT}). The MEASURED
+     * also turn around their drawn parent-frame axis; only a channel-only target
+     * or an Euler pole falls back to one gimbal channel. The MEASURED
      * {@link #rotateAxes} (the renderer's response to the euler channels, which
      * folds in the cubic {@code Ry(180°)} post-flip AND the euler stack's gimbal
      * skew) is deliberately NOT a gesture basis anymore &mdash; a LOCAL ring
@@ -320,7 +325,11 @@ public class GizmoDrag
                 /* Constrained drags need axes whatever happens, so a degenerate
                  * view falls back to the world frame. */
                 return camera == null ? new Matrix3f() : camera;
+            case LOCAL:
+                if (this.hasFrameAxes) return new Matrix3f(this.localWorldAxes);
+                return new Matrix3f(this.gizmoWorldAxes);
             default:
+                if (this.hasFrameAxes) return new Matrix3f(this.parentWorldAxes);
                 /* LOCAL and PARENT: the frame the gizmo was drawn in IS the
                  * space frame — the placement matrix carries the bone's own
                  * frame in LOCAL and the origin/parent frame in PARENT. */
@@ -409,6 +418,7 @@ public class GizmoDrag
     public GizmoDrag setRotateAxes(Matrix3f axes)
     {
         this.rotateAxes.set(axes);
+        this.hasRotateAxes = true;
 
         return this;
     }
@@ -456,8 +466,33 @@ public class GizmoDrag
      * Restores the original translate value before returning so the caller is
      * free to keep using the {@code Transform} as is.
      */
-    public static Matrix3f computeTranslateJacobian(Transform transform, Supplier<Vector3f> worldPositionSampler)
+    /**
+     * Wrap a pose sampler so every read re-evaluates the form instead of being answered from
+     * this frame's pose cache ({@link RenderFrame}).
+     *
+     * <p>Required by every probe below, and by any other measurement built the same way. The
+     * probes work by writing raw fields of a {@link Transform} and re-reading the matrices that
+     * come out; those writes are plain {@code Vector3f} assignments, so they do NOT bubble a
+     * value notification and do NOT bump {@link mchorse.bbs_mod.forms.forms.Form#getPoseVersion}.
+     * The frame cache is keyed on that version, so without this every probe of a gesture is
+     * answered with the same unperturbed matrix: the measured response is zero, the rotate axes
+     * collapse to the identity and the translate Jacobian to zero, and the gesture then turns
+     * and slides the bone in a frame that has nothing to do with the one on screen. This is
+     * exactly the out-of-band mutation {@link RenderFrame#invalidate} exists for.
+     */
+    public static <T> Supplier<T> freshSampler(Supplier<T> sampler)
     {
+        return () ->
+        {
+            RenderFrame.invalidate();
+
+            return sampler.get();
+        };
+    }
+
+    public static Matrix3f computeTranslateJacobian(Transform transform, Supplier<Vector3f> sampler)
+    {
+        Supplier<Vector3f> worldPositionSampler = freshSampler(sampler);
         Vector3f saved = new Vector3f(transform.translate);
         float epsilon = 1F;
 
@@ -483,6 +518,7 @@ public class GizmoDrag
         finally
         {
             transform.translate.set(saved);
+            RenderFrame.invalidate();
         }
     }
 
@@ -519,7 +555,7 @@ public class GizmoDrag
 
     public static Matrix3f resolveTranslateJacobian(Matrix3f jacobian, boolean modelPart)
     {
-        if (jacobian != null && isUsableTranslateJacobian(jacobian))
+        if (jacobian != null && jacobian.isFinite() && !jacobian.equals(new Matrix3f().zero()))
         {
             return new Matrix3f(jacobian);
         }
@@ -556,8 +592,9 @@ public class GizmoDrag
      * {@code rotate.z}, unit-length. Original {@code rotate} values are
      * restored before returning.</p>
      */
-    public static Matrix3f computeRotateAxes(Transform transform, Supplier<Matrix4f> matrixSampler)
+    public static Matrix3f computeRotateAxes(Transform transform, Supplier<Matrix4f> sampler)
     {
+        Supplier<Matrix4f> matrixSampler = freshSampler(sampler);
         boolean quat = transform.rotationMode == Transform.RotationMode.QUATERNION;
         Vector3f savedRotate = new Vector3f(transform.rotate);
         Quaternionf savedQuat = new Quaternionf(transform.quat);
@@ -635,6 +672,7 @@ public class GizmoDrag
         {
             transform.rotate.set(savedRotate);
             transform.quat.set(savedQuat);
+            RenderFrame.invalidate();
         }
     }
 
@@ -642,4 +680,88 @@ public class GizmoDrag
     {
         return computeRotateAxes(transform, matrixSampler);
     }
+
+    /**
+     * Both bone frames at once, each as the matrix the gizmo WOULD be placed on in that
+     * frame (the host's origin matrix with and without the bone's own rotation).
+     * 🔴 Pass them in the space the gizmo's origin is read back in — lift host-frame
+     * matrices through the renderer first, exactly as the rotate axes are.
+     *
+     * <p>A {@code null} in either leaves BOTH unset: half a pair would answer for one
+     * frame and quietly lie about the other.
+     */
+    public GizmoDrag setFrameAxes(Matrix4f local, Matrix4f parent)
+    {
+        if (local == null || parent == null)
+        {
+            return this;
+        }
+
+        this.localWorldAxes.set(basisOf(local));
+        this.parentWorldAxes.set(basisOf(parent));
+        this.hasFrameAxes = true;
+
+        return this;
+    }
+
+    /** Whether {@link #setFrameAxes} was given a pair of frames. */
+    public boolean hasFrameAxes()
+    {
+        return this.hasFrameAxes;
+    }
+
+    /** Shared by placement and dragging: unit, perpendicular axes without inherited
+     *  stretch/shear. Preserve mirrored handedness and reconstruct collapsed axes. */
+    public static Matrix3f basisOf(Matrix4f matrix)
+    {
+        Matrix3f basis = matrix.get3x3(new Matrix3f());
+        Vector3f x = basis.getColumn(0, new Vector3f());
+        Vector3f y = basis.getColumn(1, new Vector3f());
+        Vector3f z = basis.getColumn(2, new Vector3f());
+
+        if (x.lengthSquared() < 1.0E-12F)
+        {
+            y.cross(z, x);
+
+            if (x.lengthSquared() < 1.0E-12F)
+            {
+                Vector3f remaining = y.lengthSquared() >= 1.0E-12F ? y : z;
+
+                if (remaining.lengthSquared() < 1.0E-12F)
+                {
+                    return basis.identity();
+                }
+
+                x.set(Math.abs(remaining.x) < Math.abs(remaining.y) ? 1F : 0F,
+                    Math.abs(remaining.x) < Math.abs(remaining.y) ? 0F : 1F, 0F);
+                x.fma(-x.dot(remaining) / remaining.lengthSquared(), remaining);
+            }
+        }
+
+        x.normalize();
+        y.fma(-x.dot(y), x);
+
+        if (y.lengthSquared() < 1.0E-12F)
+        {
+            z.cross(x, y);
+
+            if (y.lengthSquared() < 1.0E-12F)
+            {
+                y.set(Math.abs(x.y) < 0.9F ? 0F : 1F, Math.abs(x.y) < 0.9F ? 1F : 0F, 0F);
+                y.fma(-x.dot(y), x);
+            }
+        }
+
+        y.normalize();
+
+        Vector3f perpendicular = x.cross(y, new Vector3f()).normalize();
+
+        if (perpendicular.dot(z) < 0F)
+        {
+            perpendicular.negate();
+        }
+
+        return basis.setColumn(0, x).setColumn(1, y).setColumn(2, perpendicular);
+    }
+
 }

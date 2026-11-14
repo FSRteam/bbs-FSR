@@ -6,6 +6,7 @@ package mchorse.bbs_mod.ui.utils;
  */
 public final class UIConstants
 {
+    public static final int ICON_SIZE = 20;
     /** Height of standard form controls: trackpad, button, textbox, keybind, color strip. */
     public static final int CONTROL_HEIGHT = 16;
 

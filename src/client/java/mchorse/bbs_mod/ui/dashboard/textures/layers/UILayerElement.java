@@ -1,12 +1,12 @@
 package mchorse.bbs_mod.ui.dashboard.textures.layers;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.ImageClipboard;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
 import mchorse.bbs_mod.ui.dashboard.textures.data.TextureLayer;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -15,6 +15,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.resources.Pixels;
@@ -206,24 +207,20 @@ public class UILayerElement extends UIElement
             }));
         }
 
-        /* Destructive: remove at the very bottom. */
-        if (canDelete)
+        menu.icon(MenuVerb.REMOVE, () -> this.panel.currentEditor.recordLayerChange(null, () ->
         {
-            menu.action(Icons.REMOVE, UIKeys.TEXTURES_LAYERS_CONTEXT_REMOVE, BBSSettings.negativeColor() & Colors.RGB, () -> this.panel.currentEditor.recordLayerChange(null, () ->
+            this.panel.currentEditor.getDocument().layers.remove(this.index);
+            this.layer.delete();
+
+            if (this.panel.currentEditor.getDocument().activeLayerIndex >= this.panel.currentEditor.getDocument().layers.size())
             {
-                this.panel.currentEditor.getDocument().layers.remove(this.index);
-                this.layer.delete();
+                this.panel.currentEditor.getDocument().activeLayerIndex = this.panel.currentEditor.getDocument().layers.size() - 1;
+            }
 
-                if (this.panel.currentEditor.getDocument().activeLayerIndex >= this.panel.currentEditor.getDocument().layers.size())
-                {
-                    this.panel.currentEditor.getDocument().activeLayerIndex = this.panel.currentEditor.getDocument().layers.size() - 1;
-                }
-
-                this.panel.currentEditor.setActiveLayer(this.panel.currentEditor.getDocument().activeLayerIndex);
-                this.panel.updateLayers();
-                this.panel.currentEditor.dirty();
-            }));
-        }
+            this.panel.currentEditor.setActiveLayer(this.panel.currentEditor.getDocument().activeLayerIndex);
+            this.panel.updateLayers();
+            this.panel.currentEditor.dirty();
+        })).label(UIKeys.TEXTURES_LAYERS_CONTEXT_REMOVE).enabled(canDelete);
     }
 
     @Override
@@ -249,13 +246,10 @@ public class UILayerElement extends UIElement
     public void render(UIContext context)
     {
         boolean active = this.panel.currentEditor.getDocument().activeLayerIndex == this.index;
-        int color = active ? BBSSettings.primaryColor(Colors.A50) : Colors.A25;
-        if (this.area.isInside(context))
-        {
-            color = active ? BBSSettings.primaryColor(Colors.A75): Colors.A50;
-        }
+        boolean hover = this.area.isInside(context);
 
-        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), color);
+        context.batcher.box(this.area.x, this.area.y, this.area.ex(), this.area.ey(), Colors.A25);
+        RowStyle.row(context.batcher, this.area.x, this.area.y, this.area.w, this.area.h, 0, false, hover, active);
 
         super.render(context);
     }

@@ -5,6 +5,7 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.audio.AudioRenderer;
 import mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind;
+import mchorse.bbs_mod.api.client.events.RegisterPreviewOverlaysEvent;
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.camera.clips.misc.AudioClip;
 import mchorse.bbs_mod.camera.controller.RunnerCameraController;
@@ -27,7 +28,6 @@ import mchorse.bbs_mod.settings.ui.UISettingsOverlayPanel;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
-import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.controller.UIMotionPathContextMenu;
 import mchorse.bbs_mod.ui.film.controller.UIOnionSkinContextMenu;
 import mchorse.bbs_mod.ui.film.controller.UIFilmController;
@@ -76,6 +76,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 
 public class UIFilmPreview extends UIElement
 {
@@ -86,6 +87,7 @@ public class UIFilmPreview extends UIElement
     private final UIFilmController viewController;
     private final Camera displayedCamera = new Camera();
     private final ViewNavigationGesture navigationGesture = new ViewNavigationGesture();
+    private final UIPlacementGizmo placementGizmo;
     private long lastImageNanos;
     private double observedRefreshRate;
     private UIElement viewTools;
@@ -124,6 +126,7 @@ public class UIFilmPreview extends UIElement
         this.view = view;
         this.viewController = view.isPrimary() ? filmPanel.getController() : new UIFilmController(filmPanel, false);
         this.viewController.bindPreview(this);
+        this.placementGizmo = new UIPlacementGizmo(filmPanel);
 
         this.icons = UI.row(0, 0);
         this.icons.row().resize();
@@ -131,8 +134,10 @@ public class UIFilmPreview extends UIElement
 
         /* Preview buttons */
         this.onionSkin = new UIIcon(Icons.ONION_SKIN, (b) -> this.openOnionSkin());
+        this.onionSkin.highlight(() -> this.getViewController().getOnionSkin().enabled.get(), Direction.BOTTOM);
         this.onionSkin.tooltip(UIKeys.FILM_CONTROLLER_ONION_SKIN_TITLE);
         this.motionPath = new UIIcon(Icons.CURVES, (b) -> this.openMotionPath());
+        this.motionPath.highlight(() -> this.getViewController().getMotionPath().enabled.get(), Direction.BOTTOM);
         this.motionPath.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_TITLE);
         this.plause = new UIIcon(() -> this.panel.isRunning() ? Icons.PAUSE : Icons.PLAY, (b) -> this.panel.togglePlayback());
         this.plause.tooltip(UIKeys.CAMERA_EDITOR_KEYS_EDITOR_PLAUSE);
@@ -204,6 +209,8 @@ public class UIFilmPreview extends UIElement
         });
         this.flight.tooltip(UIKeys.CAMERA_EDITOR_KEYS_MODES_FLIGHT);
         this.control = new UIIcon(Icons.POSE, (b) -> this.getViewController().toggleControl());
+        this.flight.highlight(() -> this.getViewController().isViewFlying(), Direction.BOTTOM);
+        this.control.highlight(() -> this.getViewController().isControlling(), Direction.BOTTOM);
         this.control.tooltip(UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_CONTROL);
         this.perspective = new UIIcon(this.getViewController()::getOrbitModeIcon, (b) -> this.getViewController().toggleOrbitMode());
         this.perspective.tooltip(UIKeys.FILM_CONTROLLER_KEYS_CHANGE_CAMERA_MODE);
@@ -219,9 +226,12 @@ public class UIFilmPreview extends UIElement
             menu.action(Icons.FRUSTUM, UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_ORTHO, controller.orbit.isOrtho(), controller.orbit::toggleOrtho);
         });
         this.recordReplay = new UIIcon(Icons.SPHERE, (b) -> this.getViewController().pickRecording());
+        this.recordReplay.highlight(() -> this.getViewController().isRecording(), Direction.BOTTOM);
         this.recordReplay.tooltip(UIKeys.FILM_REPLAY_RECORD);
         this.recordReplay.context((menu) ->
         {
+            menu.action(Icons.KEY, UIKeys.FILM_AUTO_KEYFRAME, BBSSettings.autoKeyframe.get(),
+                () -> BBSSettings.autoKeyframe.set(!BBSSettings.autoKeyframe.get()));
             menu.action(Icons.DOWNLOAD, UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_INSTANT_KEYFRAMES, this.getViewController().isInstantKeyframes(), () ->
             {
                 this.getViewController().toggleInstantKeyframes();
@@ -285,6 +295,7 @@ public class UIFilmPreview extends UIElement
             }
         });
         this.recordVideo.tooltip(UIKeys.CAMERA_TOOLTIPS_RECORD);
+        this.recordVideo.highlight(() -> this.panel.recorder.isRecording(), Direction.BOTTOM);
         this.recordVideo.context((menu) ->
         {
             menu.action(Icons.CAMERA, UIKeys.FILM_SCREENSHOT, () ->
@@ -352,6 +363,11 @@ public class UIFilmPreview extends UIElement
         this.icons.add(this.onionSkin, this.motionPath, this.plause, this.teleport, this.flight, this.control, this.perspective, this.recordReplay, this.recordVideo);
         this.add(this.icons);
         this.setupViewTools();
+
+        for (Function<UIFilmPreview, UIElement> factory : RegisterPreviewOverlaysEvent.getOverlays())
+        {
+            this.add(factory.apply(this));
+        }
     }
 
     private void setupViewTools()
@@ -776,7 +792,7 @@ public class UIFilmPreview extends UIElement
 
     public void openMotionPath()
     {
-        this.getContext().replaceContextMenu(new UIMotionPathContextMenu(this.panel, this.getViewController().getMotionPath()));
+        this.getContext().replaceContextMenu(new UIMotionPathContextMenu(this.getViewController(), this.getViewController().getMotionPath()));
     }
 
     private void exportQueueFromTabs()
@@ -858,6 +874,12 @@ public class UIFilmPreview extends UIElement
         {
             this.panel.activatePreview(this);
             this.requestRefresh();
+
+            if (this.getViewController().picker.pickTarget(context))
+            {
+                return true;
+            }
+
             ViewNavigationState navigation = this.view.getNavigation();
             boolean cameraView = navigation.isInCameraView();
 
@@ -877,6 +899,7 @@ public class UIFilmPreview extends UIElement
                 () ->
                 {
                     handled[0] = this.getViewController().orbitGizmo.mouseClicked(context, area)
+                        || this.placementGizmo.mouseClicked(context, area)
                         || this.getViewController().clickViewport(context);
                 }
             );
@@ -911,7 +934,8 @@ public class UIFilmPreview extends UIElement
             return true;
         }
 
-        boolean handled = this.getViewController().releaseViewportGesture(context);
+        boolean handled = this.placementGizmo.mouseReleased(context)
+            || this.getViewController().releaseViewportGesture(context);
 
         if (handled)
         {
@@ -1119,6 +1143,8 @@ public class UIFilmPreview extends UIElement
             context.batcher.outline(area.x, area.y, area.ex(), area.ey(), BBSSettings.mutedTextColor());
         }
 
+        this.placementGizmo.render(context, area);
+
         this.getViewController().renderHUD(context, area);
         this.renderViewStatus(context);
 
@@ -1161,12 +1187,6 @@ public class UIFilmPreview extends UIElement
             int barShade = BBSSettings.color(BBSSettings.chromeSurface(), Colors.A50);
             context.batcher.gradientVBox(a.x, a.y, a.ex(), a.ey(), 0, barShade);
 
-            if (this.getViewController().isViewFlying()) UIDashboardPanels.renderHighlight(context.batcher, this.flight.area, Direction.BOTTOM);
-            if (this.getViewController().isControlling()) UIDashboardPanels.renderHighlight(context.batcher, this.control.area, Direction.BOTTOM);
-            if (this.getViewController().isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordReplay.area, Direction.BOTTOM);
-            if (this.panel.recorder.isRecording()) UIDashboardPanels.renderHighlight(context.batcher, this.recordVideo.area, Direction.BOTTOM);
-            if (this.getViewController().getOnionSkin().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.onionSkin.area, Direction.BOTTOM);
-            if (this.getViewController().getMotionPath().enabled.get()) UIDashboardPanels.renderHighlight(context.batcher, this.motionPath.area, Direction.BOTTOM);
             if (this.getViewController().isControlling())
             {
                 String s = UIKeys.FILM_CONTROLLER_CONTROL_MODE_TOOLTIP.format(KeyCodes.getName(Keys.FILM_CONTROLLER_TOGGLE_CONTROL.getMainKey())).get();

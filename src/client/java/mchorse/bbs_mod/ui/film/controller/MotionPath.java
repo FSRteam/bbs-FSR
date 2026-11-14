@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.controller;
 
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -12,6 +13,8 @@ import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.cubic.animation.ActionConfig;
 import mchorse.bbs_mod.cubic.animation.ActionsConfig;
 import mchorse.bbs_mod.film.FilmMatrices;
+import mchorse.bbs_mod.film.FilmTarget;
+import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -19,6 +22,7 @@ import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.settings.values.ui.ValueMotionPath;
 import mchorse.bbs_mod.utils.Pair;
@@ -35,6 +39,7 @@ import org.joml.Vector3f;
 
 import java.util.Arrays;
 import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.TreeSet;
 
 /**
@@ -68,17 +73,25 @@ public class MotionPath
     private static final Vector3d POINT_A = new Vector3d();
     private static final Vector3d POINT_B = new Vector3d();
 
-    /* Bone path cache (one editor at a time). */
-    private static String boneCacheSignature;
-    private static BoneTrajectory boneCache;
+    /* Persistent sampling state belongs to the viewport that requested it. */
+    private static final Map<UIFilmController, SampleCache> SAMPLES = new WeakHashMap<>();
     private static final Vector3d LIVE = new Vector3d();
     private static final Vector3f TEMP = new Vector3f();
 
-    /* A scratch entity reused across recomputes (re-posed per tick), so a recompute — which
-     * happens every frame while a bone is being dragged — does not pay a deep form copy each
-     * time; it is only rebuilt when the form itself changes. */
-    private static Form scratchForm;
-    private static StubEntity scratchEntity;
+    private static final class SampleCache
+    {
+        private String signature;
+        private BoneTrajectory trajectory;
+        private Form source;
+        private int sourceVersion;
+        private Level world;
+        private StubEntity entity;
+    }
+
+    public static void release(UIFilmController controller)
+    {
+        SAMPLES.remove(controller);
+    }
 
     /* The animator's action slots (mirrors Animator#setup) — emptied on the scratch form so the
      * always-applied actions don't perturb the sampled bone path. */
@@ -87,28 +100,41 @@ public class MotionPath
         "swipe", "jump", "jump_alt", "hurt", "land", "shoot", "consume", "base_pre", "base_post"
     };
 
+    /** Compatibility entrypoint for integrations using the former bone pair. */
     public static void render(IBbsWorldRenderContext context, ValueMotionPath config, UIFilmController controller, Replay replay, Pair<String, Boolean> bone, float currentTick)
     {
-        if (replay == null || replay.relative.get())
+        render(context, config, controller, replay, bone == null ? FilmTarget.NONE
+            : FilmTarget.bone(bone.a, bone.b ? TransformSpace.LOCAL : TransformSpace.WORLD), currentTick);
+    }
+
+    public static void render(IBbsWorldRenderContext context, ValueMotionPath config, UIFilmController controller, Replay replay, FilmTarget target, float currentTick)
+    {
+        BBSProfiler.begin(BBSProfiler.Timer.MOTION_PATH);
+
+        try
         {
-            return;
+            if (replay == null || replay.relative.get())
+            {
+                return;
+            }
+
+            Trajectory trajectory = target == null || target.isNone() || target.is(FilmTarget.Kind.ROOT)
+                ? null : sampledTrajectory(controller, replay, target);
+
+            if (trajectory == null)
+            {
+                trajectory = rootTrajectory(replay);
+            }
+
+            if (trajectory != null)
+            {
+                draw(context, config, trajectory, currentTick);
+            }
         }
-
-        String bonePath = bone == null ? null : bone.a;
-
-        Trajectory trajectory = bonePath == null ? null : boneTrajectory(controller, replay, bonePath);
-
-        if (trajectory == null)
+        finally
         {
-            trajectory = rootTrajectory(replay);
+            BBSProfiler.end(BBSProfiler.Timer.MOTION_PATH);
         }
-
-        if (trajectory == null)
-        {
-            return;
-        }
-
-        draw(context, config, trajectory, currentTick);
     }
 
     /* Drawing */
@@ -266,7 +292,7 @@ public class MotionPath
 
     private static void dot(BufferBuilder builder, PoseStack stack, Vector3d point, float radius, float[] color)
     {
-        float half = radius * BBSSettings.getAxesDistanceScale((float) point.length());
+        float half = radius * BBSSettings.getScreenSizeScale((float) point.length());
 
         Draw.fillBox(builder, stack, (float) point.x - half, (float) point.y - half, (float) point.z - half, (float) point.x + half, (float) point.y + half, (float) point.z + half, color[0], color[1], color[2], 1F);
     }
@@ -298,7 +324,7 @@ public class MotionPath
             return;
         }
 
-        double half = halfWidth * BBSSettings.getAxesDistanceScale((float) Math.sqrt(mx * mx + my * my + mz * mz)) / length;
+        double half = halfWidth * BBSSettings.getScreenSizeScale((float) Math.sqrt(mx * mx + my * my + mz * mz)) / length;
 
         sx *= half;
         sy *= half;
@@ -364,12 +390,14 @@ public class MotionPath
 
     /* Bone trajectory: simulated per tick on a scratch entity, cached. */
 
-    private static Trajectory boneTrajectory(UIFilmController controller, Replay replay, String bonePath)
+    private static Trajectory sampledTrajectory(UIFilmController controller, Replay replay, FilmTarget target)
     {
         Level world = Minecraft.getInstance().level;
         Form form = replay.form.get();
 
-        if (!ensureScratch(world, form))
+        SampleCache cache = SAMPLES.computeIfAbsent(controller, key -> new SampleCache());
+
+        if (!ensureScratch(world, form, cache))
         {
             return null;
         }
@@ -382,15 +410,15 @@ public class MotionPath
          * seed so each recompute drifted ~1cm — and self-triggering (a single off-sequence sample
          * never matches the in-sequence cached value). Without it the cached path is stable while
          * idle and only rebuilt on a real edit. */
-        String signature = signature(replay, bonePath);
+        String signature = signature(replay, target);
 
-        if (boneCache == null || !signature.equals(boneCacheSignature))
+        if (cache.trajectory == null || !signature.equals(cache.signature))
         {
-            boneCache = computeBoneTrajectory(entities, replay, bonePath);
-            boneCacheSignature = signature;
+            cache.trajectory = computeSampledTrajectory(cache, entities, replay, target);
+            cache.signature = signature;
         }
 
-        return boneCache;
+        return cache.trajectory;
     }
 
     /**
@@ -399,36 +427,40 @@ public class MotionPath
      * tick from the entity's movement, which made the sampled bone path jitter. The path is meant
      * to show the authored motion (keyframes + IK), so the procedural overlay is dropped.
      */
-    private static boolean ensureScratch(Level world, Form form)
+    private static boolean ensureScratch(Level world, Form form, SampleCache cache)
     {
         if (world == null || form == null)
         {
             return false;
         }
 
-        if (scratchEntity == null || scratchForm != form)
+        if (cache.entity == null || cache.source != form || cache.world != world || cache.sourceVersion != form.getPoseVersion())
         {
             Form copy = FormUtils.copy(form);
 
             if (copy == null)
             {
-                scratchEntity = null;
-                scratchForm = null;
+                cache.entity = null;
+                cache.source = null;
+                cache.trajectory = null;
 
                 return false;
             }
 
             disableActions(copy);
 
-            scratchEntity = new StubEntity(world);
-            scratchEntity.setForm(copy);
-            scratchForm = form;
+            cache.entity = new StubEntity(world);
+            cache.entity.setForm(copy);
+            cache.source = form;
+            cache.sourceVersion = form.getPoseVersion();
+            cache.world = world;
+            cache.trajectory = null;
         }
 
         return true;
     }
 
-    private static BoneTrajectory computeBoneTrajectory(Map<String, IEntity> entities, Replay replay, String bonePath)
+    private static BoneTrajectory computeSampledTrajectory(SampleCache cache, Map<String, IEntity> entities, Replay replay, FilmTarget target)
     {
         float[] range = range(replay);
 
@@ -443,22 +475,31 @@ public class MotionPath
 
         double[] points = new double[count * 3];
 
-        for (int i = 0; i < count; i++)
+        try
         {
-            if (!sampleBoneWorld(entities, replay, bonePath, base + i, LIVE))
+            for (int i = 0; i < count; i++)
             {
-                return null;
-            }
+                if (!sampleTargetWorld(cache, entities, replay, target, base + i, LIVE))
+                {
+                    return null;
+                }
 
-            points[i * 3] = LIVE.x;
-            points[i * 3 + 1] = LIVE.y;
-            points[i * 3 + 2] = LIVE.z;
+                points[i * 3] = LIVE.x;
+                points[i * 3 + 1] = LIVE.y;
+                points[i * 3 + 2] = LIVE.z;
+            }
+        }
+        finally
+        {
+            RenderFrame.invalidate();
         }
 
         TreeSet<Float> ticks = new TreeSet<>();
-        String boneName = bonePath.contains(".") ? bonePath.substring(bonePath.lastIndexOf('.') + 1) : bonePath;
+        String bonePath = target.bone();
+        String boneName = target.is(FilmTarget.Kind.ANCHOR) ? "anchor"
+            : bonePath.contains(".") ? bonePath.substring(bonePath.lastIndexOf('.') + 1) : bonePath;
 
-        for (KeyframeChannel<?> channel : replay.properties.properties.values())
+        for (KeyframeChannel<?> channel : replay.properties.tracks.values())
         {
             if (channel.getId() != null && channel.getId().contains(boneName))
             {
@@ -470,16 +511,19 @@ public class MotionPath
     }
 
     /** Pose the scratch entity at {@code tick} and read the bone's world position (camera at origin). */
-    private static boolean sampleBoneWorld(Map<String, IEntity> entities, Replay replay, String bonePath, int tick, Vector3d out)
+    private static boolean sampleTargetWorld(SampleCache cache, Map<String, IEntity> entities, Replay replay, FilmTarget target, int tick, Vector3d out)
     {
-        StubEntity entity = scratchEntity;
+        StubEntity entity = cache.entity;
 
         replay.keyframes.apply(tick, entity);
         entity.update();
         entity.getForm().update(entity);
         replay.properties.applyProperties(entity.getForm(), tick);
+        RenderFrame.invalidate();
 
-        Matrix4f matrix = FilmMatrices.getBoneCompositeMatrix(entities, entity, replay, 0D, 0D, 0D, 0F, bonePath, false);
+        Matrix4f matrix = target.is(FilmTarget.Kind.ANCHOR)
+            ? FilmMatrices.getGizmoAnchorCompositeMatrix(entities, entity, replay, 0D, 0D, 0D, 0F)
+            : FilmMatrices.getBoneCompositeMatrix(entities, entity, replay, 0D, 0D, 0D, 0F, target.bone(), false);
 
         if (matrix == null)
         {
@@ -605,7 +649,7 @@ public class MotionPath
             last = Math.max(last, lastTick(channel));
         }
 
-        for (KeyframeChannel<?> channel : replay.properties.properties.values())
+        for (KeyframeChannel<?> channel : replay.properties.tracks.values())
         {
             first = Math.min(first, firstTick(channel));
             last = Math.max(last, lastTick(channel));
@@ -638,15 +682,15 @@ public class MotionPath
         return channel.isEmpty() ? -Float.MAX_VALUE : channel.get(channel.getKeyframes().size() - 1).getTick();
     }
 
-    private static String signature(Replay replay, String bonePath)
+    private static String signature(Replay replay, FilmTarget target)
     {
-        StringBuilder builder = new StringBuilder(replay.getId()).append('|').append(bonePath);
+        StringBuilder builder = new StringBuilder(replay.getId()).append('|').append(target.kind()).append('|').append(target.bone());
 
         signature(builder, replay.keyframes.x);
         signature(builder, replay.keyframes.y);
         signature(builder, replay.keyframes.z);
 
-        for (KeyframeChannel<?> channel : replay.properties.properties.values())
+        for (KeyframeChannel<?> channel : replay.properties.tracks.values())
         {
             builder.append('#').append(channel.getId());
             signature(builder, channel);
@@ -657,10 +701,15 @@ public class MotionPath
 
     private static void signature(StringBuilder builder, KeyframeChannel<?> channel)
     {
-        /* Hash the channel's serialized data so the signature changes on value edits (re-posing a
-         * bone), not only on add/remove/move — the path follows a gizmo drag without a per-frame
-         * resample of the bone. */
-        builder.append(':').append(channel.toData().toString().hashCode());
+        int hash = 1;
+
+        for (Keyframe<?> keyframe : channel.getKeyframes())
+        {
+            hash = 31 * hash + keyframe.contentHash();
+        }
+
+        hash = 31 * hash + channel.getLoops().hashCode();
+        builder.append(':').append(hash);
     }
 
     private static void collectTicks(TreeSet<Float> ticks, KeyframeChannel<?> channel)

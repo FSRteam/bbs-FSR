@@ -16,6 +16,7 @@ import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.colors.OverlayBlend;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -184,6 +185,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         Color color = this.textColor.set(context.color, true);
 
         FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
+        OverlayBlend.apply(color, this.form.overlayColor.get());
         shadowColor.mul(context.color);
 
         if (shadowColor.a > 0)
@@ -293,6 +295,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         Color cColor = this.textColor.set(context.color, true);
 
         FormColorBlend.blend(cColor, this.form.color.get(), this.form.additiveColor.get());
+        OverlayBlend.apply(cColor, this.form.overlayColor.get());
 
         int color = cColor.getARGBColor();
 
@@ -339,7 +342,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         BufferBuilder builder;
 
-        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
+        builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
         fillQuad(
             builder, context.stack,

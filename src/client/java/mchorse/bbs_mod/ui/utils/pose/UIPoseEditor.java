@@ -17,7 +17,10 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
-import mchorse.bbs_mod.ui.utils.PickedBone;
+import mchorse.bbs_mod.ui.utils.BoneSelection;
+import mchorse.bbs_mod.ui.utils.IBoneSelectionHost;
+import mchorse.bbs_mod.ui.utils.context.MenuIcon;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.resizers.AutomaticResizer;
@@ -50,6 +53,10 @@ public class UIPoseEditor extends UIElement
     public UISliderTrackpad fix;
     public UIColor color;
     public UIToggle lighting;
+    public UISliderTrackpad glow;
+    public UIColor overlay;
+    public UIToggle boneVisible;
+    public UISection materialSection;
     public UICirculate glintMode;
     public UIColor glintColor;
     public UITrackpad glintSpeed;
@@ -57,6 +64,7 @@ public class UIPoseEditor extends UIElement
     public UISection glintSection;
     public UIPropTransform transform;
 
+    private boolean poseOnly;
     private String group = "";
     private Pose pose;
     protected IModel model;
@@ -64,6 +72,20 @@ public class UIPoseEditor extends UIElement
     private BoneHierarchy hierarchy = BoneHierarchy.EMPTY;
     /* A procedural panel may own the gizmo without changing the hidden pose-list selection. */
     private String transformBoneOverride = "";
+
+    private final BoneSelection detachedSelection = new BoneSelection();
+
+    protected BoneSelection boneSelection()
+    {
+        IBoneSelectionHost host = this.selectionAnchor().getAncestor(IBoneSelectionHost.class);
+
+        return host == null ? this.detachedSelection : host.getBoneSelection();
+    }
+
+    protected UIElement selectionAnchor()
+    {
+        return this;
+    }
 
     public UIPoseEditor()
     {
@@ -73,10 +95,7 @@ public class UIPoseEditor extends UIElement
         this.groups.list.context(() ->
         {
             UIDataContextMenu menu = new UIDataContextMenu(PoseManager.INSTANCE, this.group, () -> this.pose.toData(), this::pastePose);
-            UIIcon flip = new UIIcon(Icons.CONVERT, (b) -> this.flipPose());
-
-            flip.tooltip(UIKeys.POSE_CONTEXT_FLIP_POSE);
-            menu.row.addBefore(menu.save, flip);
+            menu.bar.register(new MenuIcon(Icons.CONVERT, UIKeys.POSE_CONTEXT_FLIP_POSE, MenuVerb.Slot.COMMON, this::flipPose).keepOpen());
 
             return menu;
         });
@@ -108,6 +127,24 @@ public class UIPoseEditor extends UIElement
                 this.applyChildren((p) -> this.setLighting(p, this.lighting.getValue()));
             });
         });
+        this.glow = new UISliderTrackpad((v) -> this.forEachSelectedPose((p) -> this.setGlow(p, v.floatValue())));
+        this.glow.limit(0D, 1D).increment(0.1D);
+        this.glow.context((menu) -> menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY,
+            () -> this.applyChildren((p) -> this.setGlow(p, (float) this.glow.getValue()))));
+        this.overlay = new UIColor((c) -> this.forEachSelectedPose((p) -> this.setOverlay(p, c))).withAlpha();
+        this.overlay.tooltip(UIKeys.FORMS_EDITORS_MATERIAL_OVERLAY_TOOLTIP);
+        this.overlay.context((menu) -> menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY,
+            () -> this.applyChildren((p) -> this.setOverlay(p, this.overlay.picker.color.getARGBColor()))));
+        this.boneVisible = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_VISIBLE, true,
+            (b) -> this.forEachSelectedPose((p) -> this.setVisible(p, b.getValue())));
+        this.boneVisible.context((menu) -> menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY,
+            () -> this.applyChildren((p) -> this.setVisible(p, this.boneVisible.getValue()))));
+        this.materialSection = new UISection(UIKeys.FORMS_EDITORS_MATERIAL);
+        this.materialSection.fields.add(
+            UI.labelRow(UIKeys.FORMS_EDITORS_MATERIAL_COLOR, this.color),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MATERIAL_OVERLAY, this.overlay),
+            UI.labelRow(UIKeys.POSE_CONTEXT_GLOW, this.glow), this.boneVisible);
+        this.materialSection.setExpanded(false);
         this.glintMode = new UICirculate((c) -> this.applyGlintModeToSelection(c.getValue()));
         this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_OFF);
         this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_FULL);
@@ -157,7 +194,7 @@ public class UIPoseEditor extends UIElement
         this.add(
             this.groups,
             UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix),
-            UI.labelRow(this.lighting, this.color),
+            this.materialSection,
             this.transform,
             this.glintSection
         );
@@ -254,7 +291,7 @@ public class UIPoseEditor extends UIElement
 
             for (String key : keys)
             {
-                consumer.accept(this.pose.get(key));
+                consumer.accept(this.pose.getOrCreate(key));
             }
         }
     }
@@ -289,7 +326,7 @@ public class UIPoseEditor extends UIElement
         }
         else
         {
-            this.transform.setTransform(this.pose.get(target));
+            this.transform.setTransform(this.pose.getOrCreate(target));
         }
     }
 
@@ -315,6 +352,20 @@ public class UIPoseEditor extends UIElement
         action.run();
         this.groups.list.setCurrent(current);
         this.pickBones(this.groups.list.getCurrent());
+    }
+
+    public void updatePoseDisplay(Pose pose)
+    {
+        this.pose = pose;
+        this.pickBones(new ArrayList<>(this.groups.list.getCurrent()));
+    }
+
+    public void poseOnly()
+    {
+        this.poseOnly = true;
+        this.fix.setVisible(false);
+        this.materialSection.setVisible(false);
+        this.glintSection.setVisible(false);
     }
 
     public void setPose(Pose pose, String group)
@@ -450,17 +501,18 @@ public class UIPoseEditor extends UIElement
     {
         boolean hasBones = this.groups.hasBones();
 
-        this.fix.setVisible(hasBones);
-        this.color.setVisible(hasBones);
-        this.lighting.setVisible(hasBones);
-        this.glintMode.setVisible(hasBones);
-        this.glintColor.setVisible(hasBones);
-        this.glintSpeed.setVisible(hasBones);
-        this.glintSection.setVisible(hasBones);
+        this.fix.setVisible(hasBones && !this.poseOnly);
+        this.color.setVisible(hasBones && !this.poseOnly);
+        this.lighting.setVisible(hasBones && !this.poseOnly);
+        this.materialSection.setVisible(hasBones && !this.poseOnly);
+        this.glintMode.setVisible(hasBones && !this.poseOnly);
+        this.glintColor.setVisible(hasBones && !this.poseOnly);
+        this.glintSpeed.setVisible(hasBones && !this.poseOnly);
+        this.glintSection.setVisible(hasBones && !this.poseOnly);
         this.transform.setVisible(hasBones);
 
         List<String> list = this.groups.list.getList();
-        int i = Math.max(reset ? 0 : list.indexOf(PickedBone.get()), 0);
+        int i = Math.max(reset ? 0 : list.indexOf(this.boneSelection().get()), 0);
 
         this.groups.list.setCurrentScroll(CollectionUtils.getSafe(list, i));
         this.pickBones(this.groups.list.getCurrent());
@@ -484,7 +536,7 @@ public class UIPoseEditor extends UIElement
      */
     public void selectBone(String bone, boolean additive)
     {
-        PickedBone.set(bone);
+        this.boneSelection().set(bone);
 
         if (additive)
         {
@@ -559,7 +611,7 @@ public class UIPoseEditor extends UIElement
         {
             for (Map.Entry<String, BoneEdit> target : UIPoseEditor.this.resolveBoneEdits(this.isMirrorEdit(), this.isAlternateInvert()).entrySet())
             {
-                UIPoseEditor.this.applyToBone(target.getValue(), UIPoseEditor.this.pose.get(target.getKey()), consumer);
+                UIPoseEditor.this.applyToBone(target.getValue(), UIPoseEditor.this.pose.getOrCreate(target.getKey()), consumer);
             }
         }
 
@@ -587,7 +639,7 @@ public class UIPoseEditor extends UIElement
         {
             for (String bone : new ArrayList<>(UIPoseEditor.this.groups.list.getCurrent()))
             {
-                consumer.accept(UIPoseEditor.this.pose.get(bone).glintTransform);
+                consumer.accept(UIPoseEditor.this.pose.getOrCreate(bone).glintTransform);
             }
         }
     }
@@ -607,10 +659,13 @@ public class UIPoseEditor extends UIElement
     {
         if (bones == null || bones.isEmpty())
         {
-            PickedBone.set("");
+            this.boneSelection().set("");
             this.fix.setValue(0F);
             this.color.setColor(Colors.WHITE);
             this.lighting.setValue(false);
+            this.glow.setValue(0F);
+            this.overlay.setColor(0x00ffffff);
+            this.boneVisible.setValue(true);
             this.glintMode.setValue((int) PoseTransform.GLINT_OFF);
             this.glintColor.setColor(Colors.WHITE);
             this.glintSpeed.setValue(PoseTransform.DEFAULT_GLINT_SPEED);
@@ -622,18 +677,21 @@ public class UIPoseEditor extends UIElement
 
         String primary = bones.get(0);
 
-        PickedBone.set(primary);
+        this.boneSelection().set(primary);
 
-        PoseTransform poseTransform = this.pose.get(primary);
+        PoseTransform poseTransform = this.pose.getOrCreate(primary);
 
         this.fix.setValue(poseTransform.fix);
         this.color.setColor(poseTransform.color.getARGBColor());
         this.lighting.setValue(poseTransform.lighting == 0F);
+        this.glow.setValue(poseTransform.lighting);
+        this.overlay.setColor(poseTransform.overlay.getARGBColor());
+        this.boneVisible.setValue(poseTransform.visible);
         this.glintMode.setValue((int) poseTransform.glintMode);
         this.glintColor.setColor(poseTransform.glintColor.getARGBColor());
         this.glintSpeed.setValue(poseTransform.glintSpeed);
         this.glintTransform.setTransform(poseTransform.glintTransform);
-        this.transform.setTransform(this.pose.get(this.getTransformBone()));
+        this.transform.setTransform(this.pose.getOrCreate(this.getTransformBone()));
     }
 
     private void forEachSelectedPose(Consumer<? super PoseTransform> consumer)
@@ -644,7 +702,7 @@ public class UIPoseEditor extends UIElement
          * then throw ConcurrentModificationException. Same guard as flipPose/pastePose. */
         for (String bone : new ArrayList<>(this.groups.list.getCurrent()))
         {
-            consumer.accept(this.pose.get(bone));
+            consumer.accept(this.pose.getOrCreate(bone));
         }
     }
 
@@ -825,6 +883,7 @@ public class UIPoseEditor extends UIElement
 
     private void toggleFix()
     {
+        if (this.poseOnly) return;
         if (this.groups.list.getCurrent().isEmpty())
         {
             return;
@@ -843,6 +902,21 @@ public class UIPoseEditor extends UIElement
     protected void setColor(PoseTransform transform, int value)
     {
         transform.color.set(value);
+    }
+
+    protected void setOverlay(PoseTransform transform, int value)
+    {
+        transform.overlay.set(value);
+    }
+
+    protected void setVisible(PoseTransform transform, boolean value)
+    {
+        transform.visible = value;
+    }
+
+    protected void setGlow(PoseTransform transform, float value)
+    {
+        transform.lighting = value;
     }
 
     protected void setLighting(PoseTransform poseTransform, boolean value)

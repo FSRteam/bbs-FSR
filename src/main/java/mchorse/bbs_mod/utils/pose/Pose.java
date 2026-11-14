@@ -138,7 +138,14 @@ public class Pose implements IMapSerializable
         return name;
     }
 
+    /** Returns an authored bone transform without adding a bone to a sparse pose. */
     public PoseTransform get(String name)
+    {
+        return this.transforms.get(name);
+    }
+
+    /** Returns a mutable transform, creating a rest transform when the writer needs one. */
+    public PoseTransform getOrCreate(String name)
     {
         PoseTransform transform = this.transforms.get(name);
 

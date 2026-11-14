@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.framework;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.api.client.render.BBSRenderSurfaceKind;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.PixelArt;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import mchorse.bbs_mod.client.render.surface.BBSFormPreviewCapture;
 import mchorse.bbs_mod.client.render.surface.BBSRenderSurfaceRuntime;
@@ -81,6 +82,7 @@ public class UIScreen extends Screen implements IFileDropListener
 
         Minecraft mc = Minecraft.getInstance();
 
+        this.minecraft = mc;
         this.menu = menu;
         this.context = new UIRenderingContext(new GuiGraphics(mc, mc.renderBuffers().bufferSource()));
 
@@ -278,7 +280,14 @@ public class UIScreen extends Screen implements IFileDropListener
             return true;
         }
 
-        return this.menu.mouseClicked((int) mouseX, (int) mouseY, button);
+        try
+        {
+            return this.menu.mouseClicked((int) mouseX, (int) mouseY, button);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            return this.report("mouse click", exception);
+        }
     }
 
     @Override
@@ -339,7 +348,14 @@ public class UIScreen extends Screen implements IFileDropListener
             return true;
         }
 
-        return this.menu.mouseReleased((int) mouseX, (int) mouseY, button);
+        try
+        {
+            return this.menu.mouseReleased((int) mouseX, (int) mouseY, button);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            return this.report("mouse release", exception);
+        }
     }
 
     public boolean dispatchRemoteMouseCanceled(double mouseX, double mouseY, int button)
@@ -469,7 +485,27 @@ public class UIScreen extends Screen implements IFileDropListener
             return false;
         }
 
-        return this.menu.handleKey(keyCode, scanCode, action, modifiers);
+        try
+        {
+            return this.menu.handleKey(keyCode, scanCode, action, modifiers);
+        }
+        catch (RuntimeException | Error exception)
+        {
+            return this.report("key press", exception);
+        }
+    }
+
+    private boolean report(String action, Throwable exception)
+    {
+        System.err.println("[BBS UI] Unhandled exception on " + action + " in " + this.menu.getClass().getSimpleName());
+        exception.printStackTrace();
+
+        if (exception instanceof RuntimeException runtime)
+        {
+            throw runtime;
+        }
+
+        throw (Error) exception;
     }
 
     private boolean canFocusedElementRepeatKeys()
@@ -645,6 +681,20 @@ public class UIScreen extends Screen implements IFileDropListener
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta)
+    {
+        PixelArt.setDrawingUI(true);
+
+        try
+        {
+            this.renderUI(context, mouseX, mouseY, delta);
+        }
+        finally
+        {
+            PixelArt.setDrawingUI(false);
+        }
+    }
+
+    private void renderUI(GuiGraphics context, int mouseX, int mouseY, float delta)
     {
         super.render(context, mouseX, mouseY, delta);
 

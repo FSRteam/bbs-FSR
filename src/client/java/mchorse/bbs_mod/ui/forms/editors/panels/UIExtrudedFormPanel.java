@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
@@ -24,7 +25,7 @@ public class UIExtrudedFormPanel extends UIFormPanel<ExtrudedForm>
         {
             UITexturePicker.open(this.getContext(), this.form.texture.get(), (l) -> this.form.texture.set(l));
         });
-        this.color = new UIColor((c) -> this.form.color.set(Color.rgba(c)));
+        this.color = UIValues.color(() -> this.form.color);
         this.color.withAlpha();
         this.billboard = new UIToggle(UIKeys.FORMS_EDITORS_BILLBOARD_TITLE, false, (b) -> this.form.billboard.set(b.getValue()));
         this.shading = new UIToggle(UIKeys.FORMS_EDITORS_BILLBOARD_SHADING, false, (b) -> this.form.shading.set(b.getValue()));

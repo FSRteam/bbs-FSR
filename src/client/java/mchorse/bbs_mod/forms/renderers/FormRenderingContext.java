@@ -2,6 +2,7 @@ package mchorse.bbs_mod.forms.renderers;
 
 import mchorse.bbs_mod.camera.Camera;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.film.replays.FormProperties;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
@@ -39,6 +40,7 @@ public class FormRenderingContext
     public boolean timelinePlaying;
 
     private final Quaternionf cameraRotation = new Quaternionf();
+    private PoseStack reusableWorld;
 
     public FormRenderingContext()
     {}
@@ -50,7 +52,20 @@ public class FormRenderingContext
         this.entity = entity;
         this.simulationOwner = entity;
         this.stack = stack;
-        this.world = new PoseStack();
+        if (this.reusableWorld == null)
+        {
+            this.reusableWorld = new PoseStack();
+        }
+        else
+        {
+            while (!this.reusableWorld.clear())
+            {
+                this.reusableWorld.popPose();
+            }
+
+            this.reusableWorld.setIdentity();
+        }
+        this.world = this.reusableWorld;
         this.allowWorldTargetOverrides = this.type.hasWorldHost();
         this.allowWorldCollisions = this.type.hasWorldHost();
         this.light = light;
@@ -233,18 +248,22 @@ public class FormRenderingContext
     }
 
     /**
-     * Whether this render call belongs to the world translucent stage. The
-     * deferred queue is global for a frame, therefore render type alone is
-     * insufficient: editor, framebuffer and stencil previews can run while a
-     * world queue is still active.
+     * Whether this call may enter its active translucent queue. World geometry
+     * uses the frame queue; only a form-editor viewport with an explicitly owned
+     * preview scope may use a local queue. Ordinary previews remain immediate.
      */
     public boolean canDeferWorldTranslucency()
     {
-        return BBSRendering.isRenderingWorld()
+        boolean eligible = !this.isPicking() && !this.ui;
+
+        if (FormTranslucentQueue.isPreviewActive())
+        {
+            return eligible && this.type == FormRenderType.PREVIEW && this.modelRenderer;
+        }
+
+        return eligible && BBSRendering.isRenderingWorld()
             && this.renderSpace != null
             && this.renderSpace.isWorld()
-            && !this.isPicking()
-            && !this.ui
             && !this.modelRenderer;
     }
 

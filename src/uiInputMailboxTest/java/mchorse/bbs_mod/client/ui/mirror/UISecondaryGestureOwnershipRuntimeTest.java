@@ -11,6 +11,7 @@ import mchorse.bbs_mod.ui.framework.elements.context.UISimpleContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UIKeybind;
 import mchorse.bbs_mod.ui.framework.elements.input.color.UIColorPicker;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
+import mchorse.bbs_mod.ui.framework.elements.input.items.UIItems;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.input.text.utils.Textbox;
@@ -66,6 +67,7 @@ public final class UISecondaryGestureOwnershipRuntimeTest
         assertProgrammaticClickableCleansUpAfterFailureAndRemoval();
         assertProgrammaticClickablePreservesPhysicalOwner();
         assertProgrammaticClickablePreservesVirtualDispatch();
+        UIListParityTest.runAll();
     }
 
     private static void assertCurveKeepsLeftEditUntilLeftRelease()
@@ -357,15 +359,15 @@ public final class UISecondaryGestureOwnershipRuntimeTest
         list.area.set(0, 0, 100, 60);
         list.sorting = true;
         list.setList(new ArrayList<>(List.of("a", "b", "c")));
-        setInt(list, "dragging", 0);
-        setLong(list, "dragTime", 0L);
+        list.drag.start(List.of(list.getList().get(0)), 10, 5);
+        list.drag.update(10, 55);
 
-        context.setMouse(10, 45, RIGHT);
-        release(UIList.class, list, context, RIGHT);
+        context.setMouse(10, 55, RIGHT);
+        release(UIItems.class, list, context, RIGHT);
         check(list.getDraggingIndex() == 0 && list.swaps == 0 && ownership.isOwnedBy(LEFT),
             "list committed or cleared left sorting on right-button release");
 
-        release(UIList.class, list, context, LEFT);
+        release(UIItems.class, list, context, LEFT);
         check(list.getDraggingIndex() == -1 && list.swaps == 1 && list.retiredBeforeSwap,
             "list did not retire its owner before the matching sort commit");
         check(list.getList().equals(List.of("b", "c", "a")),

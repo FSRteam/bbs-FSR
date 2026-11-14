@@ -4,6 +4,7 @@ import mchorse.bbs_mod.forms.forms.utils.ParticleSettings;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.input.list.UIVanillaParticleList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
@@ -25,7 +26,7 @@ public class UIParticleSettings extends UIElement
     {
         this.particle = new UIButton(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_EDITOR_PICK, (b) ->
         {
-            UIListOverlayPanel overlayPanel = new UIListOverlayPanel(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_EDITOR_TITLE, (l) -> this.setParticle(ResourceLocation.parse(l)));
+            UIListOverlayPanel overlayPanel = new UIListOverlayPanel(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_EDITOR_TITLE, (l) -> this.setParticle(ResourceLocation.parse(l)), UIVanillaParticleList::new);
             List<String> strings = new ArrayList<>();
 
             for (ResourceLocation key : BuiltInRegistries.PARTICLE_TYPE.keySet())

@@ -6,7 +6,9 @@ import mchorse.bbs_mod.cubic.data.model.ModelGroup;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.utils.pose.Pose;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -23,7 +25,39 @@ public interface IModel extends IBoneHierarchy
 
     public void applyPose(Pose pose);
 
+    /** Records FK overlays before constraints, IK, and physics compose their evaluated results. */
+    public default void snapshotChannels()
+    {
+        for (ModelGroup group : this.getAllGroups())
+        {
+            group.snapshotChannels();
+        }
+
+        for (BOBJBone bone : this.getAllBOBJBones())
+        {
+            bone.snapshotChannels();
+        }
+    }
+
+    public default void restoreChannels()
+    {
+        for (ModelGroup group : this.getAllGroups())
+        {
+            group.restoreChannels();
+        }
+
+        for (BOBJBone bone : this.getAllBOBJBones())
+        {
+            bone.restoreChannels();
+        }
+    }
+
     public Set<String> getShapeKeys();
+
+    public default boolean isFacingFlipped()
+    {
+        return false;
+    }
 
     public String getAnchor();
 
@@ -37,6 +71,16 @@ public interface IModel extends IBoneHierarchy
     public RigBone getBone(String name);
 
     public Collection<String> getAllChildrenKeys(String key);
+
+    /** Every rig bone in parent-before-child evaluation order. */
+    public default Collection<? extends RigBone> getRigBones()
+    {
+        List<RigBone> bones = new ArrayList<>();
+        bones.addAll(this.getAllGroups());
+        bones.addAll(this.getAllBOBJBones());
+
+        return bones;
+    }
 
     public Collection<ModelGroup> getAllGroups();
 

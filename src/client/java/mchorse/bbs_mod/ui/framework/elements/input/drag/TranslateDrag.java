@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.framework.elements.input.drag;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.utils.GizmoDrag;
+import mchorse.bbs_mod.ui.utils.GizmoJacobian;
 import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.pose.Transform;
 import org.joml.Matrix3f;
@@ -43,10 +44,18 @@ public class TranslateDrag extends DragStrategy
         super(ctx, TransformOp.TRANSLATE, axis, axis2);
     }
 
-    /** Guarded inverse of the translate Jacobian, retaining the model-part unit fallback. */
+    /** The shared normalized inverse also supports a flattened visible plane. */
     protected static Matrix3f invertedJacobian(Matrix3f jacobian, boolean modelPart)
     {
-        return GizmoDrag.resolveTranslateJacobian(jacobian, modelPart).invert();
+        /* An absent derivative still uses the historical units. A nonzero but
+         * flattened derivative is meaningful: solve its visible motion instead
+         * of replacing it with an unrelated identity frame. */
+        if (jacobian == null || !jacobian.isFinite() || jacobian.equals(new Matrix3f().zero()))
+        {
+            jacobian = GizmoDrag.resolveTranslateJacobian(jacobian, modelPart);
+        }
+
+        return GizmoJacobian.inverse(jacobian);
     }
 
     @Override

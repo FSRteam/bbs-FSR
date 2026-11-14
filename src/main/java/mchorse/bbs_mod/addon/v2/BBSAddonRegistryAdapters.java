@@ -58,13 +58,16 @@ final class BBSAddonRegistryAdapters
 
     static BBSFormRegistry forms(BBSAddonRegistrationWindow window, BBSAddonDiagnosticRecord diagnostics, BBSAddonDescriptor descriptor, FormArchitect forms)
     {
-        return (id, formType) ->
+        return new BBSFormRegistry()
         {
-            String key = stringId(id);
-
-            return window.run(diagnostics, key, "forms", () ->
+            @Override
+            public BBSRegistrationResult register(Link id, Class<? extends Form> formType)
             {
-                BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.FORMS, key, "forms");
+                String key = stringId(id);
+
+                return window.run(diagnostics, key, "forms", () ->
+                {
+                    BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.FORMS, key, "forms");
 
                 if (capability != null)
                 {
@@ -90,8 +93,34 @@ final class BBSAddonRegistryAdapters
 
                 forms.register(id, formType, null);
 
-                return diagnostics.record(BBSRegistrationResult.accepted(key));
-            });
+                    return diagnostics.record(BBSRegistrationResult.accepted(key));
+                });
+            }
+
+            @Override
+            public BBSRegistrationResult registerModifier(Consumer<Form> modifier)
+            {
+                String key = modifier == null ? "<null>" : modifier.getClass().getName();
+
+                return window.run(diagnostics, key, "form-modifiers", () ->
+                {
+                    BBSRegistrationResult capability = requireCapability(diagnostics, descriptor, BBSAddonCapability.FORMS, key, "form-modifiers");
+
+                    if (capability != null)
+                    {
+                        return capability;
+                    }
+
+                    if (modifier == null)
+                    {
+                        return diagnostics.record(BBSRegistrationResult.rejected(key, "form modifier is null"));
+                    }
+
+                    FormArchitect.registerModifier(modifier);
+
+                    return diagnostics.record(BBSRegistrationResult.accepted(key));
+                });
+            }
         };
     }
 

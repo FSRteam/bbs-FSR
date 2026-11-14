@@ -215,26 +215,23 @@ public class InternalAssetsSourcePack implements ISourcePack
 
     /* Zip handling */
 
-    private void getLinksFromZipFile(File file, Link link, Collection<Link> links, boolean recursive)
+    private synchronized void getLinksFromZipFile(File file, Link link, Collection<Link> links, boolean recursive)
     {
-        /**
-         * Zip files can be big sometimes, so there is no point to
-         * read the zip file every time...
-         */
-        try (ZipFile zipFile = new ZipFile(file))
+        String zipPath = file.getAbsolutePath();
+        long zipLastModified = file.lastModified();
+        boolean sameZipSource = zipPath.equals(this.cachedZipPath) && zipLastModified == this.cachedZipLastModified;
+
+        if (!sameZipSource)
         {
-            String zipPath = file.getAbsolutePath();
-            long zipLastModified = file.lastModified();
-            boolean sameZipSource = zipPath.equals(this.cachedZipPath) && zipLastModified == this.cachedZipLastModified;
+            this.zipCache.clear();
+            this.cachedZipPath = zipPath;
+            this.cachedZipLastModified = zipLastModified;
+        }
 
-            if (!sameZipSource)
-            {
-                this.zipCache.clear();
-                this.cachedZipPath = zipPath;
-                this.cachedZipLastModified = zipLastModified;
-            }
-
-            if (this.zipCache.isEmpty())
+        /* Keep listing and lazy cache fill in the same scope as model-loader readers. */
+        if (this.zipCache.isEmpty())
+        {
+            try (ZipFile zipFile = new ZipFile(file))
             {
                 Enumeration<? extends ZipEntry> it = zipFile.entries();
 
@@ -248,10 +245,10 @@ public class InternalAssetsSourcePack implements ISourcePack
                     }
                 }
             }
-        }
-        catch (IOException e)
-        {
-            e.printStackTrace();
+            catch (IOException e)
+            {
+                e.printStackTrace();
+            }
         }
 
         this.handleLinksFromZipFile(link, links, recursive);

@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.film.replays;
 
 import mchorse.bbs_mod.BBSMod;
+import mchorse.bbs_mod.utils.categories.CategoryPath;
 import mchorse.bbs_mod.actions.SuperFakePlayer;
 import mchorse.bbs_mod.actions.types.ActionClip;
 import mchorse.bbs_mod.camera.data.Point;
@@ -37,7 +38,7 @@ public class Replay extends ValueGroup
 
     public final ValueBoolean enabled = new ValueBoolean("enabled", true);
     /**
-     * Single-level folder name for the replay list (empty = root). No {@code /} — see {@link #normalizeCategory(String)}.
+     * Folder path for the replay list (empty = root), with at most eight levels.
      */
     public final ValueString category = new ValueString("category", "");
     public final ValueString label = new ValueString("label", "");
@@ -51,6 +52,7 @@ public class Replay extends ValueGroup
     public final ValueInt looping = new ValueInt("looping", 0);
 
     public final ValueBoolean actor = new ValueBoolean("actor", false);
+    public final ValueBoolean actorPickup = new ValueBoolean("actor_pickup", true);
     public final ValueBoolean fp = new ValueBoolean("fp", false);
     public final ValueBoolean relative = new ValueBoolean("relative", false);
     public final ValuePoint relativeOffset = new ValuePoint("relativeOffset", new Point(0, 0, 0));
@@ -78,6 +80,7 @@ public class Replay extends ValueGroup
         this.add(this.looping);
 
         this.add(this.actor);
+        this.add(this.actorPickup);
         this.add(this.fp);
         this.add(this.relative);
         this.add(this.relativeOffset);
@@ -87,30 +90,11 @@ public class Replay extends ValueGroup
     }
 
     /**
-     * Normalizes a user-supplied category: trim, single segment (no {@code /}), empty = root.
+     * Normalizes a user-supplied category: trim segments, at most eight levels, empty = root.
      */
     public static String normalizeCategory(String raw)
     {
-        if (raw == null)
-        {
-            return "";
-        }
-
-        String s = raw.trim();
-
-        if (s.isEmpty())
-        {
-            return "";
-        }
-
-        int slash = s.indexOf('/');
-
-        if (slash >= 0)
-        {
-            s = s.substring(0, slash).trim();
-        }
-
-        return s.isEmpty() ? "" : s;
+        return CategoryPath.normalize(raw);
     }
 
     /**
@@ -191,7 +175,7 @@ public class Replay extends ValueGroup
             last = Math.max(last, lastTick(channel));
         }
 
-        for (KeyframeChannel<?> channel : this.properties.properties.values())
+        for (KeyframeChannel<?> channel : this.properties.tracks.values())
         {
             last = Math.max(last, lastTick(channel));
         }

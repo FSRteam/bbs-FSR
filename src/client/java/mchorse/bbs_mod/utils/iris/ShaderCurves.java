@@ -23,6 +23,7 @@ public class ShaderCurves
 
     public static final String BRIGHTNESS = "brightness";
     public static final String SUN_ROTATION = "sun_rotation";
+    public static final String SUN_HORIZONTAL_ROTATION = "sun_horizontal_rotation";
     public static final String WEATHER = "weather";
 
     public static final String UNIFORM_IDENTIFIER = "bbs_";
@@ -45,6 +46,8 @@ public class ShaderCurves
 
     public static String processSource(String source)
     {
+        source = ShaderSunRotation.processSource(source);
+
         if (BBSSettings.shaderCurvesEnabled == null || !BBSSettings.shaderCurvesEnabled.get())
         {
             return source;
@@ -71,65 +74,63 @@ public class ShaderCurves
 
     private static void removeIrrelevantVariables(String source, Map<String, ShaderVariable> variables)
     {
-        /* Remove irrelevant variables */
-        List<String> filter = BBSRendering.getShadersSliderOptions();
+        /* Float options need not be declared as sliders. Integer options remain restricted
+         * to the pack's sliders, since they may otherwise be array sizes or sample counts.
+         * Keep options used by value-dependent preprocessor directives constant below. */
+        List<String> sliders = BBSRendering.getShadersSliderOptions();
 
-        variables.values().removeIf((v) -> !filter.contains(v.name));
+        variables.values().removeIf((v) -> v.integer && !sliders.contains(v.name));
 
         for (String prohibitedVariable : prohibitedVariables)
         {
             variables.remove(prohibitedVariable);
         }
 
-        int index = 0;
+        Matcher directives = Pattern.compile("(?m)^\\h*#\\h*(if|elif|define)\\b([^\\r\\n]*)").matcher(source);
 
-        while ((index = source.indexOf("#", index + 1)) != -1)
+        while (directives.find())
         {
-            int newLine = source.indexOf('\n', index);
+            String directive = directives.group(1);
+            String expression = directives.group(2).trim();
 
-            if (newLine >= 0)
+            if (directive.equals("define"))
             {
-                String substr = source.substring(index, newLine);
+                /* Skip the macro's own name; references in its replacement must stay constant. */
+                int end = 0;
 
-                if (substr.startsWith("#if") || substr.startsWith("#elif"))
+                while (end < expression.length() && isIdentifierPart(expression.charAt(end)))
                 {
-                    variables.values().removeIf((v) -> substr.contains(v.name));
+                    end++;
                 }
-                else if (substr.startsWith("#define"))
-                {
-                    final int WHITESPACE = 0, CHARACTERS = 1;
-                    int iindex = 7;
-                    int state = 0;
-                    int switches = 0;
 
-                    while (iindex < newLine - index)
-                    {
-                        char c = substr.charAt(iindex);
-
-                        if (state == WHITESPACE && Character.isWhitespace(c))
-                        {
-                            state = CHARACTERS;
-                            switches += 1;
-                        }
-                        else if (Character.isWhitespace(c))
-                        {
-                            state = WHITESPACE;
-                        }
-
-                        if (switches == 2)
-                        {
-                            break;
-                        }
-
-                        iindex += 1;
-                    }
-
-                    final String subsubstr = substr.substring(iindex);
-
-                    variables.values().removeIf((v) -> subsubstr.contains(v.name));
-                }
+                expression = expression.substring(end);
             }
+
+            final String references = expression;
+
+            variables.values().removeIf((v) -> containsIdentifier(references, v.name));
         }
+    }
+
+    private static boolean containsIdentifier(String haystack, String identifier)
+    {
+        int from = 0;
+
+        while ((from = haystack.indexOf(identifier, from)) != -1)
+        {
+            int end = from + identifier.length();
+            boolean leftOk = from == 0 || !isIdentifierPart(haystack.charAt(from - 1));
+            boolean rightOk = end >= haystack.length() || !isIdentifierPart(haystack.charAt(end));
+
+            if (leftOk && rightOk)
+            {
+                return true;
+            }
+
+            from = end;
+        }
+
+        return false;
     }
 
     private static Map<String, ShaderVariable> parseVariables(String source)

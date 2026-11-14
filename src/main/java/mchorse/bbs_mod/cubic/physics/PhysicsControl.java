@@ -1,6 +1,6 @@
 package mchorse.bbs_mod.cubic.physics;
 
-import mchorse.bbs_mod.data.IMapSerializable;
+import mchorse.bbs_mod.cubic.chains.ChainControl;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.utils.interps.AutoBezier;
 import mchorse.bbs_mod.utils.interps.IInterp;
@@ -11,7 +11,7 @@ import mchorse.bbs_mod.utils.interps.IInterp;
  * {@link mchorse.bbs_mod.cubic.ik.IKControl}, the IK track's element. Floats interpolate;
  * the boolean steps.
  */
-public class PhysicsControl implements IMapSerializable
+public class PhysicsControl extends ChainControl<PhysicsControl>
 {
     /* Mirrors ModelPhysicsIO's defaults; duplicated because that config class lives
      * in the client source set and this keyframe value lives in main. */

@@ -3,7 +3,6 @@
     "package": "mchorse.bbs_mod.mixin.client.sodium",
     "compatibilityLevel": "JAVA_21",
     "client": [
-        "SodiumBufferBuilderAccessor",
         "SodiumWorldRendererViewMixin",
         "SodiumRenderSectionManagerViewMixin",
         "EntityVertexMixin",

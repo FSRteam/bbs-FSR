@@ -20,10 +20,13 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
+import mchorse.bbs_mod.settings.values.ui.ValueReplayCategoryNames;
+import mchorse.bbs_mod.utils.categories.Categories;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.settings.values.numeric.ValueLong;
 import mchorse.bbs_mod.utils.clips.Clips;
+import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +55,8 @@ public class Film extends ValueGroup
      * Names of replay categories that exist even with no replay assigned (empty groups).
      * Union with {@link Replay#category} on each replay defines all categories in the UI.
      */
-    public final ValueStringKeys replayCategoryNames = new ValueStringKeys("replay_categories");
+    public final Categories replayCategories = new Categories("replay_categories");
+    public final ValueStringKeys replayCategoryNames = new ValueReplayCategoryNames(this.replayCategories);
 
     /** Author's notes pinned to ticks, drawn on every timeline's ruler. */
     public final FilmMarkers markers = new FilmMarkers("markers");
@@ -80,12 +84,14 @@ public class Film extends ValueGroup
     {
         super("");
 
+        this.replays.synced();
+
         this.add(this.camera);
         this.add(this.cameraTracks);
         this.add(this.cameraCuts);
         this.add(this.activeCameraId);
         this.add(this.replays);
-        this.add(this.replayCategoryNames);
+        this.add(this.replayCategories);
         this.add(this.markers);
 
         this.add(this.hp);
@@ -121,6 +127,7 @@ public class Film extends ValueGroup
              * that key must not retain the markers of the film previously loaded into this
              * instance. */
             if (!data.asMap().has(this.markers.getId())) this.markers.fromData(new ListType());
+            if (!data.asMap().has(this.replayCategories.getId())) this.replayCategories.fromData(new ListType());
         }
 
         super.fromData(data);
@@ -344,7 +351,7 @@ public class Film extends ValueGroup
         return this.cameraCuts.removeCut(tick);
     }
 
-    /** Duration is owned by the Film so every output path observes all camera tracks. */
+    /** Keep actors alive through the longest enabled replay or camera track. */
     public int calculateDuration()
     {
         int duration = this.camera.calculateDuration();
@@ -352,6 +359,17 @@ public class Film extends ValueGroup
         for (CameraTrack track : this.cameraTracks.getList())
         {
             duration = Math.max(duration, track.clips.calculateDuration());
+        }
+
+        for (Replay replay : this.replays.getList())
+        {
+            if (replay.enabled.get())
+            {
+                for (KeyframeChannel<?> channel : replay.keyframes.getChannels())
+                {
+                    duration = Math.max(duration, (int) channel.getLength() + 1);
+                }
+            }
         }
 
         return duration;

@@ -63,7 +63,7 @@
     "bbs.config.chroma_sky.terrain-comment": "Définit si le terrain doit être affiché lorsque le ciel chromatique est activé.",
     "bbs.config.chroma_sky.title": "Ciel chromatique",
     "bbs.config.chroma_sky.tooltip": "Options par rapport au ciel chromatique",
-    "bbs.config.misc.damage_control": "Activé",
+    "bbs.config.misc.damage_control": "Contrôle de dégâts",
     "bbs.config.misc.damage_control-comment": "Si le contrôle de dégâts est activé",
     "bbs.config.dc.title": "Contrôle de dégâts",
     "bbs.config.dc.tooltip": "Options liées au contrôle de dégâts",
@@ -145,7 +145,7 @@
     "bbs.config.scrollbars.tooltip": "Option d'arriere plan, comme les couleurs ou textures, pouvant être utilisé",
     "bbs.config.scrollbars.width": "Épaisseur",
     "bbs.config.scrollbars.width-comment": "Cela vous autorise à changer l'épaisseur (largeur des barre de défilement)",
-    "bbs.config.misc.shader_curves": "Activé",
+    "bbs.config.misc.shader_curves": "Courbes de shader",
     "bbs.config.misc.shader_curves-comment": "Indique si les courbes de shader sont activées",
     "bbs.config.shader_curves.title": "Courbes de shader",
     "bbs.config.shader_curves.tooltip": "Paramètres liés aux courbes de shader",
@@ -1064,7 +1064,7 @@
     "studio.ui.utility.resize": "Redimentionner la fenêtre",
     "studio.ui.utility.title": "Panneau d'utilitée",
     "bbs.config.personalization.title": "Personalization",
-    "bbs.config.personalization.tooltip": "Theme, colors and editor appearance settings",
+    "bbs.config.personalization.tooltip": "Colors and editor appearance settings",
     "bbs.config.personalization.theme": "Style des infosbulles",
     "bbs.config.personalization.theme-comment": "Cette option autorise a changer le style des infobulles de l'interface",
     "bbs.config.personalization.primary_color": "Couleur primaire",
@@ -1086,5 +1086,7 @@
     "bbs.config.workspace.title": "Espace de travail",
     "bbs.config.workspace.tooltip": "Disposition de l'éditeur et comportement d'enregistrement",
     "bbs.config.misc.title": "Divers",
-    "bbs.config.misc.tooltip": "Options de fonctions supplémentaires"
+    "bbs.config.misc.tooltip": "Options de fonctions supplémentaires",
+	"bbs.config.personalization.secondary_color": "Secondary color",
+	"bbs.config.personalization.secondary_color-comment": "The color of the interface's background surfaces — panels, editors and everything behind them. Every shade of the interface is derived from it."
 }

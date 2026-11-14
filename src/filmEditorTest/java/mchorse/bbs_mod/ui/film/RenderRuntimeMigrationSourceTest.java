@@ -22,6 +22,8 @@ public final class RenderRuntimeMigrationSourceTest
 
     private static final Path FRAMEBUFFER_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/FramebufferFormRenderer.java");
     private static final Path FORM_FRAME_CACHE = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/utils/FormFrameCache.java");
+    private static final Path IRIS_UTILS = Path.of("src/client/java/mchorse/bbs_mod/utils/iris/IrisUtils.java");
+    private static final Path FRAMEBUFFER_POOL = Path.of("src/client/java/mchorse/bbs_mod/graphics/FramebufferPool.java");
     private static final Path ORBIT_CONTROLLER = Path.of("src/client/java/mchorse/bbs_mod/ui/film/controller/OrbitFilmCameraController.java");
     private static final Path LABEL_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/LabelFormRenderer.java");
     private static final Path MODEL_RENDERER = Path.of("src/client/java/mchorse/bbs_mod/forms/renderers/ModelFormRenderer.java");
@@ -46,7 +48,7 @@ public final class RenderRuntimeMigrationSourceTest
     private static final Path RENDER_LAYER_MIXIN = Path.of("src/client/java/mchorse/bbs_mod/mixin/client/RenderLayerMixin.java");
     private static final Path CLIENT_MIXINS = Path.of("src/client/resources/bbs.client.mixins.json");
     private static final Path ICONS = Path.of("src/client/resources/assets/bbs/assets/textures/icons.png");
-    private static final String ICONS_SHA256 = "e8e8297585374629b14de90cef480c589e643b7de1570d1cb0df5899e38c1a41";
+    private static final String ICONS_SHA256 = "067d3fe15b35b6eab439309260f4759793629a720a1d1690bf055436e3ff6f0e";
 
     private static final String[] MIGRATED_LANGUAGE_KEYS = {
         "bbs.config.workspace.keyframe_panel_width",
@@ -143,7 +145,7 @@ public final class RenderRuntimeMigrationSourceTest
         "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseTransformKeyframeFactory.java",
         "src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIWindKeyframeFactory.java",
         "src/client/java/mchorse/bbs_mod/ui/model_blocks/UIModelBlockEditorMenu.java",
-        "src/client/java/mchorse/bbs_mod/ui/model_editor/UIModelEditorPanel.java",
+        "src/client/java/mchorse/bbs_mod/ui/model_editor/UIModelConfigEditor.java",
         "src/client/java/mchorse/bbs_mod/ui/utils/pose/UIPoseEditor.java"
     };
 
@@ -161,6 +163,8 @@ public final class RenderRuntimeMigrationSourceTest
         Path root = findProjectRoot();
         String filmEntityRenderer = compact(Files.readString(root.resolve(FILM_ENTITY_RENDERER)));
         String framebuffer = compact(Files.readString(root.resolve(FRAMEBUFFER_RENDERER)));
+        String iris = compact(Files.readString(root.resolve(IRIS_UTILS)));
+        String rendering = compact(Files.readString(root.resolve(BBS_RENDERING)));
         String relativeRender = section(filmEntityRenderer, "stack.pushPose(); try", "if (UIBaseMenu.shouldRenderAxes() && context.anchorGizmo)");
 
         check(relativeRender.contains("stack.last().pose().rotate(context.camera.rotation());")
@@ -168,20 +172,42 @@ public final class RenderRuntimeMigrationSourceTest
                 && !relativeRender.contains("stack.last().pose().identity();"),
             "relative replay must compose the camera rotation without erasing the active Iris pass stack");
 
+        String nameTag = filmEntityRenderer.substring(filmEntityRenderer.indexOf("private static void renderNameTag("));
+        check(nameTag.contains("matrices.scale(0.025F, -0.025F, 0.025F);")
+                && nameTag.contains("CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();")
+                && nameTag.contains("matrix4f, consumers,")
+                && nameTag.contains("consumers.draw();")
+                && nameTag.contains("RenderSystem.disableCull();")
+                && nameTag.contains("finally { RenderSystem.enableCull(); matrices.popPose();"),
+            "replay nameplates lost the 1.21.1 orientation or same-pass text buffer flush");
+
         check(framebuffer.contains("int viewportX;")
                 && framebuffer.contains("int viewportY;")
                 && framebuffer.contains("int prevCullFace = GL30.glGetInteger(GL11.GL_CULL_FACE_MODE);")
                 && framebuffer.contains("VertexSorting vertexSorting = RenderSystem.getVertexSorting();"),
             "framebuffer forms no longer snapshot the complete borrowed viewport/cull/projection state");
-        check(framebuffer.contains("GL30.glViewport(viewportX, viewportY, width, height);")
+        check(framebuffer.contains("RenderSystem.viewport(viewportX, viewportY, width, height);")
                 && framebuffer.contains("RenderSystem.setProjectionMatrix(projectionMatrix, vertexSorting);")
                 && framebuffer.contains("GL30.glCullFace(prevCullFace);")
                 && occurrences(framebuffer, "RenderSystem.applyModelViewMatrix();") >= 2,
             "framebuffer forms no longer restore the exact caller render state");
         check(framebuffer.contains("finally { FormTranslucentQueue.restore(queueWasActive);")
-                && framebuffer.contains("finally { depth -= 1;")
+                && framebuffer.contains("FormRenderLast.restore(renderLastWasActive);")
+                && framebuffer.contains("BBSRendering.renderOffscreen(() -> super.renderBodyParts(context));")
+                && rendering.contains("IrisUtils.renderOffscreen(render);")
+                && iris.contains("boolean override = offscreenDepth == 0")
+                && iris.contains("finally { offscreenDepth -= 1; ShadowRenderer.ACTIVE = shadow;")
+                && iris.contains("if (override) { pipeline.setIsMainBound(true);")
                 && framebuffer.contains("finally { context.stack.popPose();"),
             "framebuffer child failures can leak queue, Iris depth, or PoseStack ownership");
+        check(framebuffer.contains("BBSModClient.getFramebuffers().getFormFramebuffers().get(w, h)")
+                && framebuffer.contains("if (!retained[0]) { BBSModClient.getFramebuffers().getFormFramebuffers().release(framebuffer);")
+                && framebuffer.contains("GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);")
+                && framebuffer.contains("GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);")
+                && framebuffer.contains("RenderSystem.clearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);")
+                && framebuffer.contains("if (scissorEnabled) { RenderSystem.enableScissor(")
+                && compact(Files.readString(root.resolve(FRAMEBUFFER_POOL))).contains("if (!this.active.remove(framebuffer))"),
+            "pooled framebuffer ownership or caller bindings/scissor/clear color were lost");
 
         checkFormFrameCacheWiring(root);
         checkTranslucentRenderWiring(root);
@@ -257,6 +283,8 @@ public final class RenderRuntimeMigrationSourceTest
                 && cache.contains("entry.simulationOwner == simulationOwner")
                 && cache.contains("entry.allowWorldTargetOverrides == allowWorldTargetOverrides")
                 && cache.contains("entry.allowWorldCollisions == allowWorldCollisions")
+                && cache.contains("entry.poseVersion == form.getPoseVersion()")
+                && cache.contains("if (this.epoch != RenderFrame.getEpoch())")
                 && cache.contains("Float.compare(entry.transition, transition) == 0")
                 && cache.contains("matricesEqual(entry.semanticBase, semanticBase)"),
             "FormFrameCache no longer keys every pose-affecting input");
@@ -297,7 +325,9 @@ public final class RenderRuntimeMigrationSourceTest
             "RenderLayerMixin no longer routes deferred buffers into the FSR queue");
         check(occurrences(model, "FormTranslucentQueue.setSortOrigin(") >= 2
                 && occurrences(model, "consumers.endBatch();") >= 3
-                && model.contains("boolean cutout = irisWorld && textureObject != null && textureObject.hasTranslucency()")
+                && model.contains("boolean cutout = renderLayer == Form.LAYER_AUTO ? irisWorld && textureObject != null && textureObject.hasTranslucency()")
+                && model.contains(": renderLayer == Form.LAYER_CUTOUT && irisWorld;")
+                && model.contains("boolean noBlend = cutout || renderLayer == Form.LAYER_SOLID || renderLayer == Form.LAYER_CUTOUT;")
                 && model.contains("queueWasActive = FormTranslucentQueue.suspend();"),
             "model armor/items or Iris rendering bypasses the migrated translucency policy");
         check(extruded.contains("boolean cutout = defer && irisWorld && textureObject != null && textureObject.hasTranslucency()")
@@ -352,7 +382,11 @@ public final class RenderRuntimeMigrationSourceTest
         check(queue.contains("PASS_TRANSLUCENT, false")
                 && queue.contains("boolean closeBuffer")
                 && billboard.contains("VertexBufferCommand(buffer, () -> capturedShader, texture,")
-                && framebuffer.contains("VertexBufferCommand(buffer, () -> capturedShader, texture,")
+                && framebuffer.contains("VertexBufferCommand(buffer, () -> capturedShader, FormTranslucentQueue.PASS_TRANSLUCENT, false, texture,")
+                && framebuffer.contains("() -> BBSModClient.getFramebuffers().getFormFramebuffers().release(framebuffer)")
+                && framebuffer.contains("retained[0] = true;")
+                && queue.contains("if (this.released) { return; }")
+                && queue.contains("this.releaseResource.run();")
                 && label.contains("VertexBufferCommand(buffer, GameRenderer::getPositionColorShader, null,"),
             "flat billboard/framebuffer/label forms no longer use the depth-write-free deferred replay");
     }
@@ -421,9 +455,9 @@ public final class RenderRuntimeMigrationSourceTest
         String replacement = section(
             keyframeEditor,
             "private void replaceEditor(",
-            "public void setTimelineVisible(boolean visible)"
+            "public void setPropertiesVisible(boolean visible)"
         );
-        int mounted = replacement.indexOf("this.add(replacement);");
+        int mounted = replacement.indexOf("this.attachPropertiesPanel(replacement, this.propertiesWidth);");
         int targetResize = replacement.indexOf("this.target.resize();");
         int editorResize = replacement.indexOf("this.resize();");
 

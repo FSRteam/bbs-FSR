@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input.color;
 
 import mchorse.bbs_mod.l10n.keys.IKey;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.utils.UIConstants;
@@ -26,8 +27,8 @@ public class UIColorFields extends UIElement
     /** Channels including alpha. */
     public static final int CHANNELS = 4;
 
-    private static final IKey[] RGB_LABELS = {IKey.constant("Red"), IKey.constant("Green"), IKey.constant("Blue"), IKey.constant("Alpha")};
-    private static final IKey[] HSV_LABELS = {IKey.constant("Hue"), IKey.constant("Saturation"), IKey.constant("Value"), IKey.constant("Alpha")};
+    private static final IKey[] RGB_LABELS = {UIKeys.COLOR_CHANNEL_RED, UIKeys.COLOR_CHANNEL_GREEN, UIKeys.COLOR_CHANNEL_BLUE, UIKeys.COLOR_CHANNEL_ALPHA};
+    private static final IKey[] HSV_LABELS = {UIKeys.COLOR_CHANNEL_HUE, UIKeys.COLOR_CHANNEL_SATURATION, UIKeys.COLOR_CHANNEL_VALUE, UIKeys.COLOR_CHANNEL_ALPHA};
 
     /** What a full channel counts to on screen. */
     private static final float[] RGB_SCALE = {255F, 255F, 255F, 255F};

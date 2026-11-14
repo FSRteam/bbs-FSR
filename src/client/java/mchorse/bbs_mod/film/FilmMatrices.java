@@ -167,6 +167,32 @@ public class FilmMatrices
         return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, false);
     }
 
+    /**
+     * Resolve the complete frame produced by an anchor, including its local transform. This is
+     * the measurement counterpart to the renderer's anchor composition and is used when an editor
+     * retargets a keyframe while preserving the form's world placement.
+     */
+    public static Matrix4f getAnchorMatrix(Map<String, IEntity> entities, IEntity entity, Replay replay,
+        double cameraX, double cameraY, double cameraZ, float transition, Anchor anchor)
+    {
+        if (entity == null || entity.getForm() == null || anchor == null)
+        {
+            return null;
+        }
+
+        Matrix4f defaultMatrix = getMatrixForRenderWithRotation(entity, cameraX, cameraY, cameraZ, transition);
+
+        if (replay != null && replay.relative.get())
+        {
+            return defaultMatrix;
+        }
+
+        Pair<Matrix4f, Float> pair = getTotalMatrix(entities, anchor, defaultMatrix,
+            cameraX, cameraY, cameraZ, transition, 0);
+
+        return pair.a != null ? pair.a : defaultMatrix;
+    }
+
     public static Matrix4f getEntityMatrix(Map<String, IEntity> entities, double cameraX, double cameraY, double cameraZ, Anchor anchor, Matrix4f defaultMatrix, float transition, int i, boolean fullMatrix)
     {
         return getEntityMatrix(entities, cameraX, cameraY, cameraZ, anchor, defaultMatrix, transition, i, fullMatrix, true, null);
@@ -235,30 +261,10 @@ public class FilmMatrices
                 {
                     basic.mul(matrix);
 
-                    if (!fullMatrix && anchor.scale)
-                    {
-                        Matrix3f mat = new Matrix3f();
-                        Vector3f v = new Vector3f();
-                        basic.get3x3(mat);
-
-                        mat.getColumn(0, v); v.normalize(); mat.setColumn(0, v);
-                        mat.getColumn(1, v); v.normalize(); mat.setColumn(1, v);
-                        mat.getColumn(2, v); v.normalize(); mat.setColumn(2, v);
-
-                        basic.set3x3(mat);
-                    }
-
-                    if (!fullMatrix && anchor.translate)
-                    {
-                        Vector3f t = new Vector3f();
-                        basic.getTranslation(t);
-                        basic.set(defaultMatrix);
-                        basic.setTranslation(t);
-                    }
                 }
             }
 
-            return basic;
+            return fullMatrix ? basic : anchor.filterMatrix(basic, defaultMatrix);
         }
 
         return defaultMatrix;

@@ -28,6 +28,7 @@ public final class UISectionMouseButtonTest
         UISection section = new UISection();
         UIContext context = new UIContext(null);
 
+        section.area.set(16, 26, 128, 100);
         section.title.area.set(20, 30, 120, 10);
 
         check(section.isExpanded(), "section did not start expanded");
@@ -39,6 +40,12 @@ public final class UISectionMouseButtonTest
             "left click did not collapse the section header");
         check(click(section, context, GLFW.GLFW_MOUSE_BUTTON_LEFT) && section.isExpanded(),
             "second left click did not expand the section header");
+        context.setMouse(17, 28, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        check(section.subMouseClicked(context) && !section.isExpanded(),
+            "header padding did not share the visible header's fold action");
+        context.setMouse(25, 60, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        check(!section.subMouseClicked(context) && !section.isExpanded(),
+            "a click below the shared header toggled the section");
     }
 
     private static void collapsingRelayoutsAncestorScrollView()

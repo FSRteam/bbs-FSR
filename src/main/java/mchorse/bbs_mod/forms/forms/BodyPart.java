@@ -11,27 +11,22 @@ import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.utils.pose.Transform;
 
-import java.util.Set;
+import mchorse.bbs_mod.utils.joml.Matrices;
+import org.joml.Matrix4f;
 
 public class BodyPart extends ValueGroup
 {
-    /**
-     * The attachment switches a build newer than this one writes.
-     *
-     * <p>Upstream lets a part ride only some components of its bone's frame; this build always
-     * takes the bone whole, so it has no child to claim the three flags. Dropping them would make
-     * a sight that follows a hand without turning with it — or a form that keeps its size on a
-     * stretched bone — come back as an ordinary attachment, and the authoring choice would be
-     * gone rather than merely ignored. Kept as raw data; see
-     * {@link ValueGroup#preservedUnknownKeys()}.</p>
-     */
-    private static final Set<String> PRESERVED_UNKNOWN_KEYS = Set.of("inheritPosition", "inheritRotation", "inheritScale");
+    private static final Matrix4f NO_BONE = new Matrix4f().rotateY((float) Math.PI);
 
     private Form form;
 
     public final ValueTransform transform = new ValueTransform("transform", new Transform());
     public final ValueString bone = new ValueString("bone", "");
     public final ValueBoolean useTarget = new ValueBoolean("useTarget", false);
+
+    public final ValueBoolean inheritPosition = new ValueBoolean("inheritPosition", true);
+    public final ValueBoolean inheritRotation = new ValueBoolean("inheritRotation", true);
+    public final ValueBoolean inheritScale = new ValueBoolean("inheritScale", true);
 
     private IEntity entity = new StubEntity();
 
@@ -42,11 +37,39 @@ public class BodyPart extends ValueGroup
         this.add(this.transform);
         this.add(this.bone);
         this.add(this.useTarget);
+        this.add(this.inheritPosition);
+        this.add(this.inheritRotation);
+        this.add(this.inheritScale);
     }
 
     public Form getForm()
     {
         return this.form;
+    }
+
+    public boolean inheritsWholeBone()
+    {
+        return this.inheritPosition.get() && this.inheritRotation.get() && this.inheritScale.get();
+    }
+
+    /**
+     * The attachment bone's matrix with the components the part doesn't inherit taken from
+     * {@link #NO_BONE} instead. Returns the matrix itself when there is nothing to take out, and
+     * never modifies the input: the bone matrices are a shared per-frame cache read by every part
+     * hanging off that bone.
+     */
+    public Matrix4f filterBoneMatrix(Matrix4f matrix)
+    {
+        if (matrix == null || this.inheritsWholeBone())
+        {
+            return matrix;
+        }
+
+        return Matrices.compose(
+            this.inheritPosition.get() ? matrix : NO_BONE,
+            this.inheritRotation.get() ? matrix : NO_BONE,
+            this.inheritScale.get() ? matrix : NO_BONE
+        );
     }
 
     public IEntity getEntity()
@@ -142,9 +165,4 @@ public class BodyPart extends ValueGroup
         }
     }
 
-    @Override
-    protected Set<String> preservedUnknownKeys()
-    {
-        return PRESERVED_UNKNOWN_KEYS;
-    }
 }

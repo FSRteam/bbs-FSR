@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 
+/** @deprecated Read through {@link DataStorage#readFromStream(InputStream)} for new code. */
+@Deprecated
 public class DataURLStorage extends DataStorage
 {
     protected URL url;

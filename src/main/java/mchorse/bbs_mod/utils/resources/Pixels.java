@@ -195,26 +195,7 @@ public class Pixels
 
     public void draw(Pixels pixels, int x, int y)
     {
-        Color color = new Color();
-
-        for (int i = Math.max(x, 0), ic = Math.min(x + pixels.width, this.width); i < ic; i++)
-        {
-            for (int j = Math.max(y, 0), jc = Math.min(y + pixels.height, this.height); j < jc; j++)
-            {
-                int px = i - x;
-                int py = j - y;
-
-                Color target = pixels.getColor(px, py);
-                Color source = this.getColor(i, j);
-
-                color.a = 1 - (1 - target.a) * (1 - source.a);
-                color.r = target.r * target.a / color.a + source.r * source.a * (1 - target.a) / color.a;
-                color.g = target.g * target.a / color.a + source.g * source.a * (1 - target.a) / color.a;
-                color.b = target.b * target.a / color.a + source.b * source.a * (1 - target.a) / color.a;
-
-                this.setColor(i, j, color);
-            }
-        }
+        this.draw(pixels, x, y, 1F);
     }
 
     public void draw(Pixels pixels, int x, int y, float opacity)
@@ -241,28 +222,7 @@ public class Pixels
 
     public void draw(Pixels pixels, int x, int y, int w, int h)
     {
-        Color color = new Color();
-
-        for (int i = Math.max(x, 0), ic = Math.min(x + w, this.width); i < ic; i++)
-        {
-            for (int j = Math.max(y, 0), jc = Math.min(y + h, this.height); j < jc; j++)
-            {
-                float fx = (i - x) / (float) w;
-                float fy = (j - y) / (float) h;
-                int px = (int) (pixels.width * fx);
-                int py = (int) (pixels.height * fy);
-
-                Color target = pixels.getColor(px, py);
-                Color source = this.getColor(i, j);
-
-                color.a = 1 - (1 - target.a) * (1 - source.a);
-                color.r = target.r * target.a / color.a + source.r * source.a * (1 - target.a) / color.a;
-                color.g = target.g * target.a / color.a + source.g * source.a * (1 - target.a) / color.a;
-                color.b = target.b * target.a / color.a + source.b * source.a * (1 - target.a) / color.a;
-
-                this.setColor(i, j, color);
-            }
-        }
+        this.draw(pixels, x, y, w, h, 1F);
     }
 
     public void draw(Pixels pixels, int x, int y, int w, int h, float opacity)

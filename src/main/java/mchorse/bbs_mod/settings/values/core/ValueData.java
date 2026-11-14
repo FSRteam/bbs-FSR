@@ -11,6 +11,12 @@ public class ValueData extends BaseValueBasic<BaseType>
     }
 
     @Override
+    protected BaseType copyValue(BaseType value)
+    {
+        return value == null ? null : value.copy();
+    }
+
+    @Override
     public BaseType toData()
     {
         return this.value == null ? null : this.value.copy();

@@ -1,13 +1,12 @@
 package mchorse.bbs_mod.ui.framework.elements.input.list;
 
 import mchorse.bbs_mod.BBSMod;
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.StringUtils;
-import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.Collection;
 import java.util.function.Consumer;
@@ -156,8 +155,10 @@ public class UIFileLinkList extends UIList<UIFileLinkList.FileLink>
     @Override
     protected void renderElementPart(UIContext context, FileLink element, int i, int x, int y, boolean hover, boolean selected)
     {
-        context.batcher.icon(element.folder ? Icons.FOLDER : Icons.IMAGE, Colors.setA(Colors.WHITE, hover ? 0.75F : 0.6F), x + 2, y);
-        context.batcher.textShadow(element.title, x + 20, y + 4, hover ? BBSSettings.highlightColor() : BBSSettings.textColor());
+        int h = this.rowHeight();
+
+        context.batcher.icon(element.folder ? Icons.FOLDER : Icons.IMAGE, RowStyle.iconColor(hover || selected), x + 2, y + h / 2F, 0F, 0.5F);
+        context.batcher.textShadow(element.title, x + 20, y + (h - context.batcher.getFont().getHeight()) / 2, RowStyle.textColor(hover || selected));
     }
 
     public static class FileLink

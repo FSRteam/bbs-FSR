@@ -1,10 +1,14 @@
 package mchorse.bbs_mod.ui.film.clips.widgets;
 
 import mchorse.bbs_mod.camera.data.Placement;
+import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.utils.Direction;
 
 import java.util.function.Consumer;
 
@@ -22,13 +26,21 @@ public class UIPlacement
     public UITrackpad offsetY;
     public UITrackpad anchorX;
     public UITrackpad anchorY;
-    public UITrackpad scale;
+    public UITrackpad scaleX;
+    public UITrackpad scaleY;
 
     private Placement placement = new Placement();
+    private Placement defaultPlacement;
     private Consumer<Placement> callback;
 
     public UIPlacement(Consumer<Placement> callback)
     {
+        this(new Placement(), callback);
+    }
+
+    public UIPlacement(Placement defaultPlacement, Consumer<Placement> callback)
+    {
+        this.defaultPlacement = defaultPlacement.copy();
         this.callback = callback;
 
         this.grid = new UIAnchorGrid((x, y) ->
@@ -76,12 +88,53 @@ public class UIPlacement
             this.updateGrid();
             this.emit();
         });
-        this.scale = new UITrackpad((v) ->
+        this.scaleX = new UITrackpad((v) ->
         {
-            this.placement.scale = v.floatValue();
+            this.placement.scaleX = v.floatValue();
+
+            if (isChained())
+            {
+                this.placement.scaleY = this.placement.scaleX;
+                this.scaleY.setValue(this.placement.scaleY);
+            }
+
             this.emit();
         });
-        this.scale.limit(0);
+        this.scaleX.limit(0);
+        this.scaleY = new UITrackpad((v) ->
+        {
+            this.placement.scaleY = v.floatValue();
+
+            if (isChained())
+            {
+                this.placement.scaleX = this.placement.scaleY;
+                this.scaleX.setValue(this.placement.scaleX);
+            }
+
+            this.emit();
+        });
+        this.scaleY.limit(0);
+        this.scaleX.tooltip(UIKeys.CAMERA_PANELS_PLACEMENT_SCALE_SHIFT, Direction.BOTTOM);
+        this.scaleY.tooltip(UIKeys.CAMERA_PANELS_PLACEMENT_SCALE_SHIFT, Direction.BOTTOM);
+
+        this.grid.context((menu) -> menu.action(Icons.REFRESH, L10n.lang("bbs.ui.reset"), this::reset));
+    }
+
+    /**
+     * Both scale axes move together, unless shift is held — the modifier
+     * every scale editor shares: these trackpads AND the preview gizmo's
+     * handles. Read live, so shift can be pressed and released mid-drag.
+     */
+    public static boolean isChained()
+    {
+        return !Window.isShiftPressed();
+    }
+
+    private void reset()
+    {
+        this.placement.set(this.defaultPlacement);
+        this.fillFields();
+        this.emit();
     }
 
     /**
@@ -94,7 +147,7 @@ public class UIPlacement
             UI.label(UIKeys.CAMERA_PANELS_PLACEMENT_POSITION), UI.row(this.windowX, this.windowY),
             UI.label(UIKeys.CAMERA_PANELS_PLACEMENT_OFFSET), UI.row(this.offsetX, this.offsetY),
             UI.label(UIKeys.CAMERA_PANELS_PLACEMENT_ANCHOR), UI.row(this.anchorX, this.anchorY),
-            UI.label(UIKeys.CAMERA_PANELS_PLACEMENT_SCALE), this.scale
+            UI.label(UIKeys.CAMERA_PANELS_PLACEMENT_SCALE), UI.row(this.scaleX, this.scaleY)
         };
     }
 
@@ -112,7 +165,8 @@ public class UIPlacement
         this.offsetY.setValue(this.placement.offsetY);
         this.anchorX.setValue(this.placement.anchorX);
         this.anchorY.setValue(this.placement.anchorY);
-        this.scale.setValue(this.placement.scale);
+        this.scaleX.setValue(this.placement.scaleX);
+        this.scaleY.setValue(this.placement.scaleY);
         this.updateGrid();
     }
 

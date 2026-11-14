@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.particles;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.platform.NativeImage;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.particles.ParticleScheme;
 import mchorse.bbs_mod.particles.components.expiration.ParticleComponentKillPlane;
@@ -8,11 +9,11 @@ import mchorse.bbs_mod.particles.emitter.ParticleEmitter;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIModelRenderer;
-import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -22,10 +23,33 @@ import org.joml.Vector3f;
 
 public class UIParticleSchemeRenderer extends UIModelRenderer
 {
+    private static DynamicTexture whiteLightmapTexture;
+
     public ParticleEmitter emitter;
 
     private Vector3f vector = new Vector3f(0, 0, 0);
     private final Matrix4f cameraView = new Matrix4f();
+
+    private static int getWhiteLightmapTextureId()
+    {
+        if (whiteLightmapTexture == null)
+        {
+            whiteLightmapTexture = new DynamicTexture(16, 16, false);
+            NativeImage image = whiteLightmapTexture.getPixels();
+
+            for (int y = 0; y < 16; y++)
+            {
+                for (int x = 0; x < 16; x++)
+                {
+                    image.setPixelRGBA(x, y, -1);
+                }
+            }
+
+            whiteLightmapTexture.upload();
+        }
+
+        return whiteLightmapTexture.getId();
+    }
 
     public UIParticleSchemeRenderer()
     {
@@ -38,6 +62,19 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
     {
         this.emitter = new ParticleEmitter();
         this.emitter.setScheme(scheme);
+    }
+
+    @Override
+    public void render(UIContext context)
+    {
+        super.render(context);
+
+        if (this.emitter != null && this.emitter.scheme != null)
+        {
+            String label = this.emitter.particles.size() + "P - " + this.emitter.age + "A";
+
+            context.batcher.textShadow(label, this.area.ex() - 4 - context.batcher.getFont().getWidth(label), this.area.ey() - 12);
+        }
     }
 
     @Override
@@ -63,8 +100,6 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
         this.emitter.setupGuiCameraProperties(this.camera);
         this.emitter.rotation.identity();
 
-        Minecraft.getInstance().gameRenderer.lightTexture().turnOnLightLayer();
-
         PoseStack stack = context.batcher.getContext().pose();
 
         stack.pushPose();
@@ -73,6 +108,10 @@ public class UIParticleSchemeRenderer extends UIModelRenderer
 
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
+        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+
+        /* Worldless previews use fullbright UVs; bind their lightmap independently of world lighting. */
+        RenderSystem.setShaderTexture(2, getWhiteLightmapTextureId());
         this.emitter.render(DefaultVertexFormat.PARTICLE, GameRenderer::getParticleShader, stack, OverlayTexture.NO_OVERLAY, context.getTransition());
         RenderSystem.disableDepthTest();
         RenderSystem.disableBlend();

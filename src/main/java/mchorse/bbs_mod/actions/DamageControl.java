@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.actions;
 
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.entity.ActorEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -11,9 +12,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class DamageControl
 {
@@ -25,6 +29,10 @@ public class DamageControl
      * quadratic in the size of the snapshot. */
     private Map<BlockPos, BlockCapture> blocks = new LinkedHashMap<>();
     private List<Entity> entities = new ArrayList<>();
+    private static final int PRUNE_FLOOR = 256;
+    private int pruneAt = PRUNE_FLOOR;
+    private final Set<Object> owners = Collections.newSetFromMap(new IdentityHashMap<>());
+    private int manualHolds;
 
     private ServerLevel world;
 
@@ -47,6 +55,42 @@ public class DamageControl
         return this.world;
     }
 
+    public void acquire(Object owner)
+    {
+        if (owner == null)
+        {
+            this.manualHolds++;
+        }
+        else
+        {
+            this.owners.add(owner);
+        }
+
+        this.updateLegacyNested();
+    }
+
+    /** Releasing the same playback twice must not release another playback's hold. */
+    public boolean release(Object owner)
+    {
+        if (owner == null)
+        {
+            if (this.manualHolds > 0) this.manualHolds--;
+        }
+        else
+        {
+            this.owners.remove(owner);
+        }
+
+        this.updateLegacyNested();
+
+        return this.owners.isEmpty() && this.manualHolds == 0;
+    }
+
+    private void updateLegacyNested()
+    {
+        this.nested = Math.max(0, this.owners.size() + this.manualHolds - 1);
+    }
+
     public void addBlock(BlockPos pos, BlockState state, CompoundTag blockEntity)
     {
         if (!this.enable || this.blocks.containsKey(pos))
@@ -63,9 +107,15 @@ public class DamageControl
 
     public void addEntity(Entity entity)
     {
-        if (!this.enable)
+        if (!this.enable || entity instanceof ActorEntity)
         {
             return;
+        }
+
+        if (this.entities.size() >= this.pruneAt)
+        {
+            this.entities.removeIf(Entity::isRemoved);
+            this.pruneAt = Math.max(PRUNE_FLOOR, this.entities.size() * 2);
         }
 
         this.entities.add(entity);
@@ -95,8 +145,8 @@ public class DamageControl
      * from the manager would be written to while it is being walked.</p>
      *
      * <p>One entry that cannot be restored - a block entity whose type no longer exists, a
-     * position outside the world - must not cost the rest of them, so every entry is put
-     * back on its own and the snapshot is emptied whatever happens.</p>
+     * position outside the world - must not cost the rest of them. Successful entries are
+     * removed individually; failed entries stay available for the next restore attempt.</p>
      */
     public void restore()
     {

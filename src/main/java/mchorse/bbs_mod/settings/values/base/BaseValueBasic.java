@@ -8,12 +8,46 @@ public abstract class BaseValueBasic <T> extends BaseValue
 {
     protected T value;
     protected T runtimeValue;
+    private T defaultValue;
 
     public BaseValueBasic(String id, T value)
     {
         super(id);
 
         this.value = value;
+        this.captureDefault();
+    }
+
+    protected final void captureDefault()
+    {
+        this.defaultValue = this.copyValue(this.value);
+    }
+
+    protected T copyValue(T value)
+    {
+        return value;
+    }
+
+    protected boolean compareValue(T a, T b)
+    {
+        return Objects.equals(a, b);
+    }
+
+    public T getDefaultValue()
+    {
+        return this.defaultValue;
+    }
+
+    @Override
+    public void reset()
+    {
+        this.set(this.copyValue(this.defaultValue));
+    }
+
+    @Override
+    public boolean isDefault()
+    {
+        return this.compareValue(this.value, this.defaultValue);
     }
 
     public T get()

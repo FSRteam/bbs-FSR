@@ -1,5 +1,11 @@
 package mchorse.bbs_mod.ui.utils;
 
+import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.BBSSettings;
+import net.minecraft.client.renderer.ShaderInstance;
+import com.mojang.blaze3d.shaders.Uniform;
+import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.Framebuffer;
@@ -238,5 +244,56 @@ public class StencilFormFramebuffer
     public boolean hasPicked()
     {
         return this.index > 0;
+    }
+
+    public void renderPreview(UIContext context, Area area)
+    {
+        this.renderPreview(context, area, this.getIndex());
+    }
+
+    public void renderPreview(UIContext context, Area area, int index)
+    {
+        Texture texture = this.getFramebuffer().getMainTexture();
+        ShaderInstance program = BBSShaders.getPickerPreviewProgram();
+        Uniform target = program.getUniform("Target");
+
+        if (target != null)
+        {
+            target.set(index);
+        }
+
+        Uniform highlight = program.getUniform("HighlightColor");
+
+        if (highlight != null)
+        {
+            int color = BBSSettings.stencilHighlightColor.get();
+
+            highlight.set(Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
+        }
+
+        RenderSystem.enableBlend();
+        context.batcher.texturedBox(BBSShaders::getPickerPreviewProgram, texture.id, Colors.WHITE,
+            area.x, area.y, area.w, area.h,
+            0, texture.height, texture.width, 0, texture.width, texture.height);
+    }
+
+    public int indexOf(Form form, String bone)
+    {
+        for (Map.Entry<Integer, Pair<Form, String>> entry : this.indexMap.entrySet())
+        {
+            Pair<Form, String> pair = entry.getValue();
+
+            if (pair.a == form && pair.b.equals(bone))
+            {
+                return entry.getKey();
+            }
+        }
+
+        return 0;
+    }
+
+    public void clearIndex()
+    {
+        this.index = 0;
     }
 }

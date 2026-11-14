@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.forms.forms.BillboardForm;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.forms.editors.utils.UICropOverlayPanel;
@@ -48,13 +49,13 @@ public class UIBillboardFormPanel extends UIFormPanel<BillboardForm>
             UIOverlay.addOverlay(this.getContext(), new UICropOverlayPanel(this.form.texture.get(), this.form.crop.get()), 0.5F, 0.5F);
         });
         this.resizeCrop = new UIToggle(UIKeys.FORMS_EDITORS_BILLBOARD_RESIZE_CROP, false, (b) -> this.form.resizeCrop.set(b.getValue()));
-        this.color = new UIColor((value) -> this.form.color.set(Color.rgba(value))).direction(Direction.LEFT).withAlpha();
+        this.color = UIValues.color(() -> this.form.color).direction(Direction.LEFT).withAlpha();
 
-        this.offsetX = new UITrackpad((value) -> this.form.offsetX.set(value.floatValue()));
+        this.offsetX = UIValues.trackpad(() -> this.form.offsetX);
         this.offsetX.tooltip(UIKeys.FORMS_EDITORS_BILLBOARD_OFFSET_X);
-        this.offsetY = new UITrackpad((value) -> this.form.offsetY.set(value.floatValue()));
+        this.offsetY = UIValues.trackpad(() -> this.form.offsetY);
         this.offsetY.tooltip(UIKeys.FORMS_EDITORS_BILLBOARD_OFFSET_Y);
-        this.rotation = new UITrackpad((value) -> this.form.rotation.set(value.floatValue()));
+        this.rotation = UIValues.trackpad(() -> this.form.rotation);
         this.rotation.tooltip(UIKeys.FORMS_EDITORS_BILLBOARD_ROTATION);
 
         this.shading = new UIToggle(UIKeys.FORMS_EDITORS_BILLBOARD_SHADING, false, (b) -> this.form.shading.set(b.getValue()));

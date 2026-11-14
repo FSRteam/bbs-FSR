@@ -18,15 +18,17 @@ public class Subtitle
     public Transform transform;
     public float factor;
 
+    public final OverlayBox box = new OverlayBox();
+
     public int lineHeight;
     public int maxWidth;
-
-    public Link font;
-    public int fontSize;
 
     public Link image;
     public boolean imageRight;
     public float imageScale;
+
+    public Link font;
+    public int fontSize;
 
     public void update(String label, Placement placement, int color, boolean textShadow)
     {

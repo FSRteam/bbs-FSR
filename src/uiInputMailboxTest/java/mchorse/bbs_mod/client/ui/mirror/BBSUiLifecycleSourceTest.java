@@ -59,11 +59,12 @@ public final class BBSUiLifecycleSourceTest
                 && dashboard.contains("this.setPanelPlacement(this.panel, TASKBAR_HEIGHT - slide)")
                 && dashboard.contains("this.panel.setDashboardChromeHiddenAmount(slide / (float) TASKBAR_HEIGHT)")
                 && dashboard.contains("this.panel.isDashboardChromeHovered(context.mouseX, context.mouseY)")
-                && dashboard.contains("overTopReveal || overBottomReveal")
+                && dashboard.contains("overTopReveal || overSideReveal")
+                && dashboard.contains("case TOP -> overTopReveal")
                 && !dashboard.contains("y(0F, slide).w(1F).h(1F, -TASKBAR_HEIGHT)")
-                && dataPanel.contains("this.tabBar.relative(this).y(-tabsSlide)")
+                && dataPanel.contains("this.topBar.relative(this).y(-tabsSlide)")
                 && dataPanel.contains("int contentTop = tabsHeight - tabsSlide"),
-            "dashboard auto-hide must slide only the bottom taskbar and top data-panel chrome, never the active panel itself");
+            "dashboard auto-hide must use the selected taskbar edge and shared top chrome without translating the active panel");
         check(film.contains("private final UIDockLayout dock;")
                 && film.contains("this.dock = new UIDockLayout()")
                 && film.contains("this.editor.add(this.dock);")
@@ -88,7 +89,7 @@ public final class BBSUiLifecycleSourceTest
     private static void assertOwnerAwareInputCallSites()
     {
         String activity = readSource("src/client/java/mchorse/bbs_mod/ui/film/FilmEditorUserActivity.java");
-        String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
+        String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/drag/TransformGesture.java");
         String screen = readSource("src/client/java/mchorse/bbs_mod/ui/framework/UIScreen.java");
         String dispatcher = readSource("src/client/java/mchorse/bbs_mod/client/ui/mirror/BBSUiInputDispatcher.java");
         String modelBlocks = readSource("src/client/java/mchorse/bbs_mod/ui/model_blocks/UIModelBlockPanel.java");
@@ -250,6 +251,8 @@ public final class BBSUiLifecycleSourceTest
         String modelEditorPanel = readSource("src/client/java/mchorse/bbs_mod/ui/model_editor/UIModelEditorPanel.java");
         String clientNetwork = readSource("src/client/java/mchorse/bbs_mod/network/ClientNetwork.java");
         String transform = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UIPropTransform.java");
+        String gesture = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/drag/TransformGesture.java");
+        String hotkeyTargets = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/drag/HotkeyTarget.java");
         String transformBase = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/UITransform.java");
         String poseFactory = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseKeyframeFactory.java");
         String poseTransformFactory = readSource("src/client/java/mchorse/bbs_mod/ui/framework/elements/input/keyframes/factories/UIPoseTransformKeyframeFactory.java");
@@ -262,7 +265,7 @@ public final class BBSUiLifecycleSourceTest
         String vertexConsumers = readSource("src/client/java/mchorse/bbs_mod/forms/CustomVertexConsumerProvider.java");
         String bobj = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/BOBJModelVAO.java");
         String modelVao = readSource("src/client/java/mchorse/bbs_mod/cubic/render/vao/ModelVAO.java");
-        String enableMode = sourceSection(transform, "public void enableMode(TransformOp op)", "private HotkeyTarget currentHotkeyTarget");
+        String enableMode = sourceSection(gesture, "public void enableMode(TransformOp op)", "private HotkeyTarget currentHotkeyTarget");
 
         check(panels.contains("private boolean panelAppeared;")
                 && panels.contains("if (this.panel != null && !this.panelAppeared)")
@@ -271,8 +274,9 @@ public final class BBSUiLifecycleSourceTest
             "dashboard close/reopen no longer pairs active-panel disappear/appear ownership");
         String dashboardOpen = sourceSection(dashboard, "public void onOpen(UIBaseMenu oldMenu)", "public void onClose(UIBaseMenu nextMenu)");
         String restorePanelControls = sourceSection(dashboard, "private void restoreCurrentPanelControls()", "protected void closeMenu()");
-        String outsideRecording = sourceSection(filmController, "public void startRecording(List<String> groups)", "public void stopRecording()");
-        String filmActivate = sourceSection(filmPanel, "private void activateLifecycle()", "public void close()");
+        String recordingController = readSource("src/client/java/mchorse/bbs_mod/ui/film/controller/FilmRecordingController.java");
+        String outsideRecording = sourceSection(recordingController, "public void startRecording(List<String> groups)", "public void stopRecording()");
+        String filmActivate = sourceSection(filmPanel, "private void activateLifecycle()", "private void onPanelClosed()");
 
         check(dashboardOpen.contains("this.panels.open();")
                 && dashboardOpen.contains("this.restoreCurrentPanelControls();")
@@ -319,9 +323,12 @@ public final class BBSUiLifecycleSourceTest
                 && seek.indexOf("this.finishFlight(true, \"seek\");") < seek.indexOf("this.cancelViewInteractions();")
                 && seek.indexOf("this.finishFlight(true, \"seek\");") < seek.indexOf("this.runner.setCursor(Math.max(0F, value));"),
             "timeline UI replaced the captured flight target before committing its pose");
-        check(outsideRecording.indexOf("Film film = this.panel.getData();")
+        check(filmController.contains("this.recorder.startRecording(groups);")
+                && outsideRecording.indexOf("Film film = this.controller.panel.getData();") >= 0
+                && outsideRecording.indexOf("Film film = this.controller.panel.getData();")
                 < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
-                && outsideRecording.indexOf("int cursor = this.panel.getCursor();")
+                && outsideRecording.indexOf("int cursor = this.controller.panel.getCursor();") >= 0
+                && outsideRecording.indexOf("int cursor = this.controller.panel.getCursor();")
                 < outsideRecording.indexOf("Minecraft.getInstance().setScreen(null);")
                 && outsideRecording.contains("startRecording(film, index, cursor, true)"),
             "external replay recording still reads Film panel state after closing the dashboard");
@@ -398,12 +405,12 @@ public final class BBSUiLifecycleSourceTest
         check(enableMode.contains("this.nextHotkeyTarget(op, ray)")
                 && enableMode.contains("target == HotkeyTarget.ALL")
                 && enableMode.contains("this.enableUniformScale(drag, true)")
-                && transform.contains("if (this.isScaleAll()) return HotkeyTarget.ALL;")
-                && transform.contains("ALL(\"all\", null, false)"),
+                && gesture.contains("if (this.isScaleAll()) return HotkeyTarget.ALL;")
+                && hotkeyTargets.contains("ALL(\"all\", null, false)"),
             "the S hotkey no longer cycles through the configured all/X/Y/Z targets");
         check(transform.contains("private boolean isScaleFieldDragging()")
                 && transform.contains("field.getEvents().register(UITrackpadDragEndEvent.class, (e) -> this.syncUniformScaleRow())")
-                && transform.contains("!this.editing && !this.isScaleFieldDragging()")
+                && transform.contains("!this.gesture.isEditing() && !this.isScaleFieldDragging()")
                 && transform.contains("!= this.isScaleRowCollapsed()")
                 && transformBase.contains("protected boolean isScaleRowCollapsed()"),
             "uniform-scale row synchronization can mutate children during a trackpad render or compare against the SPACE/RMB modifier");

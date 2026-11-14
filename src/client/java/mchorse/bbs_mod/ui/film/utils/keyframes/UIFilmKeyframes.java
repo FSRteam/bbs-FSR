@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.film.utils.keyframes;
 
 import mchorse.bbs_mod.api.client.events.TimelineEvents;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.markers.FilmMarkers;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
@@ -88,6 +89,13 @@ public class UIFilmKeyframes extends UIKeyframes
     protected boolean hasCursor()
     {
         return this.editor != null;
+    }
+
+    @Override
+    public Float getAutoKeyframeTick()
+    {
+        return this.editor != null && BBSSettings.autoKeyframe != null && BBSSettings.autoKeyframe.get()
+            ? this.getOffset() : null;
     }
 
     @Override

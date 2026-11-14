@@ -54,6 +54,14 @@ public class UITransformKeyframeFactory extends UIKeyframeFactory<Transform>
             return recorded == null ? null : recorded.getValue();
         }
 
+        @Override
+        protected Transform getAutoKeyTransform(float tick)
+        {
+            UIKeyframeSheet sheet = this.editor.editor.getGraph().getSheet(this.editor.keyframe);
+            Transform sampled = (Transform) UIReplaysEditorUtils.sampleKeyframeValue(sheet, tick);
+            return sampled == null ? null : sampled;
+        }
+
         public static void applyRecording(UIKeyframes editor, Keyframe keyframe, int tick, Consumer<Transform> consumer)
         {
             UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick, (recorded) ->

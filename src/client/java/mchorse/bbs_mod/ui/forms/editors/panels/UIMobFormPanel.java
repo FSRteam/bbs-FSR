@@ -5,6 +5,7 @@ import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.forms.editors.panels.widgets.UIMobEditor;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
@@ -27,6 +28,7 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
 {
     private static final List<String> MOB_IDS = new ArrayList<>();
 
+    public UIMobEditor mobEditor;
     public UIButton pickMob;
     public UIButton pick;
     public UIColor color;
@@ -93,7 +95,8 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
         this.nbtSection.fields.add(this.mobNBT);
         this.nbtSection.setExpanded(false);
 
-        this.options.add(this.pickMob, this.pick, this.color, this.paused, this.poseEditor, this.nbtSection);
+        this.mobEditor = new UIMobEditor(null);
+        this.options.add(this.mobEditor, this.pick, this.color, this.paused, this.poseEditor);
     }
 
     @Override
@@ -101,6 +104,16 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
     {
         super.startEdit(form);
 
+        this.mobEditor.removeFromParent();
+        this.mobEditor = new UIMobEditor((id, nbt) ->
+        {
+            if (this.form != form) return;
+            form.mobID.set(id);
+            form.mobNBT.set(nbt);
+            this.refreshPoseEditor();
+        }).onClose(() -> { if (this.form == form) this.refreshPoseEditor(); });
+        this.mobEditor.set(form.mobID.get(), form.mobNBT.get());
+        this.options.prepend(this.mobEditor);
         this.color.setColor(this.form.color.get().getARGBColor());
         this.paused.setValue(this.form.paused.get());
         this.mobNBT.setText(this.form.mobNBT.get());
@@ -115,7 +128,7 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
         }
 
         this.options.add(this.poseEditor);
-        this.options.add(this.nbtSection);
+
         this.options.resize();
         this.refreshPoseEditor();
     }

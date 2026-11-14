@@ -39,6 +39,8 @@ public class FilmControllerContext
     public String bone2;
     public boolean local2;
 
+    public FilmTarget gizmoTarget = FilmTarget.NONE;
+
     public boolean anchorGizmo;
     public boolean anchorLocal;
 
@@ -64,6 +66,7 @@ public class FilmControllerContext
         this.gizmoView = null;
         this.bone2 = null;
         this.local2 = false;
+        this.gizmoTarget = FilmTarget.NONE;
         this.anchorGizmo = false;
         this.anchorLocal = false;
         this.nameTag = "";
@@ -168,6 +171,17 @@ public class FilmControllerContext
         this.anchorGizmo = anchorGizmo;
         this.anchorLocal = anchorLocal;
 
+        return this;
+    }
+
+    public FilmControllerContext gizmoTarget(FilmTarget target)
+    {
+        this.gizmoTarget = target == null ? FilmTarget.NONE : target;
+        this.bone = this.gizmoTarget.is(FilmTarget.Kind.BONE) ? this.gizmoTarget.bone() : null;
+        this.anchorGizmo = this.gizmoTarget.is(FilmTarget.Kind.ANCHOR);
+        this.space = this.gizmoTarget.space();
+        this.local = this.space == TransformSpace.LOCAL;
+        this.anchorLocal = this.local;
         return this;
     }
 

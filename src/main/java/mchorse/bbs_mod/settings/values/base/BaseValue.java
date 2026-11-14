@@ -17,6 +17,7 @@ public abstract class BaseValue implements IDataSerializable<BaseType>, IValueNo
     protected BaseValue parent;
 
     private boolean visible = true;
+    private boolean synced;
     private List<IValueListener> preCallbacks;
     private List<IValueListener> postCallbacks;
 
@@ -55,6 +56,31 @@ public abstract class BaseValue implements IDataSerializable<BaseType>, IValueNo
         this.visible = false;
 
         return this;
+    }
+
+    /** Declare that edits in this subtree must reach the server's live copy. */
+    public BaseValue synced()
+    {
+        this.synced = true;
+
+        return this;
+    }
+
+    public boolean isSynced()
+    {
+        BaseValue value = this;
+
+        while (value != null)
+        {
+            if (value.synced)
+            {
+                return true;
+            }
+
+            value = value.getParent();
+        }
+
+        return false;
     }
 
     public BaseValue preCallback(IValueListener callback)
@@ -108,6 +134,15 @@ public abstract class BaseValue implements IDataSerializable<BaseType>, IValueNo
 
             value = value.getParent();
         }
+    }
+
+    /** Restore the declaration default through the ordinary value notifications. */
+    public void reset()
+    {}
+
+    public boolean isDefault()
+    {
+        return true;
     }
 
     public void setParent(BaseValue parent)

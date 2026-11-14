@@ -90,6 +90,11 @@ public class FilmManager extends BaseManager<Film>
                 return null;
             }
 
+            if (!this.upgrade(id, rawFilm))
+            {
+                return null;
+            }
+
             return this.create(id, rawFilm);
         }
         catch (Exception | LinkageError e)

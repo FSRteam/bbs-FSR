@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
 import mchorse.bbs_mod.forms.forms.TrailForm;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.forms.editors.forms.UIForm;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
@@ -24,9 +25,9 @@ public class UITrailFormPanel extends UIFormPanel<TrailForm>
         {
             UITexturePicker.open(this.getContext(), this.form.texture.get(), (l) -> this.form.texture.set(l));
         });
-        this.length = new UITrackpad((v) -> this.form.length.set(v.floatValue()));
-        this.loop = new UIToggle(UIKeys.FORMS_EDITORS_TRAIL_LOOP, (b) -> this.form.loop.set(b.getValue()));
-        this.paused = new UIToggle(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_PAUSED, (b) -> this.form.paused.set(b.getValue()));
+        this.length = UIValues.trackpad(() -> this.form.length);
+        this.loop = UIValues.toggle(UIKeys.FORMS_EDITORS_TRAIL_LOOP, () -> this.form.loop);
+        this.paused = UIValues.toggle(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_PAUSED, () -> this.form.paused);
 
         this.options.add(this.pick, UI.labelRow(UIKeys.FORMS_EDITORS_TRAIL_LENGTH, this.length), this.loop, this.paused);
     }

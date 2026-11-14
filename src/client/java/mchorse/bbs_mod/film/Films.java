@@ -28,10 +28,13 @@ import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class Films
 {
@@ -137,6 +140,18 @@ public class Films
     public Recorder getRecorder()
     {
         return this.recorder;
+    }
+
+    /**
+     * Controllers currently driving world entities, in draw/ownership order.
+     *
+     * <p>The list is intentionally read-only to callers: film pose hooks need to resolve the
+     * owner on every query (including while paused or seeking), but must not be able to mutate
+     * playback lifecycle from a mixin callback.</p>
+     */
+    public List<BaseFilmController> getControllers()
+    {
+        return java.util.Collections.unmodifiableList(this.controllers);
     }
 
     public void startRecording(Film film, int replayId, int tick)
@@ -606,6 +621,7 @@ public class Films
         Throwable failure = null;
         Recorder recorder = this.recorder;
         List<BaseFilmController> controllers = new ArrayList<>(this.controllers);
+        Set<BaseFilmController> closed = Collections.newSetFromMap(new IdentityHashMap<>());
 
         this.controllers.clear();
         this.actors.clear();
@@ -613,6 +629,7 @@ public class Films
 
         if (recorder != null)
         {
+            closed.add(recorder);
             try
             {
                 this.stopRecordingForClientLifecycle(recorder);
@@ -625,6 +642,11 @@ public class Films
 
         for (BaseFilmController controller : controllers)
         {
+            if (!closed.add(controller))
+            {
+                continue;
+            }
+
             try
             {
                 controller.shutdown();

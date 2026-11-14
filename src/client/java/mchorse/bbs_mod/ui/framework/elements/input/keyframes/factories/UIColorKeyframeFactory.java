@@ -19,4 +19,11 @@ public class UIColorKeyframeFactory extends UIKeyframeFactory<Color>
 
         this.scroll.add(this.color);
     }
+
+    @Override
+    public void update()
+    {
+        super.update();
+        this.color.setColor(this.getDisplayValue().getARGBColor());
+    }
 }

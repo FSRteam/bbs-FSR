@@ -46,10 +46,10 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
     public boolean stretchFPS = false;
     public boolean loop = false;
 
-    /* Billboard direction sub-feature */
-    public String directionMode = null; /* null = not set, "derive_from_velocity" or "custom" */
-    public float speedThreshold = 0.01F;
-    public MolangExpression[] customDirection = null; /* 3-element array: x, y, z */
+    /* Direction source for the direction_x/y/z facing modes */
+    public BillboardDirection directionMode = BillboardDirection.DERIVE_FROM_VELOCITY;
+    public float minSpeedThreshold = 0.01F;
+    public MolangExpression[] customDirection = {MolangParser.ZERO, MolangParser.ZERO, MolangParser.ZERO};
 
     /* Full texture UV mode */
     public boolean fullTexture = false;
@@ -78,6 +78,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
     private Vector3f translation = new Vector3f();
     private Vector3f n = new Vector3f();
     private Vector3f direction = new Vector3f();
+    private Vector3f bDir = new Vector3f();
     private Vector3f cameraDirection = new Vector3f();
     private Vector3f projectedDirection = new Vector3f();
     private Vector3f rotatedNormal = new Vector3f();
@@ -98,24 +99,23 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         data.put("size", size);
         data.putString("facing_camera_mode", this.facing.id);
 
-        /* Billboard direction sub-feature */
-        if (this.directionMode != null)
+        if (this.directionMode == BillboardDirection.CUSTOM_DIRECTION || this.minSpeedThreshold != 0.01F)
         {
             MapType direction = new MapType();
 
-            direction.putString("mode", this.directionMode);
+            direction.putString("mode", this.directionMode.id);
 
-            if ("derive_from_velocity".equals(this.directionMode))
-            {
-                direction.putFloat("min_speed_threshold", this.speedThreshold);
-            }
-            else if ("custom".equals(this.directionMode) && this.customDirection != null)
+            if (this.directionMode == BillboardDirection.CUSTOM_DIRECTION)
             {
                 ListType customDir = new ListType();
                 customDir.add(this.customDirection[0].toData());
                 customDir.add(this.customDirection[1].toData());
                 customDir.add(this.customDirection[2].toData());
                 direction.put("custom_direction", customDir);
+            }
+            else
+            {
+                direction.putFloat("min_speed_threshold", this.minSpeedThreshold);
             }
 
             data.put("direction", direction);
@@ -222,33 +222,9 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             this.facing = CameraFacing.fromString(map.getString("facing_camera_mode"));
         }
 
-        /* Parse direction sub-feature */
         if (map.has("direction", BaseType.TYPE_MAP))
         {
-            MapType direction = map.getMap("direction");
-
-            if (direction.has("mode"))
-            {
-                this.directionMode = direction.getString("mode");
-
-                if ("derive_from_velocity".equals(this.directionMode) && direction.has("min_speed_threshold"))
-                {
-                    this.speedThreshold = direction.getFloat("min_speed_threshold");
-                }
-                else if ("custom".equals(this.directionMode) && direction.has("custom_direction", BaseType.TYPE_LIST))
-                {
-                    ListType customDir = direction.getList("custom_direction");
-
-                    if (customDir.size() >= 3)
-                    {
-                        this.customDirection = new MolangExpression[]{
-                            parser.parseDataSilently(customDir.get(0)),
-                            parser.parseDataSilently(customDir.get(1), MolangParser.ONE),
-                            parser.parseDataSilently(customDir.get(2))
-                        };
-                    }
-                }
-            }
+            this.parseDirection(map.getMap("direction"), parser);
         }
 
         /* Detect fullTexture mode: no "uv" key means full texture */
@@ -262,6 +238,31 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         }
 
         return super.fromData(map, parser);
+    }
+
+    private void parseDirection(MapType data, MolangParser parser)
+    {
+        if (data.has("mode"))
+        {
+            this.directionMode = BillboardDirection.fromString(data.getString("mode"));
+        }
+
+        if (data.has("min_speed_threshold"))
+        {
+            this.minSpeedThreshold = data.getFloat("min_speed_threshold");
+        }
+
+        if (data.has("custom_direction", BaseType.TYPE_LIST))
+        {
+            ListType custom = data.getList("custom_direction");
+
+            if (custom.size() >= 3)
+            {
+                this.customDirection[0] = parser.parseDataSilently(custom.get(0));
+                this.customDirection[1] = parser.parseDataSilently(custom.get(1));
+                this.customDirection[2] = parser.parseDataSilently(custom.get(2));
+            }
+        }
     }
 
     private void parseUv(MapType data, MolangParser parser) throws MolangException
@@ -406,7 +407,7 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             entityPitch = (float) (-(Math.atan2(dY, hDist) * (180D / Math.PI))) + 180;
         }
 
-        if (this.facing.isDirection)
+        if (this.facing == CameraFacing.LOOKAT_DIRECTION)
         {
             this.resolveDirection(particle);
         }
@@ -441,35 +442,40 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
             this.rotation.rotateY(entityYaw / 180 * (float) Math.PI);
             this.transform.mul(this.rotation);
         }
-        else if (this.facing == CameraFacing.DIRECTION_X)
+        else if (this.facing == CameraFacing.DIRECTION_X || this.facing == CameraFacing.DIRECTION_Y || this.facing == CameraFacing.DIRECTION_Z)
         {
-            this.rotation.identity();
-            this.rotation.rotateY(this.getDirectionYaw() / 180 * (float) Math.PI);
-            this.transform.mul(this.rotation);
-            this.rotation.identity();
-            this.rotation.rotateX(this.getDirectionPitch() / 180 * (float) Math.PI);
-            this.transform.mul(this.rotation);
-            this.rotation.identity();
-            this.rotation.rotateY((float) Math.PI / 2);
-            this.transform.mul(this.rotation);
-        }
-        else if (this.facing == CameraFacing.DIRECTION_Y)
-        {
-            this.rotation.identity();
-            this.rotation.rotateY(this.getDirectionYaw() / 180 * (float) Math.PI);
-            this.transform.mul(this.rotation);
-            this.rotation.identity();
-            this.rotation.rotateX((this.getDirectionPitch() + 90F) / 180 * (float) Math.PI);
-            this.transform.mul(this.rotation);
-        }
-        else if (this.facing == CameraFacing.DIRECTION_Z)
-        {
-            this.rotation.identity();
-            this.rotation.rotateY(this.getDirectionYaw() / 180 * (float) Math.PI);
-            this.transform.mul(this.rotation);
-            this.rotation.identity();
-            this.rotation.rotateX(this.getDirectionPitch() / 180 * (float) Math.PI);
-            this.transform.mul(this.rotation);
+            this.updateFacingDirection(emitter, particle, staticSpace);
+
+            float nx = particle.facingDirection.x;
+            float ny = particle.facingDirection.y;
+            float nz = particle.facingDirection.z;
+
+            if (ny == 1F)
+            {
+                ny = -1F;
+            }
+            else if (ny == -1F)
+            {
+                ny = 1F;
+                nz = -1.0E-5F;
+            }
+
+            float yaw = (float) Math.atan2(nx, nz);
+            float pitch = (float) Math.atan2(ny, Math.sqrt(nx * nx + nz * nz));
+            float halfPi = (float) (Math.PI / 2D);
+
+            if (this.facing == CameraFacing.DIRECTION_X)
+            {
+                this.transform.rotateY(yaw - halfPi).rotateZ(pitch);
+            }
+            else if (this.facing == CameraFacing.DIRECTION_Y)
+            {
+                this.transform.rotateY(yaw - (float) Math.PI).rotateX(pitch - halfPi);
+            }
+            else
+            {
+                this.transform.rotateY(yaw).rotateX(-pitch);
+            }
         }
         else if (this.facing == CameraFacing.LOOKAT_DIRECTION)
         {
@@ -542,11 +548,11 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
 
     private void resolveDirection(Particle particle)
     {
-        if ("custom".equals(this.directionMode) && this.customDirection != null)
+        if (this.directionMode == BillboardDirection.CUSTOM_DIRECTION)
         {
             this.direction.set((float) this.customDirection[0].get(), (float) this.customDirection[1].get(), (float) this.customDirection[2].get());
         }
-        else if (particle.speed.lengthSquared() > this.speedThreshold * this.speedThreshold)
+        else if (particle.speed.lengthSquared() > this.minSpeedThreshold * this.minSpeedThreshold)
         {
             this.direction.set(particle.speed).normalize();
         }
@@ -564,6 +570,38 @@ public class ParticleComponentAppearanceBillboard extends ParticleComponentBase 
         else if (Math.abs(lengthSquared - 1F) > 0.0001F)
         {
             this.direction.normalize();
+        }
+    }
+
+    private void updateFacingDirection(ParticleEmitter emitter, Particle particle, boolean staticSpace)
+    {
+        if (this.directionMode == BillboardDirection.CUSTOM_DIRECTION)
+        {
+            particle.facingDirection.set((float) this.customDirection[0].get(), (float) this.customDirection[1].get(), (float) this.customDirection[2].get());
+
+            if (particle.facingDirection.lengthSquared() > 1.0E-8F)
+            {
+                particle.facingDirection.normalize();
+            }
+
+            return;
+        }
+
+        this.bDir.set(
+            (float) (particle.position.x - particle.prevPosition.x),
+            (float) (particle.position.y - particle.prevPosition.y),
+            (float) (particle.position.z - particle.prevPosition.z)
+        );
+
+        if (staticSpace)
+        {
+            emitter.rotation.transform(this.bDir);
+        }
+
+        /* Position delta is per tick; the saved threshold is blocks per second. */
+        if (this.bDir.lengthSquared() > 1.0E-8F && this.bDir.length() * 20F >= this.minSpeedThreshold)
+        {
+            particle.facingDirection.set(this.bDir).normalize();
         }
     }
 

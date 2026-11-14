@@ -33,15 +33,27 @@ import mchorse.bbs_mod.api.client.events.RegisterClientSettingsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterClipPanelsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterClipRenderersEvent;
 import mchorse.bbs_mod.api.client.events.RegisterFormEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormPanelsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterFormRenderersEvent;
 import mchorse.bbs_mod.api.client.events.RegisterFormSectionsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFilmToolsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFrameOverlaysEvent;
+import mchorse.bbs_mod.ui.film.FrameOverlays;
+import mchorse.bbs_mod.utils.resources.PlayerSkins;
+import mchorse.bbs_mod.utils.resources.PlayerSkinSourcePack;
 import mchorse.bbs_mod.api.client.events.RegisterImportersEvent;
 import mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterKeyframeEditorsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterL10nEvent;
 import mchorse.bbs_mod.api.client.events.RegisterModelLoadersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterPreviewOverlaysEvent;
+import mchorse.bbs_mod.api.client.events.RegisterReplayActionsEvent;
 import mchorse.bbs_mod.api.client.events.RegisterTrackStylesEvent;
+import mchorse.bbs_mod.api.client.events.RegisterTrackCategoriesEvent;
+import mchorse.bbs_mod.api.client.editor.TrackCategories;
 import mchorse.bbs_mod.api.client.events.RegisterValueWidgetsEvent;
+import mchorse.bbs_mod.settings.ui.UIValueMap;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory;
 import mchorse.bbs_mod.cubic.model.ModelManager;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.Films;
@@ -53,6 +65,7 @@ import mchorse.bbs_mod.film.WorldVideoExportListener;
 import mchorse.bbs_mod.film.WorldVideoExportSession;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormCategories;
+import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.structure.BakedStructure;
 import mchorse.bbs_mod.forms.structure.StructureSelection;
@@ -70,6 +83,7 @@ import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.particles.ParticleManager;
+import mchorse.bbs_mod.particles.vanilla.VanillaParticlePreview;
 import mchorse.bbs_mod.plugin.client.BBSPluginClientStructuralBridge;
 import mchorse.bbs_mod.resources.AssetProvider;
 import mchorse.bbs_mod.resources.Link;
@@ -79,8 +93,11 @@ import mchorse.bbs_mod.resources.packs.URLSourcePack;
 import mchorse.bbs_mod.resources.packs.URLTextureErrorCallback;
 import mchorse.bbs_mod.selectors.EntitySelectors;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.utils.keyframes.factories.ItemStackKeyframeFactory;
+import mchorse.bbs_mod.data.GameRegistries;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
+import mchorse.bbs_mod.ui.dashboard.DashboardWarmup;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.audio.UIAudioRecorder;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
@@ -192,6 +209,8 @@ public class BBSModClient
      */
     public static void onResourcePacksReloaded()
     {
+        VanillaParticlePreview.clearCache();
+
         /* The first reload runs before the client has started; both packs index themselves when made. */
         if (cemSourcePack == null)
         {
@@ -344,11 +363,18 @@ public class BBSModClient
 
     public static UIDashboard getDashboard()
     {
+        UIDashboard dashboard = getUnfinishedDashboard();
+        dashboard.finishBuilding();
+        return dashboard;
+    }
+
+    /** Only the warmup owner may use a dashboard whose queued panels are incomplete. */
+    public static UIDashboard getUnfinishedDashboard()
+    {
         if (dashboard == null)
         {
             dashboard = new UIDashboard();
         }
-
         return dashboard;
     }
 
@@ -465,11 +491,21 @@ public class BBSModClient
 
     public void onInitializeClient()
     {
-        ItemStackKeyframeFactory.setClientRegistryAccess(() ->
+        GameRegistries.addPreferredSource(new GameRegistries.Source()
         {
-            Level level = Minecraft.getInstance().level;
+            @Override
+            public HolderLookup.Provider lookup()
+            {
+                ClientPacketListener connection = Minecraft.getInstance().getConnection();
 
-            return level == null ? null : level.registryAccess();
+                return connection == null ? null : connection.registryAccess();
+            }
+
+            @Override
+            public boolean isOwnThread()
+            {
+                return Minecraft.getInstance().isSameThread();
+            }
         });
 
         AssetProvider provider = BBSMod.getProvider();
@@ -536,11 +572,16 @@ public class BBSModClient
         provider.register(new URLSourcePack("http", repository));
         provider.register(new URLSourcePack("https", repository));
 
+        PlayerSkins.init(new File(parentFile, "skin_cache"));
+        provider.register(new PlayerSkinSourcePack());
+
         KeybindSettings.registerClasses();
 
         /* Before the settings file below is built: it reads the classes, and the addon combos
          * have to be among them. */
         postAddonEvent(new RegisterKeybindsEvent());
+        postAddonEvent(new RegisterTrackCategoriesEvent());
+        TrackCategories.finishRegistration();
 
         BBSMod.setupConfig(Icons.KEY_CAP, "keybinds", new File(BBSMod.getSettingsFolder(), "keybinds.json"), KeybindSettings::register);
 
@@ -550,13 +591,22 @@ public class BBSModClient
          * puts BBS's own entries in before an addon gets a chance to — a subscriber's register()
          * call is what initializes the class. So the only thing that matters here is that the
          * posts happen before anything reads the finished picture. */
+        FormUtilsClient.setup();
         postAddonEvent(new RegisterFormRenderersEvent());
         postAddonEvent(new RegisterFormEditorsEvent());
+        postAddonEvent(new RegisterFormPanelsEvent());
+        postAddonEvent(new RegisterPreviewOverlaysEvent());
+        postAddonEvent(new RegisterReplayActionsEvent());
         postAddonEvent(new RegisterClipPanelsEvent());
+        UIKeyframeFactory.setup();
         postAddonEvent(new RegisterKeyframeEditorsEvent());
+        UIValueMap.setup();
         postAddonEvent(new RegisterValueWidgetsEvent());
         postAddonEvent(new RegisterClipRenderersEvent());
         postAddonEvent(new RegisterTrackStylesEvent());
+        postAddonEvent(new RegisterFilmToolsEvent());
+        FrameOverlays.setup();
+        postAddonEvent(new RegisterFrameOverlaysEvent());
         postAddonEvent(new RegisterImportersEvent());
 
         BBSSettings.language.postCallback((v, f) -> reloadLanguage(getLanguageKey()));
@@ -601,7 +651,7 @@ public class BBSModClient
             UIKeys.GENERAL_X,
             UIKeys.GENERAL_Y,
             UIKeys.GENERAL_Z
-        );
+        ).colors(0, Colors.A100 | Colors.RED, Colors.A100 | Colors.GREEN, Colors.A100 | Colors.BLUE);
         BBSSettings.scaleHotkeyOrder
             .labels(
                 UIKeys.TRANSFORMS_TARGET_ALL,
@@ -616,7 +666,7 @@ public class BBSModClient
             UIKeys.GENERAL_X,
             UIKeys.GENERAL_Y,
             UIKeys.GENERAL_Z
-        );
+        ).colors(0, 0, Colors.A100 | Colors.RED, Colors.A100 | Colors.GREEN, Colors.A100 | Colors.BLUE);
 
         UIKeys.C_KEYBIND_CATGORIES.load(KeyCombo.getCategoryKeys());
         UIKeys.C_KEYBIND_CATGORIES_TOOLTIP.load(KeyCombo.getCategoryKeys());
@@ -778,6 +828,8 @@ public class BBSModClient
             runClientLifecycleStep("stop Minecraft sound capture", minecraftSoundCapture::end);
             runClientLifecycleStep("release video decoders", () -> videos.delete());
             runClientLifecycleStep("release Film view resources", BBSRendering::releaseViewResources);
+            runClientLifecycleStep("discard pending form draws", FormTranslucentQueue::abort);
+            runClientLifecycleStep("release form framebuffer pool", () -> framebuffers.getFormFramebuffers().delete());
             runClientLifecycleStep("reset UI mirror", () -> BBSUiMirrorRuntime.reset());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
         }
@@ -785,6 +837,7 @@ public class BBSModClient
         {
             /* Identity clearing is unconditional and independent of callbacks. */
             dashboard = null;
+            DashboardWarmup.reset();
         }
 
         /* Corners are raw coordinates: kept across a world change they would point the wand
@@ -878,6 +931,7 @@ public class BBSModClient
         fonts.update();
 
         BBSRendering.startTick();
+        getFormCategories().getUserForms().flush();
     }
 
     public static void onLevelTickPost()
@@ -896,6 +950,7 @@ public class BBSModClient
     public static void onClientTickPost()
     {
         Minecraft mc = Minecraft.getInstance();
+        DashboardWarmup.tick(mc);
 
         BBSUiOpenDispatcher.tick(mc);
 
@@ -1025,12 +1080,15 @@ public class BBSModClient
             runClientLifecycleStep("cancel client exports", () -> cancelClientExports(filmPanel));
             runClientLifecycleStep("release video decoders", () -> videos.delete());
             runClientLifecycleStep("release Film view resources", BBSRendering::releaseViewResources);
+            runClientLifecycleStep("discard pending form draws", FormTranslucentQueue::abort);
+            runClientLifecycleStep("release framebuffers", () -> framebuffers.delete());
             runClientLifecycleStep("shutdown UI mirror", () -> BBSUiMirrorRuntime.shutdown());
             runClientLifecycleStep("reset Film collaboration", () -> BBSFilmCollaborationBridge.resetSession());
         }
         finally
         {
             dashboard = null;
+            DashboardWarmup.reset();
             runClientLifecycleStep("stop resource watchdog", () -> BBSResources.stopWatchdog());
         }
 

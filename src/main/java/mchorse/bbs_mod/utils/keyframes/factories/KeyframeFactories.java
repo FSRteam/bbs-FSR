@@ -80,8 +80,17 @@ public class KeyframeFactories
             || factory instanceof Vector3fKeyframeFactory;
     }
 
-    static
+    private static boolean initialized;
+
+    /** Register built-ins once before the addon factory registration event. */
+    public static void setup()
     {
+        if (initialized)
+        {
+            return;
+        }
+
+        initialized = true;
         FACTORIES.put("color", COLOR);
         FACTORIES.put("transform", TRANSFORM);
         FACTORIES.put("pose_transform", POSE_TRANSFORM);
@@ -112,5 +121,11 @@ public class KeyframeFactories
         FACTORIES.put("sound_visualization", SOUND_VISUALIZATION);
         FACTORIES.put("sound_falloff", SOUND_FALLOFF);
         FACTORIES.put("sound_reflections", SOUND_REFLECTIONS);
+    }
+
+    /* FSR addons and standalone data consumers can use the registry before common setup. */
+    static
+    {
+        setup();
     }
 }

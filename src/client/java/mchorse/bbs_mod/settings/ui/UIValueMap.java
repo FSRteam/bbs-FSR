@@ -6,6 +6,8 @@ import mchorse.bbs_mod.audio.ChannelLayout;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.value.ValueKeyCombo;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
@@ -13,6 +15,8 @@ import mchorse.bbs_mod.settings.values.numeric.ValueDouble;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
 import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
+import mchorse.bbs_mod.settings.values.ui.ValueKeyframeStyle;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.overlays.UIKeyframeStyleOverlayPanel;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.settings.values.ui.ValueExportChannelLayout;
 import mchorse.bbs_mod.settings.values.ui.ValueVideoSettings;
@@ -54,9 +58,17 @@ import java.util.Map;
 public class UIValueMap
 {
     private static Map<Class<? extends BaseValue>, IUIValueFactory<? extends BaseValue>> factories = new HashMap<>();
+    private static boolean initialized;
 
-    static
+    /** Register built-in widgets before the client addon registration event. */
+    public static void setup()
     {
+        if (initialized)
+        {
+            return;
+        }
+
+        initialized = true;
         register(ValueBoolean.class, (value, ui) ->
         {
             if (value == BBSSettings.updateCheckTrigger)
@@ -97,6 +109,22 @@ public class UIValueMap
 
         register(ValueInt.class, (value, ui) ->
         {
+            if (value == BBSSettings.taskbarSide)
+            {
+                UICirculate button = new UICirculate((b) -> value.set(b.getValue()));
+
+                for (IKey label : UIDashboardPanels.getSideLabels())
+                {
+                    button.addLabel(label);
+                }
+
+                button.setValue(value.get());
+                button.valueBinding(() -> button.setValue(value.get()));
+                button.w(90);
+
+                return Arrays.asList(UIValueFactory.column(button, value));
+            }
+
             if (value == BBSSettings.updateChannel || value == BBSSettings.updateInterval)
             {
                 UICirculate button = new UICirculate(null);
@@ -108,6 +136,7 @@ public class UIValueMap
 
                 button.callback = (b) -> value.set(button.getValue());
                 button.setValue(value.get());
+                button.valueBinding(() -> button.setValue(value.get()));
                 button.w(90);
 
                 return Arrays.asList(UIValueFactory.column(button, value));
@@ -129,6 +158,7 @@ public class UIValueMap
                     }
                 };
                 button.setValue(value.get());
+                button.valueBinding(() -> button.setValue(value.get()));
                 button.w(90);
 
                 return Arrays.asList(UIValueFactory.column(button, value));
@@ -183,6 +213,7 @@ public class UIValueMap
 
                 button.callback = (b) -> value.set(button.getValue());
                 button.setValue(value.get());
+                button.valueBinding(() -> button.setValue(value.get()));
                 button.w(90);
 
                 return Arrays.asList(UIValueFactory.column(button, value));
@@ -193,6 +224,14 @@ public class UIValueMap
             trackpad.w(90);
 
             return Arrays.asList(UIValueFactory.column(trackpad, value));
+        });
+
+        register(ValueKeyframeStyle.class, (value, ui) ->
+        {
+            UIButton button = new UIButton(UIKeys.CONFIG_KEYFRAME_STYLE_EDIT, (b) ->
+                UIOverlay.addOverlay(ui.getContext(), new UIKeyframeStyleOverlayPanel(value.get(), value::set), 220, 200));
+            button.w(90);
+            return Arrays.asList(UIValueFactory.column(button, value));
         });
 
         register(ValueLanguage.class, (value, ui) ->
@@ -224,6 +263,7 @@ public class UIValueMap
             button.addLabel(UIKeys.VIDEO_SETTINGS_AUDIO_CHANNELS_MONO);
             button.addLabel(UIKeys.VIDEO_SETTINGS_AUDIO_CHANNELS_STEREO);
             button.setValue(value.getResolved() == ChannelLayout.STEREO ? 1 : 0);
+            button.valueBinding(() -> button.setValue(value.getResolved() == ChannelLayout.STEREO ? 1 : 0));
             button.w(90);
 
             return Arrays.asList(UIValueFactory.column(button, value));
@@ -345,14 +385,29 @@ public class UIValueMap
 
     public static <T extends BaseValue> void register(Class<T> clazz, IUIValueFactory<T> factory)
     {
+        setup();
         factories.put(clazz, factory);
     }
 
     public static <T extends BaseValue> List<UIElement> create(T value, UIElement element)
     {
+        setup();
         IUIValueFactory<T> factory = (IUIValueFactory<T>) factories.get(value.getClass());
 
-        return factory == null ? Collections.emptyList() : factory.create(value, element);
+        if (factory == null)
+        {
+            return Collections.emptyList();
+        }
+
+        List<UIElement> elements = factory.create(value, element);
+        Runnable refresh = element instanceof UISettingsOverlayPanel panel ? panel::refresh : null;
+
+        for (UIElement created : elements)
+        {
+            UIValues.resettable(created, value, refresh);
+        }
+
+        return elements;
     }
 
     public static interface IUIValueFactory <T extends BaseValue>

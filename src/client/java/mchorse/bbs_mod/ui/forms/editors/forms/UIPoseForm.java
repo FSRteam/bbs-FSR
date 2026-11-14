@@ -76,6 +76,12 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
     }
 
     @Override
+    public Matrix4f getParentOriginMatrix(float transition)
+    {
+        return this.getOrigin(transition, this.bonePath(), false);
+    }
+
+    @Override
     public Vector3f getRotationOffset(float transition)
     {
         return this.getRotationOffset(transition, this.bonePath());

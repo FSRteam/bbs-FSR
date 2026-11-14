@@ -38,6 +38,7 @@ import java.util.function.BooleanSupplier;
 public final class MinecraftSoundMixer
 {
     private static final float CENTER_GAIN = (float) Math.sqrt(0.5D);
+    private static final double GAIN_SMOOTHING_SECONDS = 0.005D;
     private static final long MAX_SAMPLES = 500_000_000L;
 
     private MinecraftSoundMixer() {}
@@ -1196,6 +1197,7 @@ public final class MinecraftSoundMixer
         private final double timelineStart;
         private final long start;
         private final long end;
+        private final float gainSmoothing;
         private long nextOutput;
         private double position;
         private boolean exhausted;
@@ -1203,6 +1205,9 @@ public final class MinecraftSoundMixer
         private ChannelLayout gainLayout;
         private float leftGain;
         private float rightGain;
+        private float smoothedLeftGain;
+        private float smoothedRightGain;
+        private boolean gainsInitialized;
 
         private Cursor(CapturedSound sound, SampleSource source, double timelineStart, long start,
                        long end, int outputRate)
@@ -1214,6 +1219,7 @@ public final class MinecraftSoundMixer
             this.timelineStart = timelineStart;
             this.start = start;
             this.end = end;
+            this.gainSmoothing = (float) (1D - Math.exp(-1D / (GAIN_SMOOTHING_SECONDS * outputRate)));
             this.nextOutput = start;
             LoopFrame initialState = sound.getTrackFrame(sound.frame);
             float initialPitch = initialState == null ? sound.pitch : initialState.pitch;
@@ -1269,34 +1275,36 @@ public final class MinecraftSoundMixer
                 double sourcePosition = this.sound.loop ? this.position % this.sourceFrames : this.position;
                 if (sourcePosition < 0D) sourcePosition += this.sourceFrames;
 
+                if (this.gainFrame != timelineFrame || this.gainLayout != layout)
+                {
+                    ListenerFrame listener = this.format.channels() >= 2 || listeners.isEmpty() ? null
+                        : listeners.get(MathUtils.clamp(timelineFrame, 0, listeners.size() - 1));
+                    this.updateGains(timelineFrame, state, listener, volume, layout);
+                }
+
+                this.smoothGains();
+
                 if (this.format.channels() == 1)
                 {
-                    ListenerFrame listener = listeners.isEmpty() ? null
-                        : listeners.get(MathUtils.clamp(timelineFrame, 0, listeners.size() - 1));
                     float value = sample(this.source, this.sourceFrames,
                         sourcePosition, 0, this.sound.loop);
 
-                    if (this.gainFrame != timelineFrame || this.gainLayout != layout)
-                    {
-                        this.updateGains(timelineFrame, state, listener, volume, layout);
-                    }
-
                     if (layout == ChannelLayout.MONO)
                     {
-                        left[destination] += value * this.leftGain;
+                        left[destination] += value * this.smoothedLeftGain;
                     }
                     else
                     {
-                        left[destination] += value * this.leftGain;
-                        right[destination] += value * this.rightGain;
+                        left[destination] += value * this.smoothedLeftGain;
+                        right[destination] += value * this.smoothedRightGain;
                     }
                 }
                 else
                 {
                     float l = sample(this.source, this.sourceFrames,
-                        sourcePosition, 0, this.sound.loop) * volume;
+                        sourcePosition, 0, this.sound.loop) * this.smoothedLeftGain;
                     float r = sample(this.source, this.sourceFrames,
-                        sourcePosition, 1, this.sound.loop) * volume;
+                        sourcePosition, 1, this.sound.loop) * this.smoothedRightGain;
                     AudioRenderer.PcmBlockRenderer.accumulate(left, right, destination,
                         layout, 2, l, r, 1F);
                 }
@@ -1315,6 +1323,12 @@ public final class MinecraftSoundMixer
         {
             this.gainFrame = timelineFrame;
             this.gainLayout = layout;
+
+            if (this.format.channels() >= 2)
+            {
+                this.leftGain = this.rightGain = volume;
+                return;
+            }
 
             if (layout == ChannelLayout.MONO)
             {
@@ -1355,6 +1369,21 @@ public final class MinecraftSoundMixer
 
             this.leftGain = gain * (float) Math.cos(angle);
             this.rightGain = gain * (float) Math.sin(angle);
+        }
+
+        private void smoothGains()
+        {
+            if (!this.gainsInitialized)
+            {
+                /* Start at the current gain; only subsequent changes need de-zippering. */
+                this.smoothedLeftGain = this.leftGain;
+                this.smoothedRightGain = this.rightGain;
+                this.gainsInitialized = true;
+                return;
+            }
+
+            this.smoothedLeftGain += (this.leftGain - this.smoothedLeftGain) * this.gainSmoothing;
+            this.smoothedRightGain += (this.rightGain - this.smoothedRightGain) * this.gainSmoothing;
         }
 
         private void advance(long from, long to, int outputRate, double frameRate)

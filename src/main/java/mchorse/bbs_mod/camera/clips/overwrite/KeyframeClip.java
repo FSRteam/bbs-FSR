@@ -33,6 +33,14 @@ public class KeyframeClip extends CameraClip
 
     public KeyframeChannel<Double>[] channels;
 
+    private final Position underneath = new Position();
+    private boolean evaluated;
+
+    public Position getUnderneath()
+    {
+        return this.evaluated ? this.underneath : null;
+    }
+
     public KeyframeClip()
     {
         super();
@@ -64,6 +72,10 @@ public class KeyframeClip extends CameraClip
     @Override
     public void applyClip(ClipContext context, Position position)
     {
+        /* Flight edits resolve their offset against this camera's input pose. */
+        this.underneath.copy(position);
+        this.evaluated = true;
+
         float t = context.relativeTick + context.transition;
 
         if (this.additive.get())

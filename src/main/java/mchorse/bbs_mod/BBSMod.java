@@ -18,6 +18,7 @@ import mchorse.bbs_mod.actions.types.item.UseBlockItemActionClip;
 import mchorse.bbs_mod.actions.types.item.UseItemActionClip;
 import mchorse.bbs_mod.actions.types.item.ReleaseUseItemActionClip;
 import mchorse.bbs_mod.data.DataStorageUtils;
+import mchorse.bbs_mod.data.GameRegistries;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.addon.BBSAddonBridge;
 import mchorse.bbs_mod.addon.BBSAddonCollector;
@@ -71,9 +72,11 @@ import mchorse.bbs_mod.events.register.RegisterSettingsEvent;
 import mchorse.bbs_mod.events.register.RegisterFormsEvent;
 import mchorse.bbs_mod.events.register.RegisterSourcePacksEvent;
 import mchorse.bbs_mod.film.FilmManager;
+import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.forms.FormArchitect;
 import mchorse.bbs_mod.forms.forms.AnchorForm;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
+import mchorse.bbs_mod.forms.forms.VideoForm;
 import mchorse.bbs_mod.forms.forms.BlockForm;
 import mchorse.bbs_mod.forms.forms.ExtrudedForm;
 import mchorse.bbs_mod.forms.forms.FramebufferForm;
@@ -120,6 +123,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.core.HolderLookup;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
@@ -448,6 +453,25 @@ public class BBSMod
     public BBSMod()
     {
         this.modBus = ModLoadingContext.get().getActiveContainer().getEventBus();
+        GameRegistries.addSource(new GameRegistries.Source()
+        {
+            @Override
+            public HolderLookup.Provider lookup()
+            {
+                MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+
+                return server == null ? null : server.registryAccess();
+            }
+
+            @Override
+            public boolean isOwnThread()
+            {
+                MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+
+                return GameRegistries.isServerThread() || server != null && server.isSameThread();
+            }
+        });
+
         this.addonIdentities = new BBSAddonIdentityRegistry();
 
         this.addonCollector = new BBSAddonCollector(this.addonIdentities);
@@ -574,14 +598,17 @@ public class BBSMod
 
         LOGGER.info("[bbs-addon] posting RegisterSourcePacksEvent");
         events.post(new RegisterSourcePacksEvent(provider));
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterSourcePacksEvent(provider));
 
         /* Before the forms, because a form of an addon's may well animate a value type of the
          * same addon's. */
+        KeyframeFactories.setup();
         postAddonEvent(new mchorse.bbs_mod.api.events.RegisterKeyframeFactoriesEvent());
 
         forms = new FormArchitect();
         forms
             .register(Link.bbs("billboard"), BillboardForm.class, null)
+            .register(Link.bbs("video"), VideoForm.class, null)
             .register(Link.bbs("label"), LabelForm.class, null)
             .register(Link.bbs("model"), ModelForm.class, null)
             .register(Link.bbs("particle"), ParticleForm.class, null)
@@ -600,6 +627,7 @@ public class BBSMod
         LOGGER.info("[bbs-addon] posting RegisterFormsEvent");
         events.post(new RegisterFormsEvent(forms));
         postAddonEvent(new mchorse.bbs_mod.api.events.RegisterFormsEvent(forms));
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterFormModifiersEvent());
 
         films = new FilmManager(() -> new File(worldFolder, "bbs/films"));
 
@@ -657,6 +685,7 @@ public class BBSMod
         this.addonManager.runCommonRegistration(settingsFolder, provider, forms, factoryCameraClips, factoryActionClips, events);
         this.runLegacyInitialization();
         events.post(new RegisterSettingsEvent());
+        postAddonEvent(new mchorse.bbs_mod.api.events.RegisterSettingsEvent());
         this.addonManager.runCommonSetup();
 
         postAddonEvent(new mchorse.bbs_mod.api.events.BBSReadyEvent());

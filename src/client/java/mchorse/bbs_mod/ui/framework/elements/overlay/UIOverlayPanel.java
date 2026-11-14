@@ -11,6 +11,9 @@ import mchorse.bbs_mod.ui.framework.elements.events.UIOverlayCloseEvent;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
+import mchorse.bbs_mod.utils.MathUtils;
+import org.joml.Vector2i;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -20,6 +23,14 @@ import java.util.function.Consumer;
 
 public class UIOverlayPanel extends UIElement
 {
+    public static final int MIN_WIDTH = 160;
+    public static final int MIN_HEIGHT = 80;
+    private static final int GRIP = 12;
+
+    private UIDraggable grip;
+    private boolean resized;
+    private boolean sizeless;
+
     public UILabel title;
     public UIElement icons;
     public UIIcon close;
@@ -52,6 +63,104 @@ public class UIOverlayPanel extends UIElement
         this.add(this.title, this.icons, this.content);
 
         this.mouseEventPropagataion(EventPropagation.BLOCK_INSIDE);
+    }
+
+    public boolean isResizable()
+    {
+        return true;
+    }
+
+    public void sizeless()
+    {
+        this.sizeless = true;
+    }
+
+    public int getPreferredWidth()
+    {
+        return -1;
+    }
+
+    public int getContentHeight()
+    {
+        return -1;
+    }
+
+    @Override
+    public void resize()
+    {
+        super.resize();
+
+        int height = this.getContentHeight();
+
+        if (this.sizeless && height > 0 && height != this.area.h)
+        {
+            this.flex.h.max = 0;
+            this.flex.h.set(0F, height);
+            super.resize();
+        }
+    }
+
+    public boolean wasResized()
+    {
+        return this.resized;
+    }
+
+    public void setupResize()
+    {
+        if (this.grip != null || !this.isResizable())
+        {
+            return;
+        }
+
+        this.grip = new UIDraggable(this::dragSize);
+        this.grip.rendering(this::renderGrip);
+        this.grip.cursors(GLFW.GLFW_RESIZE_NWSE_CURSOR, GLFW.GLFW_RESIZE_NWSE_CURSOR);
+        this.grip.reference(() -> new Vector2i(this.area.ex(), this.area.ey()));
+        this.grip.relative(this).x(1F, -GRIP).y(1F, -GRIP).wh(GRIP, GRIP);
+        this.add(this.grip);
+    }
+
+    private void dragSize(UIContext context)
+    {
+        UIElement parent = this.getParent();
+        float anchorX = this.flex.x.anchor;
+        float anchorY = this.flex.y.anchor;
+
+        if (anchorX < 1F)
+        {
+            int origin = this.area.x + (int) (this.area.w * anchorX);
+            int width = (int) ((context.mouseX - origin) / (1F - anchorX));
+
+            this.flex.w.max = 0;
+            this.flex.w.set(0F, MathUtils.clamp(width, MIN_WIDTH, Math.max(parent.area.w, MIN_WIDTH)));
+        }
+
+        if (anchorY < 1F)
+        {
+            int origin = this.area.y + (int) (this.area.h * anchorY);
+            int height = (int) ((context.mouseY - origin) / (1F - anchorY));
+
+            this.flex.h.max = 0;
+            this.flex.h.set(0F, MathUtils.clamp(height, MIN_HEIGHT, Math.max(parent.area.h, MIN_HEIGHT)));
+        }
+
+        this.resized = true;
+        parent.resize();
+    }
+
+    private void renderGrip(UIContext context)
+    {
+        int color = this.grip.area.isInside(context) ? BBSSettings.textColor() : BBSSettings.mutedTextColor();
+        int x = this.grip.area.x + 1;
+        int y = this.grip.area.y + 1;
+
+        for (int row = 0; row < 3; row++)
+        {
+            for (int column = 2 - row; column < 3; column++)
+            {
+                context.batcher.box(x + column * 3, y + row * 3, x + column * 3 + 2, y + row * 3 + 2, color);
+            }
+        }
     }
 
     public void setInitialOffset(int x, int y)

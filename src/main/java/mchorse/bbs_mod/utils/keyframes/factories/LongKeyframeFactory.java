@@ -2,6 +2,7 @@ package mchorse.bbs_mod.utils.keyframes.factories;
 
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.LongType;
+import mchorse.bbs_mod.utils.interps.AutoBezier;
 import mchorse.bbs_mod.utils.interps.IInterp;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.BezierUtils;
@@ -9,6 +10,11 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 
 public class LongKeyframeFactory implements IKeyframeFactory<Long>
 {
+    @Override
+    public int contentHash(Long value)
+    {
+        return value.hashCode();
+    }
     @Override
     public Long fromData(BaseType data)
     {
@@ -42,8 +48,17 @@ public class LongKeyframeFactory implements IKeyframeFactory<Long>
                 a.getValue(), b.getValue(),
                 a.getTick(), b.getTick(),
                 a.rx, a.ry,
-                a.lx, a.ly,
+                b.lx, b.ly,
                 x
+            );
+        }
+
+        if (interpolation.has(Interpolations.AUTO) || interpolation.has(Interpolations.AUTO_CLAMPED))
+        {
+            return (long) AutoBezier.get(
+                preA.getValue(), a.getValue(), b.getValue(), postB.getValue(),
+                preA.getTick(), a.getTick(), b.getTick(), postB.getTick(),
+                interpolation.has(Interpolations.AUTO_CLAMPED), x
             );
         }
 

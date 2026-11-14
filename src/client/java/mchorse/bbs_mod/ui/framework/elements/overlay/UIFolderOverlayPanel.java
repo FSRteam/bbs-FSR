@@ -17,6 +17,8 @@ public class UIFolderOverlayPanel extends UIMessageBarOverlayPanel
     {
         super(title, message);
 
+        this.fillsOverlay();
+
         this.callback = callback;
 
         this.list = new UIFileLinkList((l) -> {});
