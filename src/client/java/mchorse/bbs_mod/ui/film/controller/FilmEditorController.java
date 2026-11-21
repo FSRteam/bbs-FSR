@@ -113,7 +113,8 @@ public class FilmEditorController extends BaseFilmController
             entity.setPrevBodyYaw(entity.getBodyYaw());
             entity.setPrevPitch(entity.getPitch());
 
-            int diff = Math.abs(this.lastTick - ticks);
+            /* A backward seek has no intermediate ticks to replay. */
+            int diff = ticks - this.lastTick;
 
             while (diff > 0)
             {

@@ -85,6 +85,7 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
@@ -304,7 +305,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
         Scale scale = keyframes.getXAxis();
         boolean renderedOnce = false;
         int y = area.y + 1;
-        int h = Math.max(1, rulerBottom - y - 1);
+        int h = Math.max(1, rulerBottom - y);
 
         for (Clip clip : camera.get()) {
             if (!(clip instanceof AudioClip audioClip)) {
@@ -377,7 +378,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
         int left = Math.max(area.x, x1);
         int right = Math.min(area.ex(), x2);
         int top = area.y + 1;
-        int bottom = Math.max(top + 1, rulerBottom - 1);
+        int bottom = Math.max(top + 1, rulerBottom);
 
         context.batcher.gradientVBox(left, top, right, bottom, Colors.setA(color, 0.03F), Colors.setA(color, 0.78F));
         context.batcher.box(left, Math.max(top, bottom - 2), right, bottom, Colors.setA(color, 0.92F));
@@ -1316,13 +1317,13 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
 
         context.replaceContextMenu(menu ->
         {
-            menu.action(Icons.ADD, UIKeys.FILM_REPLAY_CONTEXT_ADD, () ->
+            menu.icon(MenuVerb.ADD, () ->
             {
                 if (this.film == ownerFilm)
                 {
                     this.replaysList.replays.addReplay(vec, 0F, yaw);
                 }
-            });
+            }).label(UIKeys.FILM_REPLAY_CONTEXT_ADD);
             menu.action(Icons.POINTER, UIKeys.FILM_REPLAY_CONTEXT_MOVE_HERE, () ->
             {
                 if (this.film == ownerFilm && ownerReplay != null && CollectionUtils.getIndex(ownerFilm.replays.getList(), ownerReplay) >= 0)

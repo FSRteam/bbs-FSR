@@ -1,8 +1,6 @@
 package mchorse.bbs_mod.ui.utils;
 
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.utils.colors.Colors;
 
 /**
  * A rubber-band selection: the rectangle stretched from where the button went down to where
@@ -63,9 +61,7 @@ public class Marquee extends DragGesture
         int y1 = area.y + offsetY;
         int x2 = area.ex() + offsetX;
         int y2 = area.ey() + offsetY;
-        int primary = BBSSettings.primaryColor.get();
 
-        context.batcher.box(x1, y1, x2, y2, Colors.A25 | primary);
-        context.batcher.outline(x1, y1, x2, y2, Colors.A100 | primary, 1);
+        UISelectionRenderer.renderMarquee(context, x1, y1, x2, y2);
     }
 }

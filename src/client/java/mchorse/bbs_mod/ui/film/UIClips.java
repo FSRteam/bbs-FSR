@@ -37,13 +37,12 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
-import mchorse.bbs_mod.ui.utils.UISelectionRenderer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.context.UIChoiceMenu;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
-import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
@@ -104,6 +103,7 @@ public class UIClips extends UITimelineCanvas
     private int selectingLoop = -1;
 
     /* Selection */
+    /** The outer selection transaction; Marquee owns its geometry and drawing. */
     private boolean selecting;
     private List<Integer> selection = new ArrayList<>();
 
@@ -144,7 +144,8 @@ public class UIClips extends UITimelineCanvas
         this.copyPasteController = new UICopyPasteController(PresetManager.CLIPS, "_CopyClips")
             .supplier(this::copyClips)
             .consumer(this::pasteClips)
-            .canCopy(() -> this.delegate.getClip() != null);
+            .canCopy(() -> this.delegate.getClip() != null)
+            .labels(UIKeys.CAMERA_TIMELINE_CONTEXT_COPY, UIKeys.CAMERA_TIMELINE_CONTEXT_PASTE);
 
         this.delegate = delegate;
         this.factory = factory;
@@ -161,8 +162,7 @@ public class UIClips extends UITimelineCanvas
             int mouseY = context.mouseY;
             boolean hasSelected = this.delegate.getClip() != null;
 
-            menu.custom(new UIPresetContextMenu(this.copyPasteController, mouseX, mouseY)
-                .labels(UIKeys.CAMERA_TIMELINE_CONTEXT_COPY, UIKeys.CAMERA_TIMELINE_CONTEXT_PASTE));
+            this.copyPasteController.install(menu, context, mouseX, mouseY);
 
             /* The ruler is not a clip row — a click there scrubs instead of grabbing (see
              * isInRuler), so the menu over it is about markers rather than about clips */
@@ -176,7 +176,8 @@ public class UIClips extends UITimelineCanvas
                 return;
             }
 
-            menu.action(Icons.ADD, UIKeys.CAMERA_TIMELINE_CONTEXT_ADD, () -> this.showAdds(mouseX, mouseY));
+            menu.icon(MenuVerb.ADD, () -> this.showAdds(mouseX, mouseY)).label(UIKeys.CAMERA_TIMELINE_CONTEXT_ADD);
+            menu.icon(MenuVerb.REMOVE, this::removeSelected).label(UIKeys.CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS).enabled(hasSelected);
 
             if (hasSelected)
             {
@@ -187,11 +188,6 @@ public class UIClips extends UITimelineCanvas
             }
 
             menu.action(Icons.EXCHANGE, UIKeys.CAMERA_TIMELINE_CONTEXT_REORGANIZE, () -> this.clips.sortLayers());
-
-            if (hasSelected)
-            {
-                menu.action(Icons.REMOVE, UIKeys.CAMERA_TIMELINE_CONTEXT_REMOVE_CLIPS, BBSSettings.negativeColor() & Colors.RGB, this::removeSelected);
-            }
         });
 
         Supplier<Boolean> canUseKeybinds = () -> this.delegate.canUseKeybinds() && !this.hasEmbeddedView();
@@ -404,7 +400,7 @@ public class UIClips extends UITimelineCanvas
 
             UIChoiceMenu.of(types)
                 .icon((type) -> this.factory.getData(type).icon)
-                .label((type) -> UIKeys.CAMERA_TIMELINE_CONTEXT_ADD_CLIP_TYPE.format(UIKeys.C_CLIP.get(type)))
+                .label((type) -> UIKeys.C_CLIP.get(type))
                 .color((type) -> this.factory.getData(type).color)
                 .build(add, UIKeys.CAMERA_TIMELINE_KEYS_CLIPS, (type) -> this.addClip(type, preview.x, preview.y, preview.z));
 
@@ -1302,8 +1298,7 @@ public class UIClips extends UITimelineCanvas
 
             this.prepend(this.embedded);
             this.add(this.embeddedClose);
-            this.embedded.resize();
-            this.embeddedClose.resize();
+            this.resize();
         }
     }
 
@@ -1494,6 +1489,7 @@ public class UIClips extends UITimelineCanvas
         if (shift && !this.hasEmbeddedView() && !this.isInRuler(mouseY))
         {
             this.selecting = true;
+            this.marquee.press(mouseX, mouseY);
 
             this.setMouse(mouseX, mouseY);
 
@@ -1819,6 +1815,7 @@ public class UIClips extends UITimelineCanvas
         this.grabMode = 0;
         this.grabbing = false;
         this.selecting = false;
+        this.marquee.reset();
         this.scrubbing = false;
         this.scrolling = false;
         this.selectingLoop = -1;
@@ -1923,10 +1920,8 @@ public class UIClips extends UITimelineCanvas
         }
         else if (this.selecting)
         {
-            Area selection = new Area();
-
-            selection.setPoints(this.lastX, this.lastY, mouseX, mouseY);
-            this.captureSelection(selection);
+            this.marquee.update(mouseX, mouseY);
+            this.captureSelection(this.marquee.getArea());
         }
         else if (this.grabbing)
         {
@@ -2252,11 +2247,6 @@ public class UIClips extends UITimelineCanvas
         int contentTop = Math.min(rulerBottom, this.vertical.area.ey());
         int contentHeight = Math.max(0, this.vertical.area.ey() - contentTop);
 
-        if (leftEdge > this.area.x)
-        {
-            batcher.box(this.area.x, this.area.y, Math.min(leftEdge, this.area.ex()), this.area.ey(), BBSSettings.chromeSurface());
-        }
-
         area.render(batcher, BBSSettings.deepSurface());
         batcher.clip(this.vertical.area.x, contentTop, this.vertical.area.w, contentHeight, context);
 
@@ -2269,6 +2259,8 @@ public class UIClips extends UITimelineCanvas
                 batcher.box(leftEdge, ly, this.area.ex(), ly + h, BBSSettings.baseSurface());
             }
         }
+
+        this.renderOutOfRange(batcher, leftEdge);
 
         batcher.unclip(context);
         batcher.clip(this.area, context);
@@ -2404,6 +2396,31 @@ public class UIClips extends UITimelineCanvas
         context.batcher.outline(x, y, d, y + h, Colors.WHITE);
     }
 
+    /** Paint outside the clip duration after the layer backgrounds. */
+    private void renderOutOfRange(Batcher2D batcher, int leftEdge)
+    {
+        int color = BBSSettings.sunkenSurface();
+
+        if (leftEdge > this.area.x)
+        {
+            batcher.box(this.area.x, this.area.y, Math.min(leftEdge, this.area.ex()), this.area.ey(), color);
+        }
+
+        int duration = this.clips.calculateDuration();
+
+        if (duration <= 0)
+        {
+            return;
+        }
+
+        int rightEdge = this.toGraphX(duration);
+
+        if (rightEdge < this.area.ex())
+        {
+            batcher.box(Math.max(rightEdge, this.area.x), this.area.y, this.area.ex(), this.area.ey(), color);
+        }
+    }
+
     /**
      * Render tick markers that help orient within camera work.
      */
@@ -2427,10 +2444,7 @@ public class UIClips extends UITimelineCanvas
      */
     private void renderSelection(UIContext context)
     {
-        if (this.selecting)
-        {
-            this.renderMarquee(context, this.lastX, this.lastY);
-        }
+        this.marquee.render(context, 0, 0);
     }
 
     /**
