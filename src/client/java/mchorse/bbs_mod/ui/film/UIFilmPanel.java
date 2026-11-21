@@ -1234,11 +1234,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         return new Vector3d();
     }
 
-    private void openFilmListOverlay()
-    {
-        UIOverlay.addOverlay(this.getContext(), this.overlay, 200, 0.9F);
-    }
-
     private void openLayoutPresetsMenu()
     {
         UIContext context = this.getContext();
@@ -2542,7 +2537,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             this.undoHandler = null;
         }
 
-        this.openFilmMenu.setEnabled(true);
+        this.openFilmMenu.setEnabled(data != null);
         this.openCameraEditor.setEnabled(data != null);
         this.openReplayEditor.setEnabled(data != null);
         this.openActionEditor.setEnabled(data != null);

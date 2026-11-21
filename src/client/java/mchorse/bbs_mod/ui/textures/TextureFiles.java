@@ -2,11 +2,9 @@ package mchorse.bbs_mod.ui.textures;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSResources;
-import mchorse.bbs_mod.data.DataToString;
-import mchorse.bbs_mod.data.types.ListType;
-import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.dashboard.textures.data.Document;
+import mchorse.bbs_mod.ui.dashboard.textures.data.TextureAnimation;
 import mchorse.bbs_mod.utils.PNGEncoder;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.resources.GifFrames;
@@ -58,12 +56,10 @@ public class TextureFiles
         return file != null && file.exists();
     }
 
-    /** Whether a link can be thrown away. Kept separate from {@link #canModify(Link)}: what can and can't be deleted may diverge. */
+    /** A fetched player skin can be forgotten even when it has no file the user can modify. */
     public static boolean canDelete(Link link)
     {
-        String nickname = PlayerSkins.nickname(link);
-
-        return nickname != null ? PlayerSkins.getFile(nickname) != null : canModify(link);
+        return canModify(link) || PlayerSkins.nickname(link) != null;
     }
 
     /** Whether a folder (or a source root) is read-only: nothing in it can be changed, only copied out. */
@@ -403,10 +399,14 @@ public class TextureFiles
             strip.delete();
         }
 
-        /* The sidecar says how the strip plays: every frame once, in order, for the given
-         * number of ticks. Written by hand here — the animation editor's writer takes over
-         * once it lands, and until then this is the whole of what the format needs. */
-        if (!writeDefaultMcmeta(target, pictures.size(), frametime, w, h))
+        TextureAnimation animation = new TextureAnimation();
+
+        animation.frametime = frametime;
+        animation.width = w;
+        animation.height = h;
+        animation.fillDefaultFrames(w, stripHeight);
+
+        if (!animation.write(target, w, stripHeight))
         {
             target.delete();
 
@@ -414,31 +414,6 @@ public class TextureFiles
         }
 
         return true;
-    }
-
-    /** The {@code .mcmeta} of a strip that plays every frame once, each for {@code frametime} ticks. */
-    private static boolean writeDefaultMcmeta(File target, int frames, int frametime, int w, int h)
-    {
-        MapType animation = new MapType();
-
-        animation.putInt("frametime", frametime);
-        animation.putInt("width", w);
-        animation.putInt("height", h);
-
-        ListType list = new ListType();
-
-        for (int i = 0; i < frames; i++)
-        {
-            list.addInt(i);
-        }
-
-        animation.put("frames", list);
-
-        MapType data = new MapType();
-
-        data.put("animation", animation);
-
-        return DataToString.writeSilently(sidecar(target, ".mcmeta"), data, true);
     }
 
     public static boolean delete(Link link)

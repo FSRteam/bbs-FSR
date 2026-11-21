@@ -521,10 +521,7 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
             }
         }
 
-        if (this.getRoot() != null)
-        {
-            this.getRoot().resize();
-        }
+        this.blockProperties.invalidateLayout();
     }
 
     private void openPropertyContextMenu(UIButton button, Property<?> property)

@@ -134,15 +134,17 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         Transform transform = properties.getTransform();
         BlockPos pos = entity.getBlockPos();
 
+        /* While the matrices still sit at the cell's corner, including render-last blocks. */
+        this.renderBreakingOverlay(mc, entity, matrices);
+
         if (ModelBlockRenderLastQueue.shouldDefer(entity))
         {
             /* Render-last blocks skip the block-entity pass; the queue replays them at the
              * AFTER_BLOCK_ENTITIES stage (see ModelBlockRenderLastQueue). The dispatcher's
              * current stack — already translated to this block — is captured so the replay
              * draws through the exact transform. Shadows still draw here — they go through
-             * the vanilla buffer and are order-independent. Break cracks stay on the
-             * immediate path only: the deferred replay draws after the vanilla crumbling
-             * stage has already run this frame. */
+             * the vanilla buffer and are order-independent. Break cracks are submitted
+             * once on the immediate path, before either model draw. */
             ModelBlockRenderLastQueue.add(entity, tickDelta, matrices, light, overlay);
 
             if (properties.isShadow())
@@ -152,9 +154,6 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
 
             return;
         }
-
-        /* While the matrices still sit at the cell's corner. */
-        this.renderBreakingOverlay(mc, entity, matrices);
 
         matrices.pushPose();
         matrices.translate(0.5F, 0F, 0.5F);

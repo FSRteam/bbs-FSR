@@ -71,8 +71,8 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.EventPropagation;
-import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
+import mchorse.bbs_mod.ui.framework.elements.utils.UISplitter;
 import mchorse.bbs_mod.ui.utils.BoneSelection;
 import mchorse.bbs_mod.ui.utils.IBoneSelectionHost;
 import mchorse.bbs_mod.ui.utils.Gizmo;
@@ -81,9 +81,9 @@ import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
-import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
@@ -93,7 +93,6 @@ import mchorse.bbs_mod.utils.presets.PresetManager;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.HashMap;
 import java.util.List;
@@ -113,7 +112,6 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
 
     private static Map<Class, Supplier<UIForm>> panels = new HashMap<>();
 
-    private static float treeWidth = 0.1F;
     private static boolean TOGGLED = true;
 
     /* Palette for picking a form for body parts */
@@ -259,10 +257,15 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
                 UIForms.FormEntry current = this.formsList.getCurrentFirst();
 
                 return current != null && current.getForm() != null;
-            });
+            })
+            .labels(UIKeys.FORMS_EDITOR_CONTEXT_COPY, UIKeys.FORMS_EDITOR_CONTEXT_PASTE);
 
         this.forms = new UIElement();
-        this.forms.relative(this).x(20).w(treeWidth).minW(140).h(1F);
+
+        UISplitter draggable = UISplitter.fraction("form_editor.tree", 0.1F, 0F, 0.5F);
+        draggable.measure(this.forms, this).onChange(() -> this.forms.w(draggable.getValue()).resize());
+
+        this.forms.relative(this).x(20).w(draggable.getValue()).minW(140).h(1F);
 
         this.formsList = new UIForms((l) ->
         {
@@ -428,17 +431,6 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
         {
             context.batcher.box(this.area.x, this.area.y, this.area.x + 20, this.area.ey(), BBSSettings.chromeSurface());
         });
-
-        UIDraggable draggable = new UIDraggable((context) ->
-        {
-            int diff = context.mouseX - this.forms.area.x;
-            float f = diff / (float) this.area.w;
-
-            treeWidth = MathUtils.clamp(f, 0F, 0.5F);
-
-            this.forms.w(treeWidth).resize();
-        });
-        draggable.cursors(GLFW.GLFW_HRESIZE_CURSOR, GLFW.GLFW_HRESIZE_CURSOR);
 
         draggable.relative(this.forms).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
 
@@ -769,18 +761,13 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
             return;
         }
 
-        menu.custom(new UIPresetContextMenu(this.copyPasteController)
-            .labels(UIKeys.FORMS_EDITOR_CONTEXT_COPY, UIKeys.FORMS_EDITOR_CONTEXT_PASTE));
+        this.copyPasteController.install(menu, this.getContext());
 
-        if (current.getForm() != null)
-        {
-            menu.action(Icons.ADD, UIKeys.FORMS_EDITOR_CONTEXT_ADD, () -> this.addBodyPart(new BodyPart("")));
-        }
+        menu.icon(MenuVerb.ADD, () -> this.addBodyPart(new BodyPart(""))).label(UIKeys.FORMS_EDITOR_CONTEXT_ADD).enabled(current.getForm() != null);
+        menu.icon(MenuVerb.REMOVE, this::removeBodyPart).label(UIKeys.FORMS_EDITOR_CONTEXT_REMOVE).enabled(current.part != null);
 
         if (current.part != null)
         {
-            menu.action(Icons.REMOVE, UIKeys.FORMS_EDITOR_CONTEXT_REMOVE, this::removeBodyPart);
-
             if (current.getForm() instanceof FramebufferForm framebuffer && current.form instanceof ModelForm parent)
             {
                 menu.action(Icons.CAMERA, UIKeys.FORMS_EDITOR_CONTEXT_SETUP_FACE, () ->

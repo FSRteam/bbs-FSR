@@ -8,13 +8,12 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
+import mchorse.bbs_mod.ui.framework.elements.utils.UISplitter;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.BoneSelection;
 import mchorse.bbs_mod.ui.utils.IBoneSelectionHost;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.bones.UIBonePicker;
-import mchorse.bbs_mod.utils.MathUtils;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -24,7 +23,6 @@ public abstract class UIFormPanel <T extends Form> extends UIElement
 {
     private static final float DEFAULT_OPTIONS_WIDTH = 0.2F;
 
-    private static Map<Class, Float> widths = new HashMap<>();
     private static final Map<String, Boolean> sectionFolds = new HashMap<>();
 
     protected UIForm editor;
@@ -37,21 +35,19 @@ public abstract class UIFormPanel <T extends Form> extends UIElement
     {
         this.editor = editor;
 
-        this.options = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
-        this.options.scroll.cancelScrolling();
-        this.options.relative(this).x(1F).w(widths.getOrDefault(this.getClass(), this.getDefaultOptionsWidth())).minW(120).h(1F).anchorX(1F);
-
-        this.draggable = new UIDraggable((context) ->
+        UISplitter splitter = UISplitter.fraction("form_panel." + this.getClass().getSimpleName(), this.getDefaultOptionsWidth(), 0F, 0.5F);
+        this.draggable = splitter;
+        splitter.measure(this, this::getParent).fromEnd().onChange(() ->
         {
-            float f = (this.options.area.ex() - context.mouseX) / (float) this.getParent().area.w;
-            float w = MathUtils.clamp(f, 0, 0.5F);
-
-            this.options.w(w).resize();
-            widths.put(this.getClass(), w);
+            this.options.w(splitter.getValue()).resize();
             this.draggable.resize();
         });
+
+        this.options = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING);
+        this.options.scroll.cancelScrolling();
+        this.options.relative(this).x(1F).w(splitter.getValue()).minW(120).h(1F).anchorX(1F);
+
         this.draggable.relative(this.options).x(0F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
-        this.draggable.cursors(GLFW.GLFW_HRESIZE_CURSOR, GLFW.GLFW_HRESIZE_CURSOR);
 
         this.add(this.options, this.draggable);
     }
