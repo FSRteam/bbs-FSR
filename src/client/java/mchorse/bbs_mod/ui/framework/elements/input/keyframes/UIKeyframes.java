@@ -1168,7 +1168,7 @@ public class UIKeyframes extends UITimelineCanvas
 
     public boolean isSelecting()
     {
-        return this.marquee.isPressed();
+        return this.marquee != null && this.marquee.isPressed();
     }
 
 
@@ -1176,7 +1176,7 @@ public class UIKeyframes extends UITimelineCanvas
     /** Whether the user is in the middle of any mouse interaction (dragging, selecting, navigating, scaling or stacking). */
     public boolean isInteracting()
     {
-        return this.dragging >= 0 || this.marquee.isPressed() || this.navigating || this.scaling || this.stacking
+        return this.dragging >= 0 || this.isSelecting() || this.navigating || this.scaling || this.stacking
             || this.loops.isDragging() || this.motionShift.isDragging();
     }
 
@@ -1473,7 +1473,10 @@ public class UIKeyframes extends UITimelineCanvas
 
         this.editingGeneration = 0L;
         this.navigating = false;
-        this.marquee.reset();
+        if (this.isSelecting())
+        {
+            this.marquee.reset();
+        }
         this.dragging = -1;
         this.draggingData = null;
         this.cache = null;
@@ -1600,14 +1603,14 @@ public class UIKeyframes extends UITimelineCanvas
             this.pickKeyframe(found);
             this.onKeyframePicked(picked);
         }
-        else if (!this.marquee.isPressed())
+        else if (!this.isSelecting())
         {
             this.currentGraph.clearSelection();
             this.pickKeyframe(null);
             this.moveNoKeyframes(context);
         }
 
-        if (!this.marquee.isPressed())
+        if (!this.isSelecting())
         {
             this.dragging = 0;
             this.draggingData = pair;
@@ -1646,7 +1649,7 @@ public class UIKeyframes extends UITimelineCanvas
             return super.subMouseReleased(context);
         }
 
-        boolean wasSelecting = this.marquee.isPressed();
+        boolean wasSelecting = this.isSelecting();
 
         if (wasSelecting)
         {
@@ -1659,7 +1662,10 @@ public class UIKeyframes extends UITimelineCanvas
 
         this.editingGeneration = 0L;
         this.navigating = false;
-        this.marquee.reset();
+        if (wasSelecting)
+        {
+            this.marquee.reset();
+        }
         this.dragging = -1;
         this.draggingData = null;
         this.gestureSelection = null;
@@ -1719,7 +1725,10 @@ public class UIKeyframes extends UITimelineCanvas
         this.editingOwnership.cancel();
         this.editingGeneration = 0L;
         this.navigating = false;
-        this.marquee.reset();
+        if (this.isSelecting())
+        {
+            this.marquee.reset();
+        }
         this.dragging = -1;
         this.draggingData = null;
 

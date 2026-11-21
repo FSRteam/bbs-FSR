@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 
 public class UIForms extends UIList<UIForms.FormEntry>
 {
-    public static final int INDENT = 12;
+    public static final int INDENT = 10;
 
     public BiConsumer<BodyPart, Integer> onReorder;
     private BiConsumer<BodyPart, Integer> reorder;

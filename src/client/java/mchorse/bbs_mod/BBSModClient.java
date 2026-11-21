@@ -926,6 +926,7 @@ public class BBSModClient
 
         /* Wind down decoders of video clips and forms that left the screen */
         videos.update();
+        sounds.update();
 
         /* Give back the glyph atlases of fonts nobody has drawn lately */
         fonts.update();

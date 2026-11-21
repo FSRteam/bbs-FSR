@@ -72,7 +72,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_VIDEO_OFFSET = L10n.lang("bbs.ui.forms.editors.video.offset");
     public static final IKey CAMERA_PANELS_SHAKE_NOISE_TOOLTIP = L10n.lang("bbs.ui.camera.panels.shake_noise_tooltip");
     public static final IKey CAMERA_PANELS_SHAKE_NOISE = L10n.lang("bbs.ui.camera.panels.shake_noise");
-    public static final IKey CAMERA_PANELS_PLACEMENT_SCALE_SHIFT = L10n.lang("bbs.ui.camera.panels.placement.scale_shift");
+    public static final IKey CAMERA_PANELS_PLACEMENT_SCALE_SHIFT = L10n.lang("bbs.ui.camera.panels.placement.scale-shift");
     public static final IKey ACTIONS_ATTACK_DAMAGE = L10n.lang("bbs.ui.actions.attack.damage");
     public static final IKey ACTIONS_BLOCK_DIRECTION = L10n.lang("bbs.ui.actions.block.direction");
     public static final IKey ACTIONS_BLOCK_DIRECTION_DOWN = L10n.lang("bbs.ui.actions.block.direction.down");

@@ -2612,7 +2612,7 @@
     "bbs.ui.camera.panels.shake_noise_tooltip": "Use independent smooth noise for each enabled component",
     "bbs.ui.forms.editors.video.title": "Video",
     "bbs.ui.forms.editors.video.billboard": "Billboard",
-    "bbs.ui.forms.editors.video.playback": "Playback",
+    "bbs.ui.forms.editors.video.playback": "Offset (sec)",
     "bbs.ui.forms.editors.video.offset": "Time offset (seconds)",
     "bbs.ui.inherit_title": "Inherit",
     "bbs.ui.inherit_position": "Inherit position",
