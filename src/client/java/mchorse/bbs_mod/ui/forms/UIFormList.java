@@ -615,6 +615,22 @@ public class UIFormList extends UIElement
         return false;
     }
 
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        if (context.mouseButton == GLFW.GLFW_MOUSE_BUTTON_LEFT)
+        {
+            this.marquee.reset();
+            this.marqueeCategory = null;
+            this.marqueeForm = null;
+            this.marqueeBase.clear();
+            this.pressedHeader = null;
+            this.categoryDrag.reset();
+        }
+
+        super.subMouseCanceled(context);
+    }
+
     /* Drop */
 
     /**
