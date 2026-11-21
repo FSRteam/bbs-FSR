@@ -166,7 +166,16 @@ public class FilmControllerHud
          * correctly (see Gizmo#renderInterface). */
         if (this.controller.canShowGizmo())
         {
-            this.controller.gizmo.renderGizmo(context);
+            BBSProfiler.begin(BBSProfiler.Timer.GIZMO);
+
+            try
+            {
+                this.controller.gizmo.renderGizmo(context);
+            }
+            finally
+            {
+                BBSProfiler.end(BBSProfiler.Timer.GIZMO);
+            }
         }
 
         this.controller.renderPickingPreview(context, area);

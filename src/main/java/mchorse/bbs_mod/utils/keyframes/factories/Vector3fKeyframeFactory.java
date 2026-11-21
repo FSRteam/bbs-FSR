@@ -11,6 +11,12 @@ import org.joml.Vector3f;
 
 public class Vector3fKeyframeFactory implements IKeyframeFactory<Vector3f>
 {
+    @Override
+    public int contentHash(Vector3f value)
+    {
+        return value.hashCode();
+    }
+
     private final Vector3f empty;
     private Vector3f i = new Vector3f();
 

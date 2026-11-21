@@ -65,6 +65,7 @@ import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.film.replays.UIRecordOverlayPanel;
 import mchorse.bbs_mod.ui.film.replays.UIReplayList;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
+import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -1718,7 +1719,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     private FilmTarget getDefaultEditTarget()
     {
-        if (this.isRecording() || this.panel.replayEditor == null)
+        if (this.isRecording() || this.isCovered() || this.panel.replayEditor == null)
         {
             return FilmTarget.NONE;
         }
@@ -1743,6 +1744,14 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
 
         return FilmTarget.NONE;
+    }
+
+    /** A full-screen palette owns the Gizmo while the Film still renders underneath it. */
+    private boolean isCovered()
+    {
+        UIElement root = this.panel.getRoot();
+
+        return root != null && !root.getChildren(UIFormPalette.class).isEmpty();
     }
 
     public Pair<String, Boolean> getBone()
