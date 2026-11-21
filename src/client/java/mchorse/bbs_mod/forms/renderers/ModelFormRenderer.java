@@ -115,9 +115,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private final Object offArmSimulationOwner = new Object();
     private final StubEntity armSimulationClock = new StubEntity();
     private PoseStack armSimulationWorld = new PoseStack();
-    private boolean ikAppliedThisRender;
-    private boolean physicsAppliedThisRender;
-    private boolean constraintsAppliedThisRender;
     private boolean renderingArm;
     private final PreviewPoseSnapshot previewPoseSnapshot = new PreviewPoseSnapshot();
 
@@ -557,9 +554,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
     private void renderModel(IEntity target, Object simulationOwner, Supplier<ShaderInstance> program, PoseStack stack, ModelInstance model, int light, int overlay, Color color, boolean ui, StencilMap stencilMap, float transition, PoseStack world, boolean allowWorldTargetOverrides, boolean allowWorldCollisions, boolean solvePose, boolean blend)
     {
         model.form = this.form;
-        this.ikAppliedThisRender = false;
-        this.physicsAppliedThisRender = false;
-        this.constraintsAppliedThisRender = false;
         this.geoArmorRenderedThisPass = false;
 
         if (!model.isCulling())
@@ -606,9 +600,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
              * the generic Euler clamp afterward would clear their composed quaternion orientation. */
             if (solvePose && !this.rest)
             {
-                this.applyConstraintsOnce(model);
-                this.applyIKOnce(model, baseTransform, allowWorldTargetOverrides);
-                this.applyPhysicsOnce(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
+                this.applyConstraints(model);
+                this.applyIK(model, baseTransform, allowWorldTargetOverrides);
+                this.applyPhysics(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
             }
 
             /* Default texture for materials without their own: the form's texture override, else the
@@ -711,17 +705,6 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void applyIKOnce(ModelInstance model, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
-    {
-        if (this.ikAppliedThisRender)
-        {
-            return;
-        }
-
-        this.ikAppliedThisRender = true;
-        this.applyIK(model, baseTransform, allowWorldTargetOverrides);
-    }
-
     private void applyIK(ModelInstance model, Matrix4f baseTransform, boolean allowWorldTargetOverrides)
     {
         model.form = this.form;
@@ -772,15 +755,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
     }
 
-    private void applyPhysicsOnce(IEntity target, Object simulationOwner, ModelInstance model, float transition, Matrix4f baseTransform, boolean allowWorldTargetOverrides, boolean allowWorldCollisions)
+    private void applyPhysics(IEntity target, Object simulationOwner, ModelInstance model, float transition, Matrix4f baseTransform, boolean allowWorldTargetOverrides, boolean allowWorldCollisions)
     {
-        if (this.physicsAppliedThisRender)
-        {
-            return;
-        }
-
-        this.physicsAppliedThisRender = true;
-
         /* The pose is animated and IK-solved by now; an external contributor gets its turn before the
          * built-in chain physics, so what the listeners write is what the solver and the draw see. */
         FormPoseEvents.MODEL_POSE.invoker().apply(this.form, target, model, transition, baseTransform, FormPoseEvents.Pass.RENDER);
@@ -788,14 +764,8 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         this.physicsRuntime.apply(target, simulationOwner, model, transition, baseTransform, allowWorldTargetOverrides, allowWorldCollisions);
     }
 
-    private void applyConstraintsOnce(ModelInstance model)
+    private void applyConstraints(ModelInstance model)
     {
-        if (this.constraintsAppliedThisRender)
-        {
-            return;
-        }
-
-        this.constraintsAppliedThisRender = true;
         ModelConstraintsRuntime.apply(model);
     }
 

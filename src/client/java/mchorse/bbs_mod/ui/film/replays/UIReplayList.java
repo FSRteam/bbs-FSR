@@ -438,7 +438,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         for (Replay r : replays)
         {
-            if (film == null || !film.replays.getList().contains(r))
+            if (film == null || CollectionUtils.getIndex(film.replays.getList(), r) < 0)
             {
                 continue;
             }
@@ -493,7 +493,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         for (ReplayListEntry entry : this.selection.getItems())
         {
-            if (entry.isReplay() && film != null && film.replays.getList().contains(entry.replay))
+            if (entry.isReplay() && film != null && CollectionUtils.getIndex(film.replays.getList(), entry.replay) >= 0)
             {
                 out.add(entry.replay);
             }
@@ -519,8 +519,13 @@ public class UIReplayList extends UIList<ReplayListEntry>
      */
     private List<Replay> getSelectedReplaysInFilmOrder()
     {
+        return this.replaysInFilmOrder(this.getSelectedReplays());
+    }
+
+    /** Keep current Film objects in their Film order, independently of visible rows. */
+    private List<Replay> replaysInFilmOrder(List<Replay> supplied)
+    {
         List<Replay> out = new ArrayList<>();
-        List<Replay> selected = this.getSelectedReplays();
         Film film = this.panel.getData();
 
         if (film == null)
@@ -530,7 +535,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         for (Replay replay : film.replays.getList())
         {
-            if (selected.contains(replay))
+            if (CollectionUtils.getIndex(supplied, replay) >= 0)
             {
                 out.add(replay);
             }
@@ -964,7 +969,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     private List<Replay> draggedReplays(List<ReplayListEntry> items)
     {
-        return replaysFromEntries(this.inViewOrder(items));
+        return this.replaysInFilmOrder(replaysFromEntries(items));
     }
 
     /** Compatibility for callers that expressed a move as two row indices. */

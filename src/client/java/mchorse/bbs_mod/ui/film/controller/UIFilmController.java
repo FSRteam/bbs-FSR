@@ -92,6 +92,7 @@ import mchorse.bbs_mod.ui.utils.GizmoViewport;
 import mchorse.bbs_mod.ui.utils.StencilFormFramebuffer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.ui.utils.context.UIChoiceMenu;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
@@ -138,6 +139,10 @@ public class UIFilmController extends UIElement implements GizmoViewport
     public static final int CAMERA_MODE_THIRD_PERSON_BACK = 4;
     public static final int CAMERA_MODE_THIRD_PERSON_FRONT = 5;
     public static final int CAMERA_MODE_COUNT = 6;
+    private static final List<Integer> CAMERA_MODES = List.of(
+        CAMERA_MODE_CAMERA, CAMERA_MODE_FREE, CAMERA_MODE_ORBIT,
+        CAMERA_MODE_FIRST_PERSON, CAMERA_MODE_THIRD_PERSON_BACK, CAMERA_MODE_THIRD_PERSON_FRONT
+    );
     private static final IKey[] CAMERA_MODE_LABELS = new IKey[] {
         UIKeys.FILM_REPLAY_ORBIT_CAMERA,
         UIKeys.FILM_REPLAY_ORBIT_FREE,
@@ -1316,14 +1321,16 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void populateCameraModeMenu(ContextMenuManager menu)
     {
-        int povMode = this.getPovMode();
+        this.buildOrbitModeMenu(menu);
+    }
 
-        for (int mode = 0; mode < CAMERA_MODE_COUNT; mode++)
-        {
-            int finalMode = mode;
-
-            menu.action(this.getOrbitModeIcon(mode), this.getOrbitModeLabel(mode), povMode == mode, () -> this.setPov(finalMode));
-        }
+    public void buildOrbitModeMenu(ContextMenuManager menu)
+    {
+        UIChoiceMenu.of(CAMERA_MODES)
+            .current(this.getPovMode())
+            .icon(this::getOrbitModeIcon)
+            .label(this::getOrbitModeLabel)
+            .build(menu, this::setPov);
     }
 
     public void teleportOrbitPivotToReplay()
@@ -1350,12 +1357,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
             return;
         }
 
-        this.getContext().replaceContextMenu((menu) ->
-        {
-            menu.autoKeys();
-
-            this.populateCameraModeMenu(menu);
-        });
+        this.getContext().replaceContextMenu(this::buildOrbitModeMenu);
     }
 
     public void toggleReplayMenu()

@@ -54,3 +54,6 @@ javac.*.args
 
 # local temporary compile/test material
 /temp/
+
+# Local agent files; previously tracked files remain tracked.
+.codex/

@@ -40,6 +40,7 @@ import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.UISelectionRenderer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.ui.utils.context.UIChoiceMenu;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
@@ -389,20 +390,23 @@ public class UIClips extends UITimelineCanvas
 
         context.replaceContextMenu((add) ->
         {
-            add.autoKeys(UIKeys.CAMERA_TIMELINE_KEYS_CLIPS);
+            List<Link> types = new ArrayList<>();
 
             for (Link type : this.factory.getKeys())
             {
-                IKey typeKey = UIKeys.CAMERA_TIMELINE_CONTEXT_ADD_CLIP_TYPE.format(UIKeys.C_CLIP.get(type));
                 ClipFactoryData data = this.factory.getData(type);
 
-                if (data == null || !data.isAddable())
+                if (data != null && data.isAddable())
                 {
-                    continue;
+                    types.add(type);
                 }
-
-                add.action(data.icon, typeKey, data.color, () -> this.addClip(type, preview.x, preview.y, preview.z));
             }
+
+            UIChoiceMenu.of(types)
+                .icon((type) -> this.factory.getData(type).icon)
+                .label((type) -> UIKeys.CAMERA_TIMELINE_CONTEXT_ADD_CLIP_TYPE.format(UIKeys.C_CLIP.get(type)))
+                .color((type) -> this.factory.getData(type).color)
+                .build(add, UIKeys.CAMERA_TIMELINE_KEYS_CLIPS, (type) -> this.addClip(type, preview.x, preview.y, preview.z));
 
             add.onClose((m) -> this.addPreview = null);
         });

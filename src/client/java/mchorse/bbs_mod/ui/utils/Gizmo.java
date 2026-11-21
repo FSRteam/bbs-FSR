@@ -133,6 +133,10 @@ public class Gizmo
     /** Last transform space applied to the drawing frame. Drag math keeps its own basis. */
     private TransformSpace lastSpace;
 
+    /** Camera view belonging to the captured placement; guides combine it with the drag's fixed basis. */
+    private final Matrix4f lastCameraView = new Matrix4f();
+    private boolean hasLastCameraView;
+
     /** World-space radius the sphere is drawn at, expressed in
      *  the local coordinate frame {@link #lastRenderMatrix} describes
      *  (i.e. already includes axesScale and the per-frame distanceScale).
@@ -175,8 +179,10 @@ public class Gizmo
     {
         state.renderMatrix.set(this.lastRenderMatrix);
         state.sphereMatrix.set(this.lastSphereMatrix);
+        state.cameraView.set(this.lastCameraView);
         state.hasRenderMatrix = this.hasLastRenderMatrix;
         state.hasSphereMatrix = this.hasLastSphereMatrix;
+        state.hasCameraView = this.hasLastCameraView;
         state.sphereLocalRadius = this.lastSphereLocalRadius;
         state.viewportScale = this.viewportScale;
         state.viewportHeight = this.viewportHeight;
@@ -189,8 +195,10 @@ public class Gizmo
     {
         this.lastRenderMatrix.set(state.renderMatrix);
         this.lastSphereMatrix.set(state.sphereMatrix);
+        this.lastCameraView.set(state.cameraView);
         this.hasLastRenderMatrix = state.hasRenderMatrix;
         this.hasLastSphereMatrix = state.hasSphereMatrix;
+        this.hasLastCameraView = state.hasCameraView;
         this.lastSphereLocalRadius = state.sphereLocalRadius;
         this.viewportScale = state.viewportScale;
         this.viewportHeight = state.viewportHeight;
@@ -284,6 +292,7 @@ public class Gizmo
         {
             this.hasLastRenderMatrix = false;
             this.hasLastSphereMatrix = false;
+            this.hasLastCameraView = false;
         }
     }
 
@@ -918,30 +927,70 @@ public class Gizmo
             return;
         }
 
-        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-
-        float size = 10000F;
-        float t = 0.005F;
-
-        if (debugIndex == STENCIL_X || debugIndex == STENCIL_XZ || debugIndex == STENCIL_XY)
+        stack.pushPose();
+        try
         {
-            Draw.fillBox(builder, stack, -size, -t, -t, size, t, t, Colors.RED);
+            this.orientGuide(stack);
+
+            BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+
+            float size = 10000F;
+            float t = 0.005F;
+
+            if (debugIndex == STENCIL_X || debugIndex == STENCIL_XZ || debugIndex == STENCIL_XY)
+            {
+                Draw.fillBox(builder, stack, -size, -t, -t, size, t, t, Colors.RED);
+            }
+
+            if (debugIndex == STENCIL_Y || debugIndex == STENCIL_XY || debugIndex == STENCIL_ZY)
+            {
+                Draw.fillBox(builder, stack, -t, -size, -t, t, size, t, Colors.GREEN);
+            }
+
+            if (debugIndex == STENCIL_Z || debugIndex == STENCIL_XZ || debugIndex == STENCIL_ZY)
+            {
+                Draw.fillBox(builder, stack, -t, -t, -size, t, t, size, Colors.BLUE);
+            }
+
+            RenderSystem.setShader(GameRenderer::getPositionColorShader);
+            RenderSystem.depthFunc(GL11.GL_ALWAYS);
+            try
+            {
+                MeshData mesh = builder.build();
+
+                if (mesh != null)
+                {
+                    BufferUploader.drawWithShader(mesh);
+                }
+            }
+            finally
+            {
+                RenderSystem.depthFunc(GL11.GL_LEQUAL);
+            }
+        }
+        finally
+        {
+            stack.popPose();
+        }
+    }
+
+    /** Keep the guide on the press-time drag basis even when an animated parent changes its live pose. */
+    private void orientGuide(PoseStack stack)
+    {
+        TransformGesture gesture = this.currentGesture;
+        GizmoDrag drag = gesture == null ? null : gesture.drag();
+
+        if (drag == null || !this.hasLastCameraView)
+        {
+            return;
         }
 
-        if (debugIndex == STENCIL_Y || debugIndex == STENCIL_XY || debugIndex == STENCIL_ZY)
-        {
-            Draw.fillBox(builder, stack, -t, -size, -t, t, size, t, Colors.GREEN);
-        }
+        Matrix4f matrix = stack.last().pose();
+        Vector3f translation = matrix.getTranslation(new Vector3f());
+        Matrix3f basis = this.lastCameraView.get3x3(new Matrix3f()).mul(drag.frameBasis(gesture.space()));
+        Matrix3f ambient = RenderSystem.getModelViewMatrix().get3x3(new Matrix3f());
 
-        if (debugIndex == STENCIL_Z || debugIndex == STENCIL_XZ || debugIndex == STENCIL_ZY)
-        {
-            Draw.fillBox(builder, stack, -t, -t, -size, t, t, size, Colors.BLUE);
-        }
-
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        RenderSystem.depthFunc(GL11.GL_ALWAYS);
-        { com.mojang.blaze3d.vertex.MeshData __bbsBuilt = builder.build(); if (__bbsBuilt != null) BufferUploader.drawWithShader(__bbsBuilt); }
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        matrix.set(new Matrix4f(ambient.invert().mul(basis)).setTranslation(translation));
     }
 
     private static Matrix4f modelView(PoseStack stack)
@@ -1362,7 +1411,7 @@ public class Gizmo
         this.handleMask = mask;
         try
         {
-            this.drawStencilAxes(stack);
+            this.drawStencilAxes(stack, map);
         }
         finally
         {
@@ -1377,7 +1426,7 @@ public class Gizmo
      * the world-pass {@link #renderStencil} and the UI-pass
      * {@link #renderStencilInterface}.
      */
-    private void drawStencilAxes(PoseStack stack)
+    private void drawStencilAxes(PoseStack stack, StencilMap map)
     {
         this.applyBakedRotation(stack);
 
@@ -1427,7 +1476,7 @@ public class Gizmo
         PoseStack stack = new PoseStack();
         MatrixStackUtils.multiply(stack, this.lastRenderMatrix);
 
-        this.drawStencilAxes(stack);
+        this.drawStencilAxes(stack, map);
 
         UIUtils.restoreViewport(previousViewport);
         MatrixStackUtils.restoreMatrices();
@@ -1468,6 +1517,12 @@ public class Gizmo
     public void reorientForSpace(PoseStack stack, TransformSpace space, Matrix4f cameraView, Matrix3f globalAxes)
     {
         this.lastSpace = cameraView == null ? null : space;
+        this.hasLastCameraView = cameraView != null;
+
+        if (cameraView != null)
+        {
+            this.lastCameraView.set(cameraView);
+        }
 
         if (space == null || space == TransformSpace.LOCAL || space == TransformSpace.PARENT || cameraView == null)
         {
@@ -1476,8 +1531,11 @@ public class Gizmo
 
         Matrix4f matrix = stack.last().pose();
         Vector3f translation = matrix.getTranslation(new Vector3f());
+        Matrix3f basis = GizmoDrag.stackBasisForSpace(space, cameraView, globalAxes);
+        Matrix3f ambient = RenderSystem.getModelViewMatrix().get3x3(new Matrix3f());
 
-        matrix.set(new Matrix4f(GizmoDrag.stackBasisForSpace(space, cameraView, globalAxes)).setTranslation(translation));
+        /* World rendering carries the view in RenderSystem; form previews carry it in the stack. */
+        matrix.set(new Matrix4f(ambient.invert().mul(basis)).setTranslation(translation));
     }
 
     /**
@@ -1668,8 +1726,10 @@ public class Gizmo
     {
         private final Matrix4f renderMatrix = new Matrix4f();
         private final Matrix4f sphereMatrix = new Matrix4f();
+        private final Matrix4f cameraView = new Matrix4f();
         private boolean hasRenderMatrix;
         private boolean hasSphereMatrix;
+        private boolean hasCameraView;
         private float sphereLocalRadius;
         private float viewportScale = 1F;
         private float viewportHeight;

@@ -9,6 +9,7 @@ public class Icons
 {
     public static final Map<String, Icon> ICONS = new HashMap<>();
     public static final Link ATLAS = Link.assets("textures/icons.png");
+    private static final Link EDITOR_ATLAS = Link.assets("textures/editor_icons.png");
 
     public static final Icon NONE = new Icon(null, "none", 0, 0);
 
@@ -23,8 +24,8 @@ public class Icons
     public static final Icon FILTER = register(new Icon(ATLAS, "filter", 128, 0));
     public static final Icon MOVE_UP = register(new Icon(ATLAS, "move_up", 144, 0, 16, 8));
     public static final Icon MOVE_DOWN = register(new Icon(ATLAS, "move_down", 144, 8, 16, 8));
-    public static final Icon COLLAPSE_ALL = register(new Icon(ATLAS, "collapse_all", 32, 176));
-    public static final Icon EXPAND_ALL = register(new Icon(ATLAS, "expand_all", 16, 176));
+    public static final Icon COLLAPSE_ALL = register(new Icon(EDITOR_ATLAS, "collapse_all", 32, 176));
+    public static final Icon EXPAND_ALL = register(new Icon(EDITOR_ATLAS, "expand_all", 16, 176));
     public static final Icon LOCKED = register(new Icon(ATLAS, "locked", 160, 0));
     public static final Icon UNLOCKED = register(new Icon(ATLAS, "unlocked", 176, 0));
     public static final Icon LAYOUT = register(new Icon(ATLAS, "layout", 240, 144));
@@ -197,8 +198,8 @@ public class Icons
     public static final Icon PARTICLE_TAB_EVENTS = register(new Icon(ATLAS, "particle_tab_events", 64, 144));
     public static final Icon PARTICLE_TAB_CURVES = register(new Icon(ATLAS, "particle_tab_curves", 240, 32));
 
-    public static final Icon HORIZONTAL = register(new Icon(ATLAS, "horizontal", 0, 160));
-    public static final Icon VERTICAL = register(new Icon(ATLAS, "vertical", 16, 160));
+    public static final Icon HORIZONTAL = register(new Icon(EDITOR_ATLAS, "horizontal", 0, 160));
+    public static final Icon VERTICAL = register(new Icon(EDITOR_ATLAS, "vertical", 16, 160));
     public static final Icon ARROW_SMALL = register(new Icon(ATLAS, "arrow_small", 80, 160));
     public static final Icon SPACE_GLOBAL = register(new Icon(ATLAS, "space_global", 160, 160));
     public static final Icon SPACE_LOCAL = register(new Icon(ATLAS, "space_local", 176, 160));
