@@ -1439,10 +1439,10 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.showPanel(this.replayEditor.isActionsMode() ? this.replayEditor : this.actionEditor);
     }
 
-    /** Keep replay editing available when its dock panels are hidden. */
+    /** Keep the legacy fallback before an editor is chosen, and retain it while Replay docks are hidden. */
     public boolean isReplayEditorSelected()
     {
-        return this.selectedMainEditorPanel == this.replayEditor;
+        return this.selectedMainEditorPanel == null || this.selectedMainEditorPanel == this.replayEditor;
     }
 
     public int getPanelIndex()
