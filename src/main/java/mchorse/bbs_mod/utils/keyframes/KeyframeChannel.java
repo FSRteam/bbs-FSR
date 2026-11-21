@@ -478,12 +478,23 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
      */
     public int insert(float tick, T value)
     {
-        return this.insertRaw(this.getSourceTick(tick), value);
+        return this.insert(tick, value, true);
+    }
+
+    /** Allow a gesture owner to publish its complete snapshot instead of each sample. */
+    public int insert(float tick, T value, boolean notify)
+    {
+        return this.insertRaw(this.getSourceTick(tick), value, notify);
     }
 
     private int insertRaw(float tick, T value)
     {
-        this.preNotify();
+        return this.insertRaw(tick, value, true);
+    }
+
+    private int insertRaw(float tick, T value, boolean notify)
+    {
+        if (notify) this.preNotify();
 
         Keyframe<T> prev;
 
@@ -496,7 +507,7 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
                 this.add(0, new Keyframe<>("", this.factory, tick, value));
                 this.sort();
 
-                this.postNotify();
+                if (notify) this.postNotify();
 
                 return 0;
             }
@@ -510,7 +521,7 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
             if (frame.getTick() == tick)
             {
                 frame.setValue(value);
-                this.postNotify();
+                if (notify) this.postNotify();
 
                 return index;
             }
@@ -526,7 +537,7 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
 
         this.add(index, new Keyframe<T>("", this.factory, tick, value));
         this.sort();
-        this.postNotify();
+        if (notify) this.postNotify();
 
         return index;
     }

@@ -32,10 +32,13 @@ public class UIReplayPropTransform extends UIPropTransform
 
     public UIReplayPropTransform()
     {
-        this.callbacks(() -> this.notifyKeyframes(0), () ->
+        this.callbacks(() ->
         {
-            if (this.replay != null) this.replay.keyframes.postNotify();
-        }, () -> this.notifyKeyframes(IValueListener.FLAG_UNMERGEABLE));
+            if (this.snapshot == null) this.notifyKeyframes(0);
+        }, () ->
+        {
+            if (this.snapshot == null && this.replay != null) this.replay.keyframes.postNotify();
+        }, null).gestureCallbacks(this::beginGesture, this::finishGesture);
         this.setVisible(false);
     }
 
@@ -99,9 +102,9 @@ public class UIReplayPropTransform extends UIPropTransform
         return this.replay == null ? null : this.replay.getName() + ": ";
     }
 
-    private void snapshot()
+    private void beginGesture()
     {
-        if (this.snapshot == null) this.snapshot = this.replay.keyframes.toData();
+        if (this.replay != null) this.snapshot = this.replay.keyframes.toData().copy();
     }
 
     private float writeTick()
@@ -110,26 +113,22 @@ public class UIReplayPropTransform extends UIPropTransform
         return this.replay.getTick(whole) + (this.tick - whole);
     }
 
-    @Override
-    public void acceptChanges()
+    private void finishGesture(boolean accept)
     {
-        super.acceptChanges();
-        this.snapshot = null;
-    }
+        if (this.snapshot == null || this.replay == null) return;
 
-    @Override
-    public void rejectChanges()
-    {
-        /* The base rewind writes every transform channel even before the first drag update. */
-        BaseType before = this.snapshot == null && this.replay != null ? this.replay.keyframes.toData() : this.snapshot;
-        super.rejectChanges();
+        BaseType before = this.snapshot;
+        BaseType after = this.replay.keyframes.toData().copy();
 
-        if (before != null && this.replay != null)
+        /* Both viewport cancellation and Escape finish through the gesture host. Restore the
+         * channel tree before publishing one accepted edit, including keys inserted by rewind. */
+        this.replay.keyframes.fromData(before);
+
+        if (accept && !before.equals(after))
         {
-            this.replay.keyframes.preNotify();
-            this.replay.keyframes.fromData(before);
+            this.replay.keyframes.preNotify(IValueListener.FLAG_UNMERGEABLE);
+            this.replay.keyframes.fromData(after);
             this.replay.keyframes.postNotify();
-            this.endGesture();
         }
 
         this.snapshot = null;
@@ -139,14 +138,13 @@ public class UIReplayPropTransform extends UIPropTransform
     public void setT(Axis axis, double x, double y, double z)
     {
         if (this.replay == null) return;
-        this.snapshot();
         this.preCallback();
         this.scratch.translate.set((float) x, (float) y, (float) z);
         float tick = this.writeTick();
         ReplayKeyframes keyframes = this.replay.keyframes;
-        keyframes.x.insert(tick, x);
-        keyframes.y.insert(tick, y);
-        keyframes.z.insert(tick, z);
+        keyframes.x.insert(tick, x, this.snapshot == null);
+        keyframes.y.insert(tick, y, this.snapshot == null);
+        keyframes.z.insert(tick, z, this.snapshot == null);
 
         /* Publish derived state at render rate, before the next 20 Hz film tick. */
         if (this.entity != null)
@@ -167,16 +165,15 @@ public class UIReplayPropTransform extends UIPropTransform
     public void setR(Axis axis, double x, double y, double z)
     {
         if (this.replay == null) return;
-        this.snapshot();
         this.preCallback();
         this.scratch.rotate.set(MathUtils.toRad((float) x), MathUtils.toRad((float) y), 0F);
         float tick = this.writeTick();
         ReplayKeyframes keyframes = this.replay.keyframes;
         double yaw = -y;
-        keyframes.yaw.insert(tick, yaw);
-        keyframes.headYaw.insert(tick, yaw + this.headYawOffset);
-        keyframes.bodyYaw.insert(tick, yaw + this.bodyYawOffset);
-        keyframes.pitch.insert(tick, x);
+        keyframes.yaw.insert(tick, yaw, this.snapshot == null);
+        keyframes.headYaw.insert(tick, yaw + this.headYawOffset, this.snapshot == null);
+        keyframes.bodyYaw.insert(tick, yaw + this.bodyYawOffset, this.snapshot == null);
+        keyframes.pitch.insert(tick, x, this.snapshot == null);
 
         if (this.entity != null)
         {

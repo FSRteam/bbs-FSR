@@ -38,11 +38,10 @@ import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
-import mchorse.bbs_mod.ui.utils.UISelectionRenderer;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
-import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Pair;
@@ -61,7 +60,6 @@ public class UIKeyframes extends UITimelineCanvas
 {
     /* Editing states */
 
-    private boolean selecting;
     private int dragging = -1;
     private boolean controlFirst;
     private Pair<Keyframe, KeyframeType> draggingData;
@@ -137,7 +135,8 @@ public class UIKeyframes extends UITimelineCanvas
 
                 this.pasteKeyframes(parseKeyframes(data), (float) offset, mouseY);
             })
-            .canCopy(() -> this.currentGraph.getSelected() != null);
+            .canCopy(() -> this.currentGraph.getSelected() != null)
+            .labels(UIKeys.KEYFRAMES_CONTEXT_COPY, UIKeys.KEYFRAMES_CONTEXT_PASTE);
 
         /* Context menu items */
         this.context((menu) ->
@@ -154,8 +153,8 @@ public class UIKeyframes extends UITimelineCanvas
                 menu.action(Icons.SHAPES, UIKeys.KEYFRAMES_CONTEXT_KEYFRAME_STYLE, this::openStyleEditor);
             }
 
-            menu.custom(new UIPresetContextMenu(this.copyPasteController, mouseX, mouseY)
-                .labels(UIKeys.KEYFRAMES_CONTEXT_COPY, UIKeys.KEYFRAMES_CONTEXT_PASTE));
+            this.copyPasteController.install(menu, context, mouseX, mouseY);
+            menu.icon(MenuVerb.REMOVE, () -> this.currentGraph.removeSelected()).label(UIKeys.KEYFRAMES_CONTEXT_REMOVE).enabled(hasSelected);
 
             if (!this.single)
             {
@@ -210,7 +209,6 @@ public class UIKeyframes extends UITimelineCanvas
                         sheet.channel.postNotify();
                     }
                 });
-                menu.action(Icons.REMOVE, UIKeys.KEYFRAMES_CONTEXT_REMOVE, () -> this.currentGraph.removeSelected());
             }
         });
 
@@ -1170,7 +1168,7 @@ public class UIKeyframes extends UITimelineCanvas
 
     public boolean isSelecting()
     {
-        return this.selecting;
+        return this.marquee.isPressed();
     }
 
 
@@ -1178,7 +1176,7 @@ public class UIKeyframes extends UITimelineCanvas
     /** Whether the user is in the middle of any mouse interaction (dragging, selecting, navigating, scaling or stacking). */
     public boolean isInteracting()
     {
-        return this.dragging >= 0 || this.selecting || this.navigating || this.scaling || this.stacking
+        return this.dragging >= 0 || this.marquee.isPressed() || this.navigating || this.scaling || this.stacking
             || this.loops.isDragging() || this.motionShift.isDragging();
     }
 
@@ -1305,7 +1303,8 @@ public class UIKeyframes extends UITimelineCanvas
     {
         Area area = new Area();
 
-        area.setPoints(this.initialX, this.initialY, context.mouseX, context.mouseY, 3);
+        area.copy(this.marquee.getArea());
+        area.offset(3);
 
         return area;
     }
@@ -1474,7 +1473,7 @@ public class UIKeyframes extends UITimelineCanvas
 
         this.editingGeneration = 0L;
         this.navigating = false;
-        this.selecting = false;
+        this.marquee.reset();
         this.dragging = -1;
         this.draggingData = null;
         this.cache = null;
@@ -1582,7 +1581,7 @@ public class UIKeyframes extends UITimelineCanvas
 
         if (shift && found == null)
         {
-            this.selecting = true;
+            this.marquee.press(context.mouseX, context.mouseY);
         }
 
         if (found != null)
@@ -1601,14 +1600,14 @@ public class UIKeyframes extends UITimelineCanvas
             this.pickKeyframe(found);
             this.onKeyframePicked(picked);
         }
-        else if (!this.selecting)
+        else if (!this.marquee.isPressed())
         {
             this.currentGraph.clearSelection();
             this.pickKeyframe(null);
             this.moveNoKeyframes(context);
         }
 
-        if (!this.selecting)
+        if (!this.marquee.isPressed())
         {
             this.dragging = 0;
             this.draggingData = pair;
@@ -1647,13 +1646,20 @@ public class UIKeyframes extends UITimelineCanvas
             return super.subMouseReleased(context);
         }
 
-        boolean wasSelecting = this.selecting;
+        boolean wasSelecting = this.marquee.isPressed();
+
+        if (wasSelecting)
+        {
+            this.marquee.update(context.mouseX, context.mouseY);
+        }
+
+        Area grabbingArea = wasSelecting ? this.getGrabbingArea(context) : null;
         boolean wasDragging = this.dragging > 0;
         Throwable failure = null;
 
         this.editingGeneration = 0L;
         this.navigating = false;
-        this.selecting = false;
+        this.marquee.reset();
         this.dragging = -1;
         this.draggingData = null;
         this.gestureSelection = null;
@@ -1665,7 +1671,7 @@ public class UIKeyframes extends UITimelineCanvas
         {
             failure = runEditingReleaseStep(
                 failure,
-                () -> this.currentGraph.selectInArea(this.getGrabbingArea(context))
+                () -> this.currentGraph.selectInArea(grabbingArea)
             );
         }
 
@@ -1713,7 +1719,7 @@ public class UIKeyframes extends UITimelineCanvas
         this.editingOwnership.cancel();
         this.editingGeneration = 0L;
         this.navigating = false;
-        this.selecting = false;
+        this.marquee.reset();
         this.dragging = -1;
         this.draggingData = null;
 
@@ -1918,10 +1924,7 @@ public class UIKeyframes extends UITimelineCanvas
             this.loops.render(context);
             this.motionShift.render(context);
 
-            if (this.selecting)
-            {
-                this.renderMarquee(context, this.initialX, this.initialY);
-            }
+            this.renderMarquee(context);
 
             this.currentGraph.postRender(context);
             this.renderOverlay(context);
@@ -2042,7 +2045,7 @@ public class UIKeyframes extends UITimelineCanvas
             {
                 int leftEx = Math.min(this.graphArea.ex(), leftBorder);
 
-                context.batcher.box(this.graphArea.x, this.graphArea.y, leftEx, this.graphArea.y + this.graphArea.h, BBSSettings.chromeSurface());
+                context.batcher.box(this.graphArea.x, this.graphArea.y, leftEx, this.graphArea.y + this.graphArea.h, BBSSettings.sunkenSurface());
             }
         }
 
