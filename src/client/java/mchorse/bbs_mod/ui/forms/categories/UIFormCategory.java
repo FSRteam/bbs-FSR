@@ -650,9 +650,15 @@ public class UIFormCategory extends UIItemGrid<Form>
     @Override
     protected void onDrop(Object target, List<Form> forms)
     {
+        this.onDrop(target, forms, this.drag.getInsertion());
+    }
+
+    @Override
+    protected void onDrop(Object target, List<Form> forms, int insertion)
+    {
         if (target instanceof UIFormCategory category)
         {
-            this.list.dropForms(category, this.drag.getInsertion(), forms);
+            this.list.dropForms(category, insertion, forms);
         }
     }
 

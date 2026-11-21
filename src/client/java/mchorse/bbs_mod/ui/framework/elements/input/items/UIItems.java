@@ -205,6 +205,12 @@ public abstract class UIItems<T> extends UIElement
     protected void onDrop(Object target, List<T> items)
     {}
 
+    /** The drop's slot, captured before the completed drag is reset. */
+    protected void onDrop(Object target, List<T> items, int insertion)
+    {
+        this.onDrop(target, items);
+    }
+
     /** What's handed to the callback. */
     protected List<T> selected()
     {
@@ -474,7 +480,7 @@ public abstract class UIItems<T> extends UIElement
         }
         else if (target != null)
         {
-            this.onDrop(target, items);
+            this.onDrop(target, items, insertion);
         }
     }
 
