@@ -7,6 +7,8 @@ import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.input.items.FoldState;
+import mchorse.bbs_mod.ui.framework.elements.input.items.ItemDrag;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
@@ -19,10 +21,8 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * The folders of every source as a tree down the side of a texture browser, for jumping
@@ -87,7 +87,7 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
     private final IFolderTreeHost browser;
 
     /* Which folders are unfolded; it outlives every relisting of the tree */
-    private final Set<Link> expanded = new HashSet<>();
+    private final FoldState<Link> folds = new FoldState<>();
 
     /** Whether a folder has folders inside — asked once per listing, not per frame. */
     private final Map<Link, Boolean> branches = new HashMap<>();
@@ -127,15 +127,17 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
     {
         if (path != null && !path.source.isEmpty())
         {
+            List<Link> above = new ArrayList<>();
             Link folder = TextureEntry.folderLink(path);
 
             while (!folder.path.isEmpty())
             {
                 folder = TextureEntry.folderLink(folder.parent());
-                this.expanded.add(folder);
+                above.add(folder);
             }
 
-            this.expanded.add(new Link(path.source, ""));
+            above.add(new Link(path.source, ""));
+            this.folds.expandAll(above);
         }
 
         this.rebuild();
@@ -177,7 +179,7 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
     private void addBranch(Link folder, int depth)
     {
         boolean branch = this.isBranch(folder);
-        boolean open = branch && this.expanded.contains(folder);
+        boolean open = branch && this.folds.isExpanded(folder);
 
         this.add(Node.folder(folder, depth, branch, open));
 
@@ -239,9 +241,9 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
         {
             this.pinsExpanded = !this.pinsExpanded;
         }
-        else if (!this.expanded.remove(node.link()))
+        else
         {
-            this.expanded.add(node.link());
+            this.folds.toggle(node.link());
         }
 
         this.rebuild();
@@ -320,33 +322,42 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
         this.rebuild();
     }
 
+    Link dropFolderAt(int mouseX, int mouseY, List<TextureEntry> items)
+    {
+        if (!this.isVisible() || !this.area.isInside(mouseX, mouseY))
+        {
+            return null;
+        }
+
+        int index = this.scroll.getIndex(mouseX, mouseY);
+        Node node = this.exists(index) ? this.getList().get(index) : null;
+
+        if (node == null || node.header() || !node.folder() || items.stream().anyMatch((entry) -> entry.link().equals(node.link())))
+        {
+            return null;
+        }
+
+        return node.link();
+    }
+
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (!this.area.isInside(context))
+        if (context.mouseButton == 1 && this.area.isInside(context))
         {
-            return false;
-        }
-
-        if (this.scroll.mouseClicked(context))
-        {
-            return true;
-        }
-
-        int index = this.scroll.getIndex(context.mouseX, context.mouseY);
-        Node node = this.exists(index) ? this.getList().get(index) : null;
-
-        if (context.mouseButton == 1)
-        {
-            this.contextNode = node;
+            int index = this.scroll.getIndex(context.mouseX, context.mouseY);
+            this.contextNode = this.exists(index) ? this.getList().get(index) : null;
 
             return false;
         }
 
-        if (node == null || context.mouseButton != 0)
-        {
-            return false;
-        }
+        return super.subMouseClicked(context);
+    }
+
+    @Override
+    protected boolean pressItem(int index, UIContext context)
+    {
+        Node node = this.getList().get(index);
 
         if (node.header())
         {
@@ -363,33 +374,23 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
             return true;
         }
 
-        if (node.branch() && this.hitsArrow(node, context.mouseX - this.area.x))
+        if (this.pressArrow(index, context))
         {
-            this.toggle(node);
+            return true;
         }
-        else
-        {
-            this.browser.navigate(node.link());
 
-            /* Entering a folder reveals the way down to it; a source root is the one row that
-             * reveal unfolds itself, so asking the folds afterwards would answer "expanded" to
-             * every click on one — the row's own state is what the click flips */
-            if (node.branch() && !node.expanded())
-            {
-                this.expanded.add(node.link());
-                this.rebuild();
-            }
+        boolean expanded = node.branch() && node.expanded();
+
+        this.cursor = index;
+        this.browser.navigate(node.link());
+
+        if (node.branch())
+        {
+            this.folds.set(node.link(), !expanded);
+            this.rebuild();
         }
 
         return true;
-    }
-
-    @Override
-    public boolean subMouseReleased(UIContext context)
-    {
-        this.browser.release();
-
-        return false;
     }
 
     /* Rendering */
@@ -407,15 +408,20 @@ public class UIFolderTree extends UIList<UIFolderTree.Node>
             return;
         }
 
-        TextureDrag drag = this.browser.getDrag();
+        ItemDrag<TextureEntry> drag = this.browser.getDrag();
         boolean current = node.folder() ? this.browser.isCurrentFolder(node.link()) : this.browser.isCurrentTexture(node.link());
         boolean target = false;
 
         /* A folder can't receive itself; the carried entries are matched by link since the tree has no entries */
-        if (hover && node.folder() && drag != null && drag.isActive() && !drag.isDragging(node.link()))
+        if (hover && drag != null && drag.isActive())
         {
-            drag.setTarget(node.link());
-            target = true;
+            Link folder = this.dropFolderAt(context.mouseX, context.mouseY, drag.getItems());
+
+            if (folder != null)
+            {
+                drag.setTarget(folder);
+                target = true;
+            }
         }
 
         RowStyle.row(context.batcher, x, y, this.area.w, h, 0, false, hover, current);

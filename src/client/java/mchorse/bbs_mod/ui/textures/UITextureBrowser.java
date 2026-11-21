@@ -13,23 +13,24 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
+import mchorse.bbs_mod.ui.framework.elements.input.items.ItemDrag;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
-import mchorse.bbs_mod.ui.framework.elements.utils.UIDraggable;
-import mchorse.bbs_mod.ui.utils.Marquee;
+import mchorse.bbs_mod.ui.framework.elements.utils.UISplitter;
 import mchorse.bbs_mod.ui.utils.UIFileDialogs;
 import mchorse.bbs_mod.ui.utils.UIStrip;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.cells.CellState;
 import mchorse.bbs_mod.ui.utils.cells.DragGhost;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
+import mchorse.bbs_mod.ui.utils.context.MenuVerb;
+import mchorse.bbs_mod.ui.utils.context.UIChoiceMenu;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Direction;
-import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -66,9 +67,9 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     private static final int MIN_SIDE = 100;
     private static final int MAX_SIDE = 400;
 
-    /* Side panel widths, dragged by the user and kept for the session like the form editor's tree */
-    private static int leftWidth = 140;
-    private static int infoWidth = 150;
+    /* Side panel widths, dragged by the user; each is capped by what the other leaves of the row */
+    private final UISplitter leftHandle = UISplitter.pixels("texture_browser.left", 140, MIN_SIDE, MAX_SIDE);
+    private final UISplitter infoHandle = UISplitter.pixels("texture_browser.info", 150, MIN_SIDE, MAX_SIDE);
 
     public final UITexturePicker picker;
 
@@ -93,16 +94,6 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
 
     /** Which of the two the side panel shows. It's a view, not the choice: the tree doesn't end a multiskin. */
     private boolean multiskin;
-
-    public final TextureSelection selection = new TextureSelection();
-    public final TextureDrag drag = new TextureDrag();
-    public final Marquee marquee = new Marquee();
-
-    /* The entry a Shift-press landed on: a band that goes nowhere extends the pick to it */
-    private TextureEntry marqueeEntry;
-
-    /* What was picked before the band started; the band adds to it */
-    private final List<Link> marqueeBase = new ArrayList<>();
 
     /* Files taken by Ctrl+C / Ctrl+X, put down by Ctrl+V; shown on the status line until then */
     private final List<Link> clipboard = new ArrayList<>();
@@ -249,9 +240,6 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     private int seenVersion = -1;
     private TextureEntry contextEntry;
 
-    /* A folder pressed but not yet released: a release without a drag enters it */
-    private Link pendingFolder;
-
     /* Type-to-pick, the way the old list did it */
     private final Timer lastTyped = new Timer(1000);
     private String typed = "";
@@ -265,6 +253,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         this.back.tooltip(UIKeys.TEXTURES_BROWSER_BACK, Direction.BOTTOM);
         this.treeToggle = new UIIcon(Icons.TREE, (b) -> this.setMultiskin(false));
         this.treeToggle.tooltip(UIKeys.TEXTURES_BROWSER_TREE, Direction.BOTTOM);
+        this.treeToggle.highlight(() -> !this.multiskin, Direction.BOTTOM);
         this.multiToggle = new UIIcon(Icons.GALLERY, (b) ->
         {
             if (picker.multiLink == null)
@@ -277,15 +266,18 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
             }
         });
         this.multiToggle.tooltip(UIKeys.TEXTURE_MULTISKIN, Direction.BOTTOM);
+        this.multiToggle.highlight(() -> this.multiskin, Direction.BOTTOM);
         this.search = new UITextbox(100, this::onSearch).placeholder(UIKeys.TEXTURES_BROWSER_SEARCH);
         this.sort = new UIIcon(Icons.LIST, (b) -> this.openSortMenu());
         this.sort.tooltip(UIKeys.TEXTURES_BROWSER_SORT, Direction.BOTTOM);
+        this.sort.highlight(() -> this.getSort() != TextureSort.NAME, Direction.BOTTOM);
         this.everywhere = new UIIcon(Icons.GLOBE, (b) ->
         {
             this.searchEverywhere = !this.searchEverywhere;
             this.refresh();
         });
         this.everywhere.tooltip(UIKeys.TEXTURES_BROWSER_EVERYWHERE, Direction.BOTTOM);
+        this.everywhere.highlight(() -> this.searchEverywhere, Direction.BOTTOM);
         this.newTexture = new UIIcon(Icons.MATERIAL, (b) -> this.promptNewTexture());
         this.newTexture.tooltip(UIKeys.TEXTURES_BROWSER_NEW_TEXTURE, Direction.BOTTOM);
 
@@ -309,25 +301,18 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         this.tree.relative(this.left).xy(0, 0).w(1F).h(1F);
         this.left.add(this.tree, picker.multiList, picker.buttons);
 
-        UIDraggable leftHandle = new UIDraggable((context) ->
-        {
-            leftWidth = MathUtils.clamp(context.mouseX - this.area.x, MIN_SIDE, Math.min(MAX_SIDE, this.area.w - infoWidth - MIN_SIDE));
-            this.layout();
-        });
-        UIDraggable infoHandle = new UIDraggable((context) ->
-        {
-            infoWidth = MathUtils.clamp(this.area.ex() - context.mouseX, MIN_SIDE, Math.min(MAX_SIDE, this.area.w - leftWidth - MIN_SIDE));
-            this.layout();
-        });
+        this.leftHandle.measure(this).onChange(this::layout)
+            .range(MIN_SIDE, () -> (float) Math.min(MAX_SIDE, this.area.w - this.infoHandle.getPixels() - MIN_SIDE));
+        this.infoHandle.measure(this).fromEnd().onChange(this::layout)
+            .range(MIN_SIDE, () -> (float) Math.min(MAX_SIDE, this.area.w - this.leftHandle.getPixels() - MIN_SIDE));
 
-        leftHandle.cursors(GLFW.GLFW_HRESIZE_CURSOR, GLFW.GLFW_HRESIZE_CURSOR);
-        infoHandle.cursors(GLFW.GLFW_HRESIZE_CURSOR, GLFW.GLFW_HRESIZE_CURSOR);
-        leftHandle.relative(this.left).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
-        infoHandle.relative(this.info).x(0).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
+        this.leftHandle.relative(this.left).x(1F).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
+        this.infoHandle.relative(this.info).x(0).y(0.5F).w(6).h(40).anchor(0.5F, 0.5F);
 
         this.bar.relative(this).xy(0, 0).w(1F).h(BAR_HEIGHT);
         this.bar.add(this.back, this.treeToggle, this.multiToggle, this.search, this.everywhere, this.sort, this.newTexture, picker.close);
-        this.add(this.bar, this.crumbs, this.text, this.left, this.grid, this.info, picker.editor, leftHandle, infoHandle, this.clearClipboard);
+        /* The grid clears the drop target before the tree reports a hovered folder. */
+        this.add(this.bar, this.crumbs, this.text, this.grid, this.left, this.info, picker.editor, this.leftHandle, this.infoHandle, this.clearClipboard);
 
         this.layout();
         this.setMultiskin(false);
@@ -349,6 +334,8 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     private void layout()
     {
         int top = BAR_HEIGHT * 2;
+        int leftWidth = this.leftHandle.getPixels();
+        int infoWidth = this.infoHandle.getPixels();
 
         this.crumbs.relative(this).xy(0, BAR_HEIGHT).w(1F, -infoWidth).h(BAR_HEIGHT);
         this.text.relative(this).xy(0, BAR_HEIGHT).w(1F, -infoWidth).h(BAR_HEIGHT);
@@ -431,9 +418,9 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     }
 
     @Override
-    public TextureDrag getDrag()
+    public ItemDrag<TextureEntry> getDrag()
     {
-        return this.drag;
+        return this.grid.drag;
     }
 
     public TextureSort getSort()
@@ -470,7 +457,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     public void navigate(Link folder)
     {
         this.path = folder == null ? new Link("", "") : TextureEntry.folderLink(folder);
-        this.selection.clear();
+        this.grid.selection.clear();
         this.hidePathEditor();
         this.refresh();
         this.crumbs.setPath(this.path);
@@ -547,7 +534,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     {
         this.entries.clear();
         this.entries.addAll(this.isSearching() ? this.searchEntries() : this.folderEntries());
-        this.selection.retain(this.entries);
+        this.grid.selection.retain((entry) -> this.indexOf(entry.link()) != -1);
         this.grid.relayout();
         this.newTexture.setEnabled(TextureFiles.isFolder(this.path));
         this.seenVersion = BBSResources.getAssetsVersion();
@@ -631,24 +618,22 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     private void onSearch(String query)
     {
         this.query = query == null ? "" : query.trim();
-        this.selection.clear();
+        this.grid.selection.clear();
         this.refresh();
         this.grid.scroll.setScroll(0);
     }
 
     private void openSortMenu()
     {
-        this.getContext().replaceContextMenu((menu) ->
-        {
-            for (TextureSort sort : TextureSort.values())
+        UIChoiceMenu.of(TextureSort.values())
+            .current(this.getSort())
+            .icon((sort) -> sort.icon)
+            .label((sort) -> sort.label)
+            .open(this.getContext(), (sort) ->
             {
-                menu.action(sort.icon, sort.label, () ->
-                {
-                    BBSSettings.textureSort.set(sort.id);
-                    this.refresh();
-                });
-            }
-        });
+                BBSSettings.textureSort.set(sort.id);
+                this.refresh();
+            });
     }
 
     /* Path by hand */
@@ -731,81 +716,44 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         }
     }
 
-    public void pressEntry(TextureEntry entry, UIContext context)
+    /** The picked entries as links — what the file operations act on. */
+    private List<Link> pickedLinks()
     {
-        Link link = entry.link();
+        List<Link> links = new ArrayList<>();
 
-        if (Window.isCtrlPressed())
+        for (TextureEntry entry : this.grid.selection.getItems())
         {
-            this.selection.toggle(link);
-        }
-        else
-        {
-            if (!this.selection.contains(link) || !this.selection.isGroup())
-            {
-                this.selection.set(link);
-            }
-
-            if (entry.folder())
-            {
-                /* Entered on release, so a press can also begin dragging the folder */
-                this.pendingFolder = link;
-            }
-            else
-            {
-                this.picker.onFileClicked(link);
-            }
+            links.add(entry.link());
         }
 
-        List<Link> payload = this.selection.contains(link) ? new ArrayList<>(this.selection.getLinks()) : Collections.singletonList(link);
-
-        this.drag.press(payload, context.mouseX, context.mouseY);
+        return links;
     }
 
-    public void clickEmpty()
+    private boolean isPicked(Link link)
     {
-        this.selection.clear();
+        return this.grid.selection.contains(TextureEntry.of(link));
     }
 
-    /** Shift went down over the grid: arm a band from here, in the grid's content coordinates. */
-    public void pressMarquee(TextureEntry entry, int x, int y)
+    /** The selected pictures in listing order, used as the animation's frame order. */
+    private List<Link> pickedFrames()
     {
-        this.marqueeEntry = entry;
-        this.marqueeBase.clear();
-        this.marqueeBase.addAll(this.selection.getLinks());
-        this.marquee.press(x, y);
-    }
+        List<Link> frames = new ArrayList<>();
 
-    /**
-     * While the band is stretched, the pick follows it live — what was picked before the
-     * press stays, everything the band covers joins — so the user sees the result as they go.
-     */
-    private void applyMarquee()
-    {
-        if (!this.marquee.isActive())
-        {
-            return;
-        }
-
-        this.selection.clear();
-
-        for (Link link : this.marqueeBase)
-        {
-            this.selection.add(link);
-        }
-
-        for (TextureEntry entry : this.grid.getEntriesIn(this.marquee.getArea()))
-        {
-            this.selection.add(entry.link());
-        }
-    }
-
-    private void selectAll()
-    {
         for (TextureEntry entry : this.entries)
         {
-            this.selection.add(entry.link());
+            if (!entry.folder() && this.grid.selection.contains(entry))
+            {
+                frames.add(entry.link());
+            }
         }
+
+        return frames;
+    }
+
+    /** Whether a link is one of several picked. */
+    private boolean isGrouped(Link link)
+    {
+        return this.grid.selection.isGroup() && this.isPicked(link);
     }
 
     /* Clipboard */
@@ -813,9 +761,9 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     /** What Ctrl+C / Ctrl+X take: the pick, or the current texture when nothing is picked. */
     private List<Link> subjects()
     {
-        if (!this.selection.isEmpty())
+        if (!this.grid.selection.isEmpty())
         {
-            return new ArrayList<>(this.selection.getLinks());
+            return this.pickedLinks();
         }
 
         Link current = this.getCurrent();
@@ -855,22 +803,48 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     }
 
     /** Whether the drag in progress copies rather than moves: Ctrl is held, or the files can't be moved anyway. */
-    private boolean isCopyDrag()
+    private boolean isCopyDrag(List<TextureEntry> items)
     {
         if (Window.isCtrlPressed())
         {
             return true;
         }
 
-        for (Link link : this.drag.getLinks())
+        for (TextureEntry entry : items)
         {
-            if (TextureFiles.canModify(link))
+            if (TextureFiles.canModify(entry.link()))
             {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /** Whether the captured payload can be dropped into this folder. */
+    private boolean accepts(Link folder, List<TextureEntry> items, boolean copy)
+    {
+        if (folder == null || !TextureFiles.isFolder(folder))
+        {
+            return false;
+        }
+
+        for (TextureEntry entry : items)
+        {
+            Link link = entry.link();
+
+            if (link.equals(folder) || TextureEntry.folderLink(link).equals(TextureEntry.folderLink(folder)))
+            {
+                continue;
+            }
+
+            if (copy || !TextureEntry.folderLink(link.parent()).equals(TextureEntry.folderLink(folder)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void copyToClipboard(boolean cut)
@@ -993,7 +967,20 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
     /** The links an action on {@code link} touches: the whole pick when it's one of several picked. */
     private List<Link> group(Link link)
     {
-        return this.selection.isGroup() && this.selection.contains(link) ? new ArrayList<>(this.selection.getLinks()) : Collections.singletonList(link);
+        return this.isGrouped(link) ? this.pickedLinks() : Collections.singletonList(link);
+    }
+
+    /** Delete went down over the pick: apply the same deletion policy as the menu. */
+    public void deleteEntries(List<TextureEntry> entries)
+    {
+        List<Link> links = new ArrayList<>();
+
+        for (TextureEntry entry : entries)
+        {
+            links.add(entry.link());
+        }
+
+        this.confirmDelete(this.keepSubjects(links, true));
     }
 
     /** Put the links in or take them out of the pins, and let the tree show what changed. */
@@ -1021,43 +1008,14 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         }
     }
 
-    /* Release and drop */
+    /* Drop */
 
-    public void release()
+    /** The shared grid retires its drag before this callback; use its captured payload. */
+    public void drop(Link target, List<TextureEntry> entries)
     {
-        if (this.marquee.isPressed())
-        {
-            /* An active band has already applied itself while stretching; a press that went
-             * nowhere is a Shift-click, which extends the pick to that entry */
-            if (!this.marquee.isActive() && this.marqueeEntry != null)
-            {
-                this.selection.range(this.marqueeEntry.link(), this.entries);
-            }
+        boolean copy = this.isCopyDrag(entries);
 
-            this.marquee.reset();
-            this.marqueeEntry = null;
-            this.marqueeBase.clear();
-        }
-
-        if (this.drag.isActive())
-        {
-            this.drop();
-        }
-        else if (this.pendingFolder != null)
-        {
-            this.navigate(this.pendingFolder);
-        }
-
-        this.pendingFolder = null;
-        this.drag.reset();
-    }
-
-    private void drop()
-    {
-        Link target = this.drag.getTarget();
-        boolean copy = this.isCopyDrag();
-
-        if (!this.drag.accepts(target, copy))
+        if (!this.accepts(target, entries, copy))
         {
             return;
         }
@@ -1066,8 +1024,10 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         int copies = 0;
         int moves = 0;
 
-        for (Link link : this.drag.getLinks())
+        for (TextureEntry entry : entries)
         {
+            Link link = entry.link();
+
             if (copy || !TextureFiles.canModify(link))
             {
                 if (this.copied(link, TextureFiles.copyInto(link, target)))
@@ -1080,23 +1040,21 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
 
             Link moved = TextureFiles.move(link, target);
 
-            if (moved == null)
+            if (moved != null)
             {
-                continue;
-            }
+                this.record(new MoveChange(link, moved));
+                moves += 1;
 
-            this.record(new MoveChange(link, moved));
-            moves += 1;
-
-            if (link.equals(current))
-            {
-                this.picker.selectCurrent(moved);
+                if (link.equals(current))
+                {
+                    this.picker.selectCurrent(moved);
+                }
             }
         }
 
         this.notify(UIKeys.TEXTURES_BROWSER_NOTIFY_COPIED, copies);
         this.notify(UIKeys.TEXTURES_BROWSER_NOTIFY_MOVED, moves);
-        this.selection.clear();
+        this.grid.selection.clear();
         this.refresh();
         this.tree.refresh();
     }
@@ -1214,7 +1172,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
 
         this.record(new CombineChange(frames, folder, frametime, created));
         this.notify(UIKeys.TEXTURES_BROWSER_NOTIFY_COMBINED, frames.size());
-        this.selection.clear();
+        this.grid.selection.clear();
         this.refresh();
         this.tree.refresh();
         this.picker.selectCurrent(created);
@@ -1295,7 +1253,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
                 }
             }
 
-            this.selection.clear();
+            this.grid.selection.clear();
             this.refresh();
             this.tree.refresh();
         });
@@ -1324,7 +1282,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
 
         Link link = entry.link();
         boolean texture = !entry.folder();
-        boolean group = this.selection.isGroup() && this.selection.contains(link);
+        boolean group = this.isGrouped(link);
         boolean modifiable = TextureFiles.canModify(link);
 
         if (texture)
@@ -1365,9 +1323,14 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
             }
 
             File file = TextureFiles.file(link);
+            List<Link> frames = group ? this.pickedFrames() : Collections.emptyList();
 
-            /* A texture on disk that isn't animated yet: into the editor with the animation on */
-            if (file != null && file.isFile() && !TextureAnimation.file(file).isFile())
+            if (frames.size() >= TextureFiles.MIN_COMBINE_FRAMES)
+            {
+                menu.action(Icons.FILM, UIKeys.TEXTURES_BROWSER_COMBINE.format(String.valueOf(frames.size())), () -> this.promptCombine(frames));
+            }
+            /* GIFs are already animated; a plain texture opens the animation editor. */
+            else if (file != null && file.isFile() && !GifFrames.isGif(link) && !TextureAnimation.file(file).isFile())
             {
                 menu.action(Icons.FILM, UIKeys.TEXTURES_MAKE_ANIMATED, () -> this.picker.openTextureAnimated(link));
             }
@@ -1377,7 +1340,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         {
             List<Link> links = this.group(link);
 
-            menu.action(Icons.REMOVE, group ? UIKeys.TEXTURES_BROWSER_DELETE_SELECTED.format(String.valueOf(links.size())) : UIKeys.GENERAL_REMOVE, Colors.RED, () -> this.confirmDelete(links));
+            menu.icon(MenuVerb.REMOVE, () -> this.confirmDelete(links)).label(group ? UIKeys.TEXTURES_BROWSER_DELETE_SELECTED.format(String.valueOf(links.size())) : UIKeys.GENERAL_REMOVE);
         }
     }
 
@@ -1398,7 +1361,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
                 menu.action(Icons.PASTE, UIKeys.GENERAL_PASTE, this::paste);
             }
 
-            menu.action(Icons.MATERIAL, UIKeys.TEXTURES_BROWSER_NEW_TEXTURE, this::promptNewTexture);
+            menu.icon(MenuVerb.ADD, this::promptNewTexture).label(UIKeys.TEXTURES_BROWSER_NEW_TEXTURE);
             menu.action(Icons.ADD, UIKeys.TEXTURES_BROWSER_NEW_FOLDER, this::promptNewFolder);
             menu.action(Icons.UPLOAD, UIKeys.TEXTURES_BROWSER_IMPORT, this::promptImport);
             menu.action(Icons.FOLDER, UIKeys.TEXTURE_OPEN_FOLDER, this::openFolder);
@@ -1491,7 +1454,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         }
         else if (context.isPressed(GLFW.GLFW_KEY_A) && Window.isCtrlPressed())
         {
-            this.selectAll();
+            this.grid.selectAll();
 
             return true;
         }
@@ -1588,8 +1551,14 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
 
     private void pick(TextureEntry entry)
     {
-        this.selection.set(entry.link());
+        this.grid.selection.set(entry, null);
+        this.show(entry);
+        this.grid.scrollTo(this.indexOf(entry.link()));
+    }
 
+    /** A texture becomes current; a folder shows its facts. */
+    public void show(TextureEntry entry)
+    {
         if (entry.folder())
         {
             this.info.set(entry.link());
@@ -1598,8 +1567,6 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         {
             this.picker.selectCurrent(entry.link());
         }
-
-        this.grid.scrollTo(this.indexOf(entry.link()));
     }
 
     public boolean pickByTyping(char inputChar)
@@ -1642,16 +1609,6 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
             this.hidePathEditor();
         }
 
-        /* A release over another element (an icon, the tree) must still finish what the grid started */
-        if ((this.drag.isPressed() || this.pendingFolder != null || this.marquee.isPressed()) && !Window.isMouseButtonPressed(GLFW.GLFW_MOUSE_BUTTON_LEFT))
-        {
-            this.release();
-        }
-
-        this.marquee.update(this.grid.contentX(context), this.grid.contentY(context));
-        this.applyMarquee();
-        this.drag.update(context.mouseX, context.mouseY);
-        this.drag.clearTarget();
         this.back.setEnabled(!this.path.source.isEmpty());
 
         int strip = BBSSettings.color(BBSSettings.chromeSurface(), Colors.A50);
@@ -1676,7 +1633,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
             context.batcher.textCard(this.typed, x + 2, y + 2, Colors.WHITE, Colors.A50 | BBSSettings.primaryColor.get(), 2);
         }
 
-        if (this.drag.isActive())
+        if (this.grid.drag.isActive())
         {
             this.renderGhost(context);
         }
@@ -1712,9 +1669,9 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         batcher.text(count, x, textY, Colors.GRAY);
         x += font.getWidth(count) + 12;
 
-        if (!this.selection.isEmpty())
+        if (!this.grid.selection.isEmpty())
         {
-            batcher.text(UIKeys.TEXTURES_BROWSER_STATUS_SELECTED.format(String.valueOf(this.selection.size())).get(), x, textY, Colors.LIGHTER_GRAY);
+            batcher.text(UIKeys.TEXTURES_BROWSER_STATUS_SELECTED.format(String.valueOf(this.grid.selection.size())).get(), x, textY, Colors.LIGHTER_GRAY);
         }
 
         if (!this.clipboard.isEmpty())
@@ -1726,17 +1683,17 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         }
     }
 
-    /** What's being carried, beside the cursor: a stack of the textures and their count. */
+    /** The grid's captured entries, drawn over the tree and info column. */
     private void renderGhost(UIContext context)
     {
-        List<Link> links = this.drag.getLinks();
-        boolean copy = this.isCopyDrag();
-        boolean landing = this.drag.accepts(this.drag.getTarget(), copy);
-        int size = Math.min(this.grid.getCellSize(), 48);
-        TextureEntry front = TextureEntry.of(links.get(0));
+        List<TextureEntry> items = this.grid.drag.getItems();
+        boolean copy = this.isCopyDrag(items);
+        boolean landing = this.accepts(this.grid.drag.getTarget() instanceof Link folder ? folder : null, items, copy);
+        int size = Math.min(this.grid.getCellSize(), UITextureGrid.GHOST_SIZE);
+        TextureEntry front = items.get(0);
         CellState plain = new CellState();
 
-        DragGhost.render(context, context.mouseX, context.mouseY, size, size, links.size(), landing, (ctx, x, y, w, h) ->
+        this.grid.drag.renderGhost(context, size, size, landing, (ctx, x, y, w, h) ->
         {
             TextureCellRenderer.render(ctx, front, x, y, w, h, plain);
         });

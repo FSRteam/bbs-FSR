@@ -2,127 +2,185 @@ package mchorse.bbs_mod.ui.textures;
 
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.graphics.window.Window;
-import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.UIContext;
-import mchorse.bbs_mod.ui.framework.elements.IUIElement;
-import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.input.items.UIItemGrid;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
-import mchorse.bbs_mod.ui.framework.tooltips.LabelTooltip;
-import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.GridLayout;
+import mchorse.bbs_mod.ui.utils.ScrollZoomAnchor;
 import mchorse.bbs_mod.ui.utils.cells.CellState;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.colors.Colors;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * The grid of a texture browser: the entries of the current folder (or the search hits) as
- * square cells, zoomed with Ctrl + wheel. It paints and hit-tests its cells and hands every
- * decision — what a click chooses, what a drop does — to the {@link UITextureBrowser browser}.
+ * square cells, zoomed with Ctrl + wheel. The picking, the band, the drag and the keyboard
+ * come from {@link UIItemGrid}; what a choice means — entering a folder, the picker's current
+ * texture, a drop into a folder — is handed to the {@link UITextureBrowser browser}.
  */
-public class UITextureGrid extends UIScrollView
+public class UITextureGrid extends UIItemGrid<TextureEntry>
 {
     public static final int ZOOM_STEP = 8;
     public static final int MIN_CELL = 40;
     public static final int MAX_CELL = 200;
 
     private final UITextureBrowser browser;
-    private final GridLayout layout = new GridLayout(0, 6, 3, 6, 6, 1F);
-    private final CellState state = new CellState();
 
-    private int hoverIndex = -1;
+    /* A folder pressed but not yet released: a release without a drag enters it */
+    private Link pendingFolder;
+
+    /* The entry a Shift-press landed on: a band that goes nowhere extends the pick to it */
+    private TextureEntry marqueeEntry;
 
     public UITextureGrid(UITextureBrowser browser)
     {
+        /* Links are values: the same link is the same pick, whatever the caption says */
+        super(null, (a, b) -> a.link().equals(b.link()), new GridLayout(0, 6, 3, 6, 6, 1F));
+
         this.browser = browser;
 
+        this.multi();
         this.scroll.cancelScrolling();
-        this.scroll.scrollSpeed = 40;
-    }
-
-    public GridLayout getLayout()
-    {
-        return this.layout;
-    }
-
-    public int getCellSize()
-    {
-        return BBSSettings.textureCellSize.get();
-    }
-
-    /** The cells whose rectangles overlap an area in content coordinates. */
-    public List<TextureEntry> getEntriesIn(Area area)
-    {
-        List<TextureEntry> entries = this.browser.getEntries();
-        List<TextureEntry> hit = new ArrayList<>();
-
-        for (int index : this.layout.getIndicesIn(area))
-        {
-            hit.add(entries.get(index));
-        }
-
-        return hit;
-    }
-
-    /** Cursor position in content coordinates (the grid's own space, scroll included). */
-    public int contentY(UIContext context)
-    {
-        return context.mouseY - this.area.y + (int) this.scroll.getScroll();
-    }
-
-    public int contentX(UIContext context)
-    {
-        return context.mouseX - this.area.x;
-    }
-
-    /** Lay the entries out for the current width and size, and tell the scroll how tall that is. */
-    public void relayout()
-    {
-        this.layout.set(this.area.w, this.getCellSize(), this.browser.getEntries().size());
-        this.scroll.scrollSize = this.layout.getContentHeight(true);
-        this.scroll.clamp();
-    }
-
-    @Override
-    public void resize()
-    {
-        super.resize();
-
-        this.relayout();
+        this.setCellSize(BBSSettings.textureCellSize.get());
     }
 
     public void scrollTo(int index)
     {
-        if (index >= 0 && index < this.layout.getCount())
+        this.scrollIntoView(index);
+    }
+
+    /* Geometry */
+
+    @Override
+    protected List<TextureEntry> visible()
+    {
+        return this.browser.getEntries();
+    }
+
+    /* Hooks */
+
+    @Override
+    protected String caption(TextureEntry item)
+    {
+        return item.caption();
+    }
+
+    /** Zoomed out past the name strip (or with a name longer than it), the cell says its name by the cursor. */
+    @Override
+    protected boolean showsCaption(UIContext context, TextureEntry item, int cellWidth)
+    {
+        return TextureCellRenderer.showsWholeName(context, item, cellWidth);
+    }
+
+    @Override
+    protected boolean onOpen(TextureEntry item)
+    {
+        if (item.folder())
         {
-            this.scroll.scrollIntoView(this.layout.getY(index), this.layout.getCellHeight() + 6, 6);
+            this.browser.navigate(item.link());
         }
+        else
+        {
+            this.browser.picker.selectCurrent(item.link());
+        }
+
+        return true;
+    }
+
+    @Override
+    protected boolean onDelete(List<TextureEntry> items)
+    {
+        this.browser.deleteEntries(items);
+
+        return true;
+    }
+
+    /**
+     * A hovered folder is where the drop goes; anywhere else on the grid it's the folder on
+     * show — where Ctrl makes a copy beside the originals. Search hits come from many folders,
+     * so between them there is nowhere to drop.
+     */
+    @Override
+    protected Object dropTargetAt(int x, int y)
+    {
+        int index = this.indexAt(x, y);
+        TextureEntry entry = index == -1 ? null : this.visible().get(index);
+
+        if (entry != null && entry.folder() && !this.drag.isDragging(entry))
+        {
+            return entry.link();
+        }
+
+        return this.browser.isSearching() ? null : this.browser.getPath();
+    }
+
+    @Override
+    protected void reportDropTarget(int x, int y)
+    {
+        Object target = this.dropTargetAt(x, y);
+
+        /* Nothing is ever put between cells here — the listing is sorted, not ordered by hand */
+        if (target != null)
+        {
+            this.drag.setTarget(target);
+        }
+    }
+
+    @Override
+    protected void updateDropTarget(boolean inside, int x, int y)
+    {
+        super.updateDropTarget(inside, x, y);
+
+        if (!inside)
+        {
+            Link folder = this.browser.tree.dropFolderAt(x + this.originX(), y + this.originY(), this.drag.getItems());
+
+            if (folder != null)
+            {
+                this.drag.setTarget(folder);
+            }
+        }
+    }
+
+    @Override
+    protected void onDrop(Object target, List<TextureEntry> items)
+    {
+        this.browser.drop((Link) target, items);
     }
 
     /* Input */
 
     @Override
-    protected IUIElement childrenMouseScrolled(UIContext context)
+    public boolean subMouseClicked(UIContext context)
+    {
+        if (context.mouseButton == 1 && this.area.isInside(context))
+        {
+            int index = this.indexAt(this.contentX(context), this.contentY(context));
+
+            this.browser.setContextEntry(index == -1 ? null : this.visible().get(index));
+        }
+
+        return super.subMouseClicked(context);
+    }
+
+    @Override
+    public boolean subMouseScrolled(UIContext context)
     {
         if (Window.isCtrlPressed() && context.mouseWheel != 0 && this.area.isInside(context))
         {
             this.zoom(context, context.mouseWheel > 0 ? ZOOM_STEP : -ZOOM_STEP);
 
-            return this;
+            return true;
         }
 
-        return super.childrenMouseScrolled(context);
+        return super.subMouseScrolled(context);
     }
 
-    /**
-     * Zoom around the cursor: the content point under it, and the row it belongs to, stay
-     * where they are on the screen while the cells grow or shrink around them.
-     */
     private void zoom(UIContext context, int delta)
     {
         int old = this.getCellSize();
@@ -133,204 +191,138 @@ public class UITextureGrid extends UIScrollView
             return;
         }
 
-        int cursorY = context.mouseY - this.area.y;
-        int row = this.layout.getRowAt(this.contentY(context));
-        float rowOffset = 0F;
-
-        if (row >= 0)
+        ScrollZoomAnchor.keep(this.scroll, context.mouseY - this.area.y, (y) ->
         {
-            float pitch = this.layout.getCellHeight() + this.layout.getGap();
+            int row = this.layout.getRowAt(y);
 
-            rowOffset = (this.contentY(context) - this.layout.getRowY(row)) / pitch;
-        }
-
-        int scroll = (int) this.scroll.getScroll();
-
-        BBSSettings.textureCellSize.set(size);
-        this.relayout();
-
-        if (row >= 0)
+            return row < 0 ? null : Integer.valueOf(row);
+        }, (row) -> new ScrollZoomAnchor.Placement(this.layout.getRowY(row), this.layout.getCellHeight()), () ->
         {
-            float pitch = this.layout.getCellHeight() + this.layout.getGap();
-
-            scroll = Math.round(this.layout.getRowY(row) + rowOffset * pitch - cursorY);
-        }
-
-        this.scroll.setScroll(scroll);
+            BBSSettings.textureCellSize.set(size);
+            this.setCellSize(size);
+        });
     }
 
     @Override
-    public boolean subMouseClicked(UIContext context)
+    protected boolean pressItem(int index, UIContext context)
     {
-        if (!this.area.isInside(context))
-        {
-            return false;
-        }
-
-        if (this.scroll.mouseClicked(context))
-        {
-            return true;
-        }
-
-        int x = this.contentX(context);
-        int y = this.contentY(context);
-        int index = this.layout.getIndex(x, y);
-        List<TextureEntry> entries = this.browser.getEntries();
-        TextureEntry entry = index == -1 || index >= entries.size() ? null : entries.get(index);
-
-        if (context.mouseButton == 1)
-        {
-            this.browser.setContextEntry(entry);
-
-            return false;
-        }
-
-        if (context.mouseButton != 0)
-        {
-            return false;
-        }
-
         if (Window.isShiftPressed())
         {
-            /* Shift + drag stretches a band; a Shift-click that goes nowhere still extends the pick */
-            this.browser.pressMarquee(entry, x, y);
+            /* Shift + drag stretches a band even from a cell; a Shift-click that goes nowhere still extends the pick */
+            this.marqueeEntry = this.visible().get(index);
 
-            return true;
+            return this.pressEmpty(context);
         }
 
-        if (entry == null)
+        return super.pressItem(index, context);
+    }
+
+    /** A plain press also tells the picker: a file becomes the current one, a folder is entered on release. */
+    @Override
+    protected void applySelectionOnClick(TextureEntry item, int index)
+    {
+        super.applySelectionOnClick(item, index);
+
+        if (Window.isCtrlPressed() || Window.isShiftPressed())
         {
-            this.browser.clickEmpty();
-
-            return true;
+            return;
         }
 
-        this.browser.pressEntry(entry, context);
+        if (item.folder())
+        {
+            /* Entered on release, so a press can also begin dragging the folder */
+            this.pendingFolder = item.link();
+        }
+        else
+        {
+            this.browser.picker.onFileClicked(item.link());
+        }
+    }
 
-        return true;
+    /** Any cell can be carried: the whole pick when it's one of the picked, itself alone otherwise. */
+    @Override
+    protected List<TextureEntry> dragPayload(TextureEntry item)
+    {
+        return this.selection.contains(item) ? new ArrayList<>(this.selection.getItems()) : Collections.singletonList(item);
     }
 
     @Override
-    public boolean subMouseReleased(UIContext context)
+    protected void cancelGesture()
     {
-        this.browser.release();
+        this.pendingFolder = null;
+        this.marqueeEntry = null;
 
-        return false;
+        super.cancelGesture();
+    }
+
+    @Override
+    protected void release()
+    {
+        Link folder = this.pendingFolder;
+        TextureEntry shifted = this.marqueeEntry;
+        boolean dragged = this.drag.isActive();
+        boolean clicked = this.marquee.isPressed() && !this.marquee.isActive();
+
+        this.pendingFolder = null;
+        this.marqueeEntry = null;
+
+        super.release();
+
+        if (shifted != null && clicked)
+        {
+            this.selection.range(shifted, this.scope(), this.visible());
+            this.fireCallback();
+        }
+
+        if (folder != null && !dragged)
+        {
+            this.browser.navigate(folder);
+        }
+    }
+
+    @Override
+    protected boolean subKeyPressed(UIContext context)
+    {
+        int before = this.cursor;
+        boolean handled = super.subKeyPressed(context);
+
+        /* The keyboard walked to another cell: that cell is what the browser shows now, the way a click would */
+        if (handled && this.cursor != before && this.cursor >= 0 && this.cursor < this.visible().size())
+        {
+            this.browser.show(this.visible().get(this.cursor));
+        }
+
+        return handled;
     }
 
     /* Rendering */
 
     @Override
-    public void render(UIContext context)
+    protected void renderCell(UIContext context, TextureEntry item, int x, int y, int w, int h, CellState state)
     {
-        this.scroll.drag(context.mouseX, context.mouseY);
+        /* The chosen cell is the picker's current texture (or the folder on show), not the last picked */
+        state.selected = item.link().equals(this.browser.getCurrent()) || (item.folder() && this.browser.isCurrentFolder(item.link()));
+        state.dropTarget = item.folder() && this.drag.isTarget(item.link());
 
-        this.updateHover(context);
+        TextureCellRenderer.render(context, item, x, y, w, h, state);
+    }
 
-        context.batcher.clip(this.area, context);
-        this.renderCells(context);
-        this.browser.marquee.render(context, this.area.x, this.area.y - (int) this.scroll.getScroll());
-        context.batcher.unclip(context);
+    @Override
+    protected void renderContent(UIContext context)
+    {
+        super.renderContent(context);
 
-        this.scroll.renderScrollbar(context.batcher);
-
-        if (this.browser.getEntries().isEmpty())
+        if (this.visible().isEmpty())
         {
             FontRenderer font = context.batcher.getFont();
             String label = (this.browser.isSearching() ? UIKeys.TEXTURES_BROWSER_NO_RESULTS : UIKeys.TEXTURE_NO_DATA).get();
 
             context.batcher.text(label, this.area.mx(font.getWidth(label)), this.area.my() - 4, Colors.GRAY);
         }
-
-        super.render(context);
     }
 
-    /**
-     * Who the cursor is on, and what the drag would do: a hovered folder is where the drop
-     * goes; anywhere else on the grid it's the folder on show — where Ctrl makes a copy beside
-     * the originals. Search hits come from many folders, so between them there is nowhere to
-     * drop. Reported here so the tree, painted after this grid, can override it with a folder
-     * of its own.
-     */
-    private void updateHover(UIContext context)
-    {
-        boolean inside = this.area.isInside(context) && !context.hasContextMenu();
-        int x = this.contentX(context);
-        int y = this.contentY(context);
-        List<TextureEntry> entries = this.browser.getEntries();
-        TextureDrag drag = this.browser.drag;
-
-        this.hoverIndex = inside ? this.layout.getIndex(x, y) : -1;
-
-        if (this.hoverIndex >= entries.size())
-        {
-            this.hoverIndex = -1;
-        }
-
-        if (drag.isActive())
-        {
-            TextureEntry entry = this.hoverIndex == -1 ? null : entries.get(this.hoverIndex);
-
-            if (entry != null && entry.folder() && !drag.isDragging(entry.link()))
-            {
-                drag.setTarget(entry.link());
-            }
-            else if (inside && !this.browser.isSearching())
-            {
-                drag.setTarget(this.browser.getPath());
-            }
-        }
-
-        this.updateTooltip();
-    }
-
-    /** Zoomed out past the name strip (or with a name longer than it), the cell says its name by the cursor. */
-    private void updateTooltip()
-    {
-        LabelTooltip tooltip = null;
-
-        if (this.hoverIndex != -1)
-        {
-            TextureEntry entry = this.browser.getEntries().get(this.hoverIndex);
-
-            if (!TextureCellRenderer.showsWholeName(this.getContext(), entry, this.layout.getCellWidth()))
-            {
-                tooltip = new LabelTooltip(IKey.raw(entry.caption()), Direction.BOTTOM);
-            }
-        }
-
-        this.tooltip = tooltip;
-    }
-
-    private void renderCells(UIContext context)
-    {
-        List<TextureEntry> entries = this.browser.getEntries();
-        TextureDrag drag = this.browser.drag;
-        Link current = this.browser.getCurrent();
-        int scroll = (int) this.scroll.getScroll();
-        int cellW = this.layout.getCellWidth();
-        int cellH = this.layout.getCellHeight();
-
-        for (int i = 0; i < entries.size(); i++)
-        {
-            int cy = this.area.y + this.layout.getY(i) - scroll;
-
-            if (cy + cellH < this.area.y || cy > this.area.ey())
-            {
-                continue;
-            }
-
-            TextureEntry entry = entries.get(i);
-            int cx = this.area.x + this.layout.getX(i);
-
-            this.state.reset();
-            this.state.hover = i == this.hoverIndex && !drag.isActive();
-            this.state.selected = entry.link().equals(current) || (entry.folder() && this.browser.isCurrentFolder(entry.link()));
-            this.state.picked = this.browser.selection.contains(entry.link());
-            this.state.dragged = drag.isDragging(entry.link());
-            this.state.dropTarget = entry.folder() && drag.isTarget(entry.link());
-
-            TextureCellRenderer.render(context, entry, cx, cy, cellW, cellH, this.state);
-        }
-    }
+    /** The ghost is the browser's: drawn over the folder tree too, which is painted after this grid. */
+    @Override
+    protected void renderDragGhost(UIContext context)
+    {}
 }
