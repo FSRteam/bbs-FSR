@@ -143,6 +143,8 @@ public class FilmEntityRenderer
             .color(context.color)
             .timeline(context.timelineProperties, context.timelineTick, context.timelinePlaying);
 
+        formContext.viewportHeight = context.gizmoViewportHeight;
+
         if (relative)
         {
             PoseStack semanticWorld = new PoseStack();
@@ -189,7 +191,7 @@ public class FilmEntityRenderer
             if (UIBaseMenu.shouldRenderAxes())
             {
                 if (context.bone != null) renderAxes(context.bone, context.local, context.space, context.gizmoView, context.map, form, formContext, stack, gizmoFrame);
-                if (!context.gizmoOnly && context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack, gizmoFrame, context.gizmoViewportHeight);
+                if (!context.gizmoOnly && context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack, gizmoFrame);
             }
 
         }
@@ -334,7 +336,7 @@ public class FilmEntityRenderer
      * user actually drags ({@link Gizmo#captureVisual}), and the preview runs after it in the same
      * pass, so sharing the method would leave every drag anchored on the preview bone instead.</p>
      */
-    private static void renderPreviewAxes(String bone, boolean local, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame, float viewportHeight)
+    private static void renderPreviewAxes(String bone, boolean local, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame)
     {
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
@@ -366,7 +368,7 @@ public class FilmEntityRenderer
         {
             MatrixStackUtils.multiply(stack, matrix);
 
-            float distanceScale = GizmoSize.getScale(new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose()), RenderSystem.getProjectionMatrix(), viewportHeight);
+            float distanceScale = GizmoSize.getScale(new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose()), RenderSystem.getProjectionMatrix(), context.viewportHeight);
 
             stack.scale(distanceScale, distanceScale, distanceScale);
             Draw.coolerAxes(stack, 0.25F, 0.008F, 0.26F, 0.018F);

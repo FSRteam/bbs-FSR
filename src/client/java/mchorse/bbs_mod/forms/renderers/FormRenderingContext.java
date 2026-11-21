@@ -28,6 +28,7 @@ public class FormRenderingContext
     public int light;
     public int overlay;
     public float transition;
+    public float viewportHeight;
     public final Camera camera = new Camera();
     public StencilMap stencilMap;
     public boolean ui;
@@ -71,6 +72,7 @@ public class FormRenderingContext
         this.light = light;
         this.overlay = overlay;
         this.transition = transition;
+        this.viewportHeight = 0F;
         this.stencilMap = null;
         this.ui = false;
         this.color = 0xffffffff;
