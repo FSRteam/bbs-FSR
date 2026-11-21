@@ -1495,6 +1495,17 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     public void renderHUD(UIContext context, Area area)
     {
+        PreviewHud hud = this.hud.previewHud;
+        hud.begin(area);
+        int navSize = this.orbitGizmo.isActive() ? this.orbitGizmo.getSize() : 24;
+        Area navBlock = hud.push(PreviewHud.Anchor.BOTTOM_LEFT, navSize, navSize);
+
+        this.renderHUD(context, hud, navBlock);
+        hud.flush(context);
+    }
+
+    public void renderHUD(UIContext context, PreviewHud hud, Area navBlock)
+    {
         for (mchorse.bbs_mod.api.client.editor.FilmEditorTool tool : this.addonTools)
         {
             tool.updateTool(context);
@@ -1515,7 +1526,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         try
         {
-            this.renderViewHUD(context, area);
+            this.hud.renderViewHUD(context, hud, navBlock);
             if (this.preview != null)
             {
                 this.cameraMarkers.renderOverlay(this.panel, this.preview, context);
@@ -1526,12 +1537,6 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             Gizmo.INSTANCE.restoreVisualState(this.previousVisualState);
         }
-    }
-
-
-    private void renderViewHUD(UIContext context, Area area)
-    {
-        this.hud.renderViewHUD(context, area);
     }
 
     void renderPickingPreview(UIContext context, Area area)

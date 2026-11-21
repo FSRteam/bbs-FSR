@@ -53,7 +53,7 @@ public class VideoFormRenderer extends BillboardFormRenderer<VideoForm>
             /* No file picked, or the first frame is still decoding - show SOMETHING */
             int size = 32;
 
-            context.batcher.icon(Icons.VIDEO_CAMERA, Colors.WHITE, (x1 + x2) / 2, (y1 + y2) / 2, 0.5F, 0.5F);
+            context.batcher.scaledIcon(Icons.VIDEO_CAMERA, Colors.WHITE, (x1 + x2 - size) / 2, (y1 + y2 - size) / 2, size);
         }
     }
 

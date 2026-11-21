@@ -15,6 +15,7 @@ import mchorse.bbs_mod.client.render.multiview.ViewRenderState;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.film.FilmEntityRenderer;
+import mchorse.bbs_mod.film.FilmTarget;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -68,6 +69,8 @@ public class FilmStencilPicker
     boolean stencilAlt;
 
     Replay stencilReplay;
+
+    private FilmTarget stencilGizmoTarget;
 
     private TargetPick targetPick;
     private TargetPick stencilTargetPick;
@@ -542,8 +545,10 @@ public class FilmStencilPicker
 
         TargetPick request = this.targetRequest();
 
+        FilmTarget target = this.controller.getEditTarget();
+
         if (sample != this.stencilFrame || this.stencilAlt != altPressed || this.stencilReplay != this.controller.getReplay()
-            || this.stencilTargetPick != request)
+            || this.stencilTargetPick != request || !target.equals(this.stencilGizmoTarget))
         {
             if (sample != this.controller.worldContextFrame || sample != BBSRendering.getSceneFrameId())
             {
@@ -563,6 +568,7 @@ public class FilmStencilPicker
             this.stencilFrame = rendered ? sample : -1L;
             this.stencilAlt = altPressed;
             this.stencilReplay = this.controller.getReplay();
+            this.stencilGizmoTarget = target;
             this.stencilTargetPick = request;
 
             return;
@@ -577,7 +583,8 @@ public class FilmStencilPicker
 
         return state != null && state.hasFrame() && this.stencilFrame >= 0L
             && this.stencilFrame == state.getSampleFrameId() && this.stencilAlt == altPressed
-            && this.stencilReplay == this.controller.getReplay() && this.stencilTargetPick == this.targetRequest();
+            && this.stencilReplay == this.controller.getReplay() && this.stencilTargetPick == this.targetRequest()
+            && this.controller.getEditTarget().equals(this.stencilGizmoTarget);
     }
 
     public boolean isViewportPickReady()

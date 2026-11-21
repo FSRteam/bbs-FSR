@@ -29,6 +29,7 @@ public class FilmControllerHud
         this.controller = controller;
     }
 
+    /** Standalone layout for the retained whole-frame controller rendering entry. */
     final PreviewHud previewHud = new PreviewHud();
 
     String getTargetLabel(FilmTarget target)
@@ -48,10 +49,9 @@ public class FilmControllerHud
     }
 
 
-    void renderViewHUD(UIContext context, Area area)
+    void renderViewHUD(UIContext context, PreviewHud hud, Area navBlock)
     {
-        PreviewHud hud = this.previewHud;
-        hud.begin(area);
+        Area area = hud.getFrame();
         FontRenderer font = context.batcher.getFont();
         UIFilmController scene = this.controller.panel.getController();
         int mode = scene.getMouseMode();
@@ -105,7 +105,8 @@ public class FilmControllerHud
             {
                 Area thumbnail = new Area();
                 thumbnail.setSize(40, 40);
-                thumbnail.setPos(area.ex() - PreviewHud.MARGIN - 40, Math.max(area.y, (first.y + last.ey()) / 2 - 20));
+                thumbnail.setPos(area.ex() - PreviewHud.MARGIN - 40,
+                    Math.max(first.y - PreviewHud.MARGIN, (first.y + last.ey()) / 2 - 20));
                 hud.backdrop(thumbnail);
                 hud.include(PreviewHud.Anchor.TOP_RIGHT, thumbnail, c ->
                 {
@@ -132,7 +133,6 @@ public class FilmControllerHud
                 case 5 -> UIKeys.FILM_GROUPS_EXTRA_2.get();
                 default -> UIKeys.FILM_GROUPS_LEFT_STICK.get();
             };
-            hud.reserve(PreviewHud.Anchor.BOTTOM_LEFT, 30);
             hud.label(context, PreviewHud.Anchor.BOTTOM_LEFT, label, BBSSettings.textColor(), BBSSettings.primaryColor(Colors.A100));
             int size = (int) (Math.min(area.w, area.h) * 0.75F);
             int x = area.x + (area.w - size) / 2;
@@ -160,8 +160,6 @@ public class FilmControllerHud
             }
         }
 
-        hud.flush(context);
-
         /* The visual gizmo draws here, before the picking preview, so the bone /
          * sphere hover highlights composite on top of it. It moved out of the
          * world pass into the UI pipeline so its translucent parts blend
@@ -173,7 +171,7 @@ public class FilmControllerHud
 
         this.controller.renderPickingPreview(context, area);
 
-        this.controller.orbitGizmo.render(context, area);
+        this.controller.orbitGizmo.renderInBlock(context, navBlock);
 
         this.controller.orbit.handleOrbiting(context);
     }

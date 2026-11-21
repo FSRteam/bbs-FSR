@@ -81,15 +81,33 @@ public class OrbitViewGizmo
             && !this.controller.isControlling();
     }
 
+    /** Side of the square reserved by the preview HUD for this navigation ball. */
+    public int getSize()
+    {
+        return Math.round(this.radius() * 2F);
+    }
+
+    /** Legacy entry point whose area is the complete preview frame. */
     public boolean mouseClicked(UIContext context, Area area)
+    {
+        return this.mouseClicked(context, this.centerX(area), this.centerY(area));
+    }
+
+    /** The same hit geometry centered in the block reserved by the preview HUD. */
+    public boolean mouseClickedInBlock(UIContext context, Area block)
+    {
+        return this.mouseClicked(context, block.mx(), block.my());
+    }
+
+    private boolean mouseClicked(UIContext context, float cx, float cy)
     {
         if (!this.isActive() || context.mouseButton != 0)
         {
             return false;
         }
 
-        float dx = context.mouseX - this.centerX(area);
-        float dy = context.mouseY - this.centerY(area);
+        float dx = context.mouseX - cx;
+        float dy = context.mouseY - cy;
         float r = this.radius() + 2F;
 
         if (dx * dx + dy * dy > r * r)
@@ -99,7 +117,7 @@ public class OrbitViewGizmo
 
         this.pressed = true;
         this.dragged = false;
-        this.pressedAxis = this.getHoveredAxis(this.getBalls(area), context.mouseX, context.mouseY);
+        this.pressedAxis = this.getHoveredAxis(this.getBalls(cx, cy), context.mouseX, context.mouseY);
         this.lastX = this.pressX = context.mouseX;
         this.lastY = this.pressY = context.mouseY;
 
@@ -132,7 +150,19 @@ public class OrbitViewGizmo
         this.reset();
     }
 
+    /** Legacy entry point whose area is the complete preview frame. */
     public void render(UIContext context, Area area)
+    {
+        this.render(context, this.centerX(area), this.centerY(area));
+    }
+
+    /** Draw at the same block center used by mouseClickedInBlock. */
+    public void renderInBlock(UIContext context, Area block)
+    {
+        this.render(context, block.mx(), block.my());
+    }
+
+    private void render(UIContext context, float cx, float cy)
     {
         if (!this.isActive())
         {
@@ -143,14 +173,12 @@ public class OrbitViewGizmo
 
         this.handleDragging(context);
 
-        float cx = this.centerX(area);
-        float cy = this.centerY(area);
         float mdx = context.mouseX - cx;
         float mdy = context.mouseY - cy;
         float hoverRadius = this.radius() + 2F;
         boolean hover = this.pressed || mdx * mdx + mdy * mdy <= hoverRadius * hoverRadius;
 
-        Ball[] balls = this.getBalls(area);
+        Ball[] balls = this.getBalls(cx, cy);
         int hoveredAxis = hover && !this.dragged ? this.getHoveredAxis(balls, context.mouseX, context.mouseY) : -1;
         Batcher2D batcher = context.batcher;
 
@@ -258,12 +286,10 @@ public class OrbitViewGizmo
         return area.ey() - PADDING - this.radius();
     }
 
-    private Ball[] getBalls(Area area)
+    private Ball[] getBalls(float cx, float cy)
     {
         Matrix3f view = new Matrix3f(this.controller.getViewCamera().view);
         float anchorYaw = this.controller.orbit.getAnchorYaw();
-        float cx = this.centerX(area);
-        float cy = this.centerY(area);
         float arm = this.radius() - this.ballRadius();
         Ball[] balls = new Ball[AXES.length];
         Vector3f vector = new Vector3f();

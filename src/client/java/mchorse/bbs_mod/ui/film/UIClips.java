@@ -2250,14 +2250,23 @@ public class UIClips extends UITimelineCanvas
         area.render(batcher, BBSSettings.deepSurface());
         batcher.clip(this.vertical.area.x, contentTop, this.vertical.area.w, contentHeight, context);
 
-        for (int i = 0; i < this.layers; i++)
-        {
-            int ly = this.toLayerY(i);
+        batcher.beginBatch();
 
-            if (i % 2 != 0)
+        try
+        {
+            for (int i = 0; i < this.layers; i++)
             {
-                batcher.box(leftEdge, ly, this.area.ex(), ly + h, BBSSettings.baseSurface());
+                int ly = this.toLayerY(i);
+
+                if (i % 2 != 0)
+                {
+                    batcher.box(leftEdge, ly, this.area.ex(), ly + h, BBSSettings.baseSurface());
+                }
             }
+        }
+        finally
+        {
+            batcher.endBatch();
         }
 
         this.renderOutOfRange(batcher, leftEdge);
@@ -2292,6 +2301,12 @@ public class UIClips extends UITimelineCanvas
             IUIClipRenderer renderer = this.renderers.get(clip);
 
             Area clipArea = this.getClipArea(clip, CLIP_AREA, h);
+
+            if (clipArea.ex() < area.x - 20 || clipArea.x > area.ex() + 20)
+            {
+                continue;
+            }
+
             boolean selected = this.hasSelected(i);
 
             if (!this.hasEmbeddedView())

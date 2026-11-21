@@ -110,6 +110,10 @@ public class UIFilmPreview extends UIElement
     /** Whether the icon bar is currently shown - see {@link #updateIconsVisibility(UIContext)} */
     private boolean iconsVisible = true;
 
+    private static final int CURSOR_SIZE = 24;
+    private final PreviewHud hud = new PreviewHud();
+    private final Area navBlock = new Area();
+
     public UIFilmPreview(UIFilmPanel filmPanel)
     {
         this(filmPanel, false);
@@ -360,7 +364,7 @@ public class UIFilmPreview extends UIElement
             });
         });
 
-        this.icons.add(this.onionSkin, this.motionPath, this.plause, this.teleport, this.flight, this.control, this.perspective, this.recordReplay, this.recordVideo);
+        this.icons.add(this.onionSkin, this.motionPath, this.teleport, this.flight, this.plause, this.control, this.perspective, this.recordReplay, this.recordVideo);
         this.add(this.icons);
         this.setupViewTools();
 
@@ -899,7 +903,7 @@ public class UIFilmPreview extends UIElement
                 this,
                 () ->
                 {
-                    handled[0] = this.getViewController().orbitGizmo.mouseClicked(context, area)
+                    handled[0] = this.getViewController().orbitGizmo.mouseClickedInBlock(context, this.navBlock)
                         || this.placementGizmo.mouseClicked(context, area)
                         || this.getViewController().clickViewport(context);
                 }
@@ -1105,7 +1109,17 @@ public class UIFilmPreview extends UIElement
             }
         }
 
-        if (!this.getViewController().orbitGizmo.isActive())
+        this.updateIconsVisibility(context);
+        this.hud.begin(area);
+        this.hud.reserve(PreviewHud.Anchor.BOTTOM_CENTER, area.ey() - this.icons.area.y);
+        this.hud.reserve(PreviewHud.Anchor.TOP_LEFT, this.viewTools.area.ey() - area.y);
+        this.hud.reserve(PreviewHud.Anchor.TOP_RIGHT, this.viewTools.area.ey() - area.y);
+
+        boolean ball = this.getViewController().orbitGizmo.isActive();
+        int navSize = ball ? this.getViewController().orbitGizmo.getSize() : CURSOR_SIZE;
+        this.navBlock.copy(this.hud.push(PreviewHud.Anchor.BOTTOM_LEFT, navSize, navSize));
+
+        if (!ball)
         {
             this.renderCursor(context);
         }
@@ -1151,7 +1165,7 @@ public class UIFilmPreview extends UIElement
 
         this.placementGizmo.render(context, area);
 
-        this.getViewController().renderHUD(context, area);
+        this.getViewController().renderHUD(context, this.hud, this.navBlock);
         this.renderViewStatus(context);
 
         if (this.panel.replayEditor.isVisible() && BBSSettings.audioWaveformVisibleInPreview.get())
@@ -1183,8 +1197,6 @@ public class UIFilmPreview extends UIElement
             }
         }
 
-        this.updateIconsVisibility(context);
-
         if (this.iconsVisible)
         {
             Area a = this.icons.area;
@@ -1193,15 +1205,16 @@ public class UIFilmPreview extends UIElement
             int barShade = BBSSettings.color(BBSSettings.chromeSurface(), Colors.A50);
             context.batcher.gradientVBox(a.x, a.y, a.ex(), a.ey(), 0, barShade);
 
-            if (this.getViewController().isControlling())
-            {
-                String s = UIKeys.FILM_CONTROLLER_CONTROL_MODE_TOOLTIP.format(KeyCodes.getName(Keys.FILM_CONTROLLER_TOGGLE_CONTROL.getMainKey())).get();
-                int w = context.batcher.getFont().getWidth(s);
-                int height = context.batcher.getFont().getHeight();
-
-                context.batcher.textCard(s, a.mx(w), a.y - height - 5);
-            }
         }
+
+        if (this.getViewController().isControlling())
+        {
+            String hint = UIKeys.FILM_CONTROLLER_CONTROL_MODE_TOOLTIP.format(KeyCodes.getName(Keys.FILM_CONTROLLER_TOGGLE_CONTROL.getMainKey())).get();
+
+            this.hud.label(context, PreviewHud.Anchor.BOTTOM_CENTER, hint, BBSSettings.textColor(), Colors.A50);
+        }
+
+        this.hud.flush(context);
 
         this.cameraToggle.active(this.view.getNavigation().isInCameraView());
         this.cameraToggle.tooltip(this.view.getNavigation().isInCameraView() ? UIKeys.FILM_VIEW_EXIT_CAMERA : UIKeys.FILM_VIEW_CAMERA);
@@ -1237,7 +1250,7 @@ public class UIFilmPreview extends UIElement
                 name = UIKeys.FILM_VIEW_MISSING_CAMERA.get();
             }
 
-            context.batcher.textCard(name, this.area.x + 6, this.viewTools.area.ey() + 3, BBSSettings.textColor(), Colors.A50);
+            this.hud.label(context, PreviewHud.Anchor.TOP_LEFT, name, BBSSettings.textColor(), Colors.A50);
         }
 
         if (state != null)
@@ -1282,7 +1295,7 @@ public class UIFilmPreview extends UIElement
                     color = BBSSettings.warningColor();
                 }
 
-                context.batcher.textCard(detail, this.area.x + 6, this.icons.area.y - 23, BBSSettings.mutedTextColor(), Colors.A50);
+                this.hud.label(context, PreviewHud.Anchor.BOTTOM_LEFT, detail, BBSSettings.mutedTextColor(), Colors.A50);
             }
 
             Throwable failure = state.getFailure();
@@ -1305,7 +1318,7 @@ public class UIFilmPreview extends UIElement
             }
         }
 
-        context.batcher.textCard(status, this.area.x + 6, this.icons.area.y - 36, color, Colors.A50);
+        this.hud.label(context, PreviewHud.Anchor.BOTTOM_LEFT, status, color, Colors.A50);
     }
 
     private IKey getShaderStatusLabel()
@@ -1333,7 +1346,7 @@ public class UIFilmPreview extends UIElement
         stack.pushMatrix();
 
         stack.mul(context.batcher.getContext().pose().last().pose());
-        stack.translate(area.x + 16, area.ey() - 12, 0F);
+        stack.translate(this.navBlock.mx(), this.navBlock.my(), 0F);
         stack.rotate(Axis.XN.rotation(camera.rotation.x));
         stack.rotate(Axis.YP.rotation(camera.rotation.y));
         stack.scale(-1F, -1F, -1F);
