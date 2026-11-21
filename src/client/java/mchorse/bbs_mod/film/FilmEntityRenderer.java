@@ -1,7 +1,6 @@
 package mchorse.bbs_mod.film;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.api.client.events.FilmGizmoEvents;
 import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.camera.data.Point;
@@ -26,6 +25,7 @@ import mchorse.bbs_mod.ui.film.replays.UIReplayPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.framework.elements.utils.StencilMap;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.GizmoSize;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.StringUtils;
@@ -189,7 +189,7 @@ public class FilmEntityRenderer
             if (UIBaseMenu.shouldRenderAxes())
             {
                 if (context.bone != null) renderAxes(context.bone, context.local, context.space, context.gizmoView, context.map, form, formContext, stack, gizmoFrame);
-                if (!context.gizmoOnly && context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack, gizmoFrame);
+                if (!context.gizmoOnly && context.bone2 != null && context.map == null) renderPreviewAxes(context.bone2, context.local2, form, formContext, stack, gizmoFrame, context.gizmoViewportHeight);
             }
 
         }
@@ -334,7 +334,7 @@ public class FilmEntityRenderer
      * user actually drags ({@link Gizmo#captureVisual}), and the preview runs after it in the same
      * pass, so sharing the method would leave every drag anchored on the preview bone instead.</p>
      */
-    private static void renderPreviewAxes(String bone, boolean local, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame)
+    private static void renderPreviewAxes(String bone, boolean local, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame, float viewportHeight)
     {
         String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
         Form root = FormUtils.getRoot(form);
@@ -366,10 +366,7 @@ public class FilmEntityRenderer
         {
             MatrixStackUtils.multiply(stack, matrix);
 
-            Vector3f cameraRelative = stack.last().pose().getTranslation(new Vector3f());
-            Matrix4f projection = RenderSystem.getProjectionMatrix();
-            float fov = projection.m33() == 0 ? (float) (2D * Math.atan(1D / projection.m11())) : BBSSettings.getFov();
-            float distanceScale = BBSSettings.getScreenSizeScale(cameraRelative.length(), fov);
+            float distanceScale = GizmoSize.getScale(new Matrix4f(RenderSystem.getModelViewMatrix()).mul(stack.last().pose()), RenderSystem.getProjectionMatrix(), viewportHeight);
 
             stack.scale(distanceScale, distanceScale, distanceScale);
             Draw.coolerAxes(stack, 0.25F, 0.008F, 0.26F, 0.018F);

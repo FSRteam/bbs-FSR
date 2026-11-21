@@ -36,6 +36,9 @@ public class FilmControllerContext
     public TransformSpace space = TransformSpace.LOCAL;
     public Matrix4f gizmoView;
 
+    /** Final display height in UI pixels, even when the scene uses a larger framebuffer. */
+    public float gizmoViewportHeight;
+
     public String bone2;
     public boolean local2;
 
@@ -64,6 +67,7 @@ public class FilmControllerContext
         this.local = false;
         this.space = TransformSpace.LOCAL;
         this.gizmoView = null;
+        this.gizmoViewportHeight = 0F;
         this.bone2 = null;
         this.local2 = false;
         this.gizmoTarget = FilmTarget.NONE;
@@ -154,6 +158,13 @@ public class FilmControllerContext
     {
         this.space = space;
         this.gizmoView = view;
+
+        return this;
+    }
+
+    public FilmControllerContext gizmoViewportHeight(float height)
+    {
+        this.gizmoViewportHeight = height;
 
         return this;
     }

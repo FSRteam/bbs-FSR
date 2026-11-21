@@ -101,7 +101,7 @@ public class TextureCellRenderer
         int size = Math.max(16, Math.min(w / 2, room - 8));
         int cy = y + room / 2;
 
-        context.batcher.iconArea(Icons.FOLDER, state.hover ? Colors.LIGHTEST_GRAY : Colors.WHITE, x + (w - size) / 2, cy - size / 2, size, size);
+        context.batcher.scaledIcon(Icons.FOLDER, state.hover ? Colors.LIGHTEST_GRAY : Colors.WHITE, x + (w - size) / 2, cy - size / 2, size);
     }
 
     private static void renderTexture(UIContext context, TextureEntry entry, int x, int y, int w, int h)

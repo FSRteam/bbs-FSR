@@ -63,7 +63,7 @@ public class UISplitter extends UIDraggable
         this.key = key;
         this.fraction = fraction;
         this.defaultValue = defaultValue;
-        this.value = BBSSettings.editorLayoutSettings.getSplitSize(key, defaultValue);
+        this.value = BBSSettings.editorLayoutSettings == null ? defaultValue : BBSSettings.editorLayoutSettings.getSplitSize(key, defaultValue);
         this.min = 0F;
         this.max = () -> fraction ? 1F : Float.MAX_VALUE;
 

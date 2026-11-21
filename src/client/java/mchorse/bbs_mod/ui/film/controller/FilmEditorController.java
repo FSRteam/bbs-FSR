@@ -284,6 +284,7 @@ public class FilmEditorController extends BaseFilmController
             .transition(this.getTransition(entity, context.tickDelta()))
             .bone(aBone, local)
             .gizmoSpace(this.controller.getBoneSpace(), this.controller.getGizmoView())
+            .gizmoViewportHeight(this.controller.getViewArea().h)
             .bone2(aBone2, local2)
             .anchorGizmo(anchorGizmo, this.controller.getAnchorLocal())
             .gizmoTarget(this.isCurrent(entity) && !this.controller.panel.recorder.isRecording()
