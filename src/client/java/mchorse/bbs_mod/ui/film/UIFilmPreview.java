@@ -678,6 +678,7 @@ public class UIFilmPreview extends UIElement
 
     public void cancelViewInteraction()
     {
+        this.placementGizmo.cancel();
         this.panel.cancelFlight(this);
 
         if (this.navigationGesture.isActive())
@@ -949,6 +950,11 @@ public class UIFilmPreview extends UIElement
     @Override
     protected void subMouseCanceled(UIContext context)
     {
+        if (context.mouseButton == 0)
+        {
+            this.placementGizmo.cancel();
+        }
+
         /* The preview owns the captured press in the UI tree, while orbit and
          * gizmo state live on the sibling controller. Cancellation must reach
          * that controller without synthesizing a committing release. The

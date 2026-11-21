@@ -50,7 +50,7 @@ public class UIFilmDetailsOverlayPanel extends UIOverlayPanel
         this.description = new UITextarea<>((t) -> this.film.description.set(t));
         this.description.setText(film.description.get());
         this.description.background().wrap(true).padding(8);
-        this.description.h(88);
+        this.description.h(88).expand();
 
         /* Layout: grouped spacing — meta, then description block, then stats */
         UIElement column = UI.column(
@@ -65,7 +65,7 @@ public class UIFilmDetailsOverlayPanel extends UIOverlayPanel
             this.timeLabel.marginTop(3)
         );
 
-        column.relative(this.content).xy(6, 6).w(1F, -12).h(1F, -12);
+        column.relative(this.content).xy(6, 6).w(1F, -12).hTo(this.content.area, 1F, -6);
 
         this.content.add(column);
     }

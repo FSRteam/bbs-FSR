@@ -157,17 +157,28 @@ public class UIPlacementGizmo
 
     public boolean mouseReleased(UIContext context)
     {
-        if (this.mode == MODE_NONE)
+        if (context.mouseButton != 0 || this.mode == MODE_NONE)
         {
             return false;
+        }
+
+        this.cancel();
+
+        return true;
+    }
+
+    public void cancel()
+    {
+        if (this.mode == MODE_NONE)
+        {
+            return;
         }
 
         this.mode = MODE_NONE;
         this.startPlacement = null;
         this.editedValue = null;
+        this.panel.getUndoHandler().submitUndo(true);
         this.panel.cameraEditor.markLastUndoNoMerging();
-
-        return true;
     }
 
     private void updateDrag(UIContext context, Area viewport, OverlayBox box)
@@ -177,7 +188,7 @@ public class UIPlacementGizmo
         if (value != this.editedValue || value == null)
         {
             /* The clip got deselected or edited away mid-drag */
-            this.mode = MODE_NONE;
+            this.cancel();
 
             return;
         }
@@ -283,6 +294,8 @@ public class UIPlacementGizmo
 
         if (box == null)
         {
+            this.cancel();
+
             return;
         }
 
