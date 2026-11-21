@@ -18,6 +18,7 @@ import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
@@ -41,6 +42,8 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
+
+import java.util.function.Supplier;
 
 import java.util.EnumSet;
 
@@ -317,11 +320,11 @@ public class Gizmo
 
         return switch (handle.op)
         {
-            case MOVE, SCREEN -> this.mode.shows(Op.MOVE) && BBSSettings.gizmoShowTranslate.get();
-            case SCALE, SCALE_ALL -> this.mode.shows(Op.SCALE) && BBSSettings.gizmoShowScale.get();
-            case ROTATE -> this.mode.shows(Op.ROTATE) && BBSSettings.gizmoShowRotate.get();
-            case VIEW -> this.mode.shows(Op.VIEW) && BBSSettings.gizmoShowViewRotate.get();
-            case TRACKBALL -> this.hasSphere() && BBSSettings.gizmoShowSphere.get();
+            case MOVE, SCREEN -> this.mode.shows(Op.MOVE) && Element.TRANSLATE.isVisible();
+            case SCALE, SCALE_ALL -> this.mode.shows(Op.SCALE) && Element.SCALE.isVisible();
+            case ROTATE -> this.mode.shows(Op.ROTATE) && Element.ROTATE.isVisible();
+            case VIEW -> this.mode.shows(Op.VIEW) && Element.VIEW_ROTATE.isVisible();
+            case TRACKBALL -> this.hasSphere() && Element.SPHERE.isVisible();
         };
     }
 
@@ -600,7 +603,7 @@ public class Gizmo
                 gesture.enableScreenTranslate(drag);
                 break;
             case TRACKBALL:
-                if (BBSSettings.rotate3dSphere.get()) gesture.enableSphereRotate(drag);
+                if (Element.SPHERE.isVisible()) gesture.enableSphereRotate(drag);
                 break;
             case VIEW:
                 gesture.enableViewRotate(drag);
@@ -1216,17 +1219,16 @@ public class Gizmo
         final Handle active = Gizmo.this.activeDragHandle();
         final HandleMask mask = Gizmo.this.handleMask;
 
-        final boolean showMove = BBSSettings.gizmoShowTranslate.get() && this.mask.allows(Op.MOVE) && Gizmo.this.mode.shows(Op.MOVE)
+        final boolean showMove = Element.TRANSLATE.isVisible() && this.mask.allows(Op.MOVE) && Gizmo.this.mode.shows(Op.MOVE)
             && (this.active == null || this.active.op == Op.MOVE || this.active.op == Op.SCREEN);
-        final boolean showScale = BBSSettings.gizmoShowScale.get() && this.mask.allows(Op.SCALE) && Gizmo.this.mode.shows(Op.SCALE)
+        final boolean showScale = Element.SCALE.isVisible() && this.mask.allows(Op.SCALE) && Gizmo.this.mode.shows(Op.SCALE)
             && (this.active == null || this.active.op == Op.SCALE || this.active.op == Op.SCALE_ALL);
-        final boolean rotateVisible = BBSSettings.gizmoShowRotate.get() && this.mask.allows(Op.ROTATE) && Gizmo.this.mode.shows(Op.ROTATE);
-        final boolean viewRotateVisible = BBSSettings.gizmoShowViewRotate.get() && this.mask.allows(Op.VIEW) && Gizmo.this.mode.shows(Op.VIEW);
+        final boolean rotateVisible = Element.ROTATE.isVisible() && this.mask.allows(Op.ROTATE) && Gizmo.this.mode.shows(Op.ROTATE);
+        final boolean viewRotateVisible = Element.VIEW_ROTATE.isVisible() && this.mask.allows(Op.VIEW) && Gizmo.this.mode.shows(Op.VIEW);
         final boolean showRings = this.rotateVisible && !BBSSettings.rotateHideRings.get()
             && (this.active == null || this.active.op == Op.ROTATE);
         final boolean showViewRing = this.viewRotateVisible && (this.active == null || this.active.op == Op.VIEW);
-        final boolean showRotate = (this.rotateVisible || this.viewRotateVisible)
-            && (this.active == null || this.active.op == Op.ROTATE || this.active.op == Op.VIEW || this.active.op == Op.TRACKBALL);
+        final boolean showRotate = this.showRings || this.showViewRing;
 
         final float scale = BBSSettings.axesScale.get();
         final float thickness = BBSSettings.axesThickness.get();
@@ -1234,7 +1236,7 @@ public class Gizmo
         final float opacity = BBSSettings.gizmoOpacity.get();
         final boolean constrained = Gizmo.this.currentGesture != null && Gizmo.this.currentGesture.rotationConstrained();
 
-        final float innerScale = Gizmo.this.mode == Mode.COMBINED && this.rotateVisible ? COMBINED_INNER_SCALE : 1F;
+        final float innerScale = Gizmo.this.mode == Mode.COMBINED && this.rotateVisible && !BBSSettings.rotateHideRings.get() ? COMBINED_INNER_SCALE : 1F;
         final float axisSize = AXIS_SIZE * this.scale * this.innerScale;
         final float axisOffset = AXIS_OFFSET * this.scale * this.thickness;
         final float ringRadius = 0.22F * this.scale;
@@ -1298,16 +1300,20 @@ public class Gizmo
                 Draw.fillBox(boxes, stack, x1, y1, z1, x2, y2, z2, color));
         }
 
-        /* The centre cube is decoration, so a filtered drag hides it. */
-        if (active == null && (layout.showsBoxes() || layout.showRotate))
+        /* Keep the selected origin visible even when every operation element is hidden. */
+        if (active == null)
         {
+            float centreHalf = layout.showsBoxes() || layout.showRotate
+                ? axisOffset
+                : SCREEN_CUBE_HALF * layout.scale * layout.thickness;
+
             if (!building)
             {
                 builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
                 building = true;
             }
 
-            Draw.fillBox(builder, stack, -axisOffset, -axisOffset, -axisOffset, axisOffset, axisOffset, axisOffset, Colors.WHITE);
+            Draw.fillBox(builder, stack, -centreHalf, -centreHalf, -centreHalf, centreHalf, centreHalf, centreHalf, Colors.WHITE);
         }
 
         if (building)
@@ -1606,6 +1612,31 @@ public class Gizmo
         return transform.getStrategy();
     }
 
+    /** Shared visibility flags; keyboard operation cycles remain independent of these elements. */
+    public static enum Element
+    {
+        TRANSLATE(() -> BBSSettings.gizmoShowTranslate),
+        SCALE(() -> BBSSettings.gizmoShowScale),
+        ROTATE(() -> BBSSettings.gizmoShowRotate),
+        VIEW_ROTATE(() -> BBSSettings.gizmoShowViewRotate),
+        SPHERE(() -> BBSSettings.gizmoShowSphere);
+
+        private final Supplier<ValueBoolean> setting;
+
+        Element(Supplier<ValueBoolean> setting)
+        {
+            this.setting = setting;
+        }
+
+        public boolean isVisible()
+        {
+            ValueBoolean value = this.setting.get();
+
+            return value == null || value.get();
+        }
+    }
+
+    /** Retained FSR display-mode API; its mask still composes with the shared element flags. */
     public static enum Mode
     {
         TRANSLATE, SCALE, ROTATE, COMBINED;

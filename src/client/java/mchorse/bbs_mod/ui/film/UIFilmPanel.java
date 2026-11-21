@@ -1439,6 +1439,12 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.showPanel(this.replayEditor.isActionsMode() ? this.replayEditor : this.actionEditor);
     }
 
+    /** Keep replay editing available when its dock panels are hidden. */
+    public boolean isReplayEditorSelected()
+    {
+        return this.selectedMainEditorPanel == this.replayEditor;
+    }
+
     public int getPanelIndex()
     {
         /* Keep the persisted action index and direct-addon entry point as adapters. */
@@ -3187,8 +3193,9 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         this.finishFlight(true, "seek");
         this.cancelViewInteractions();
         this.runner.setCursor(Math.max(0F, value));
+        boolean moved = this.runner.ticks != previousCursor;
 
-        if (this.runner.ticks != previousCursor)
+        if (moved)
         {
             for (ViewDescriptor view : this.getViewDescriptors())
             {
@@ -3198,7 +3205,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         this.notifyServer(ActionState.SEEK);
 
-        if (BBSSettings.editorRestartOnSeek.get())
+        if (moved && BBSSettings.editorRestartOnSeek.get())
         {
             this.restartPending = true;
         }

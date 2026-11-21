@@ -21,6 +21,7 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.UISplitter;
+import mchorse.bbs_mod.ui.framework.elements.utils.UIUndoKeys;
 import mchorse.bbs_mod.ui.utils.UIFileDialogs;
 import mchorse.bbs_mod.ui.utils.UIStrip;
 import mchorse.bbs_mod.ui.utils.UIUtils;
@@ -313,6 +314,7 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         this.bar.add(this.back, this.treeToggle, this.multiToggle, this.search, this.everywhere, this.sort, this.newTexture, picker.close);
         /* The grid clears the drop target before the tree reports a hovered folder. */
         this.add(this.bar, this.crumbs, this.text, this.grid, this.left, this.info, picker.editor, this.leftHandle, this.infoHandle, this.clearClipboard);
+        this.add(new UIUndoKeys(this::undo, this::redo).full(this));
 
         this.layout();
         this.setMultiskin(false);
@@ -1437,18 +1439,6 @@ public class UITextureBrowser extends UIElement implements IFolderTreeHost
         else if (context.isPressed(Keys.DELETE))
         {
             this.confirmDelete(this.deletableSubjects());
-
-            return true;
-        }
-        else if (context.isPressed(Keys.UNDO))
-        {
-            this.undo();
-
-            return true;
-        }
-        else if (context.isPressed(Keys.REDO))
-        {
-            this.redo();
 
             return true;
         }

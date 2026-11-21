@@ -1732,7 +1732,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         Replay replay = this.getReplay();
 
-        if (replay != null && replay.enabled.get() && this.getCurrentEntity() != null)
+        if (this.panel.isReplayEditorSelected() && replay != null && replay.enabled.get() && this.getCurrentEntity() != null)
         {
             return FilmTarget.root(TransformSpace.WORLD);
         }
