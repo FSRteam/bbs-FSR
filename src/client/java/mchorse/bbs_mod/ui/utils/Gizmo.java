@@ -130,9 +130,6 @@ public class Gizmo
     private final Matrix4f bakedRotationMatrix = new Matrix4f();
     private DragStrategy bakedGesture;
 
-    /** Last transform space applied to the drawing frame. Drag math keeps its own basis. */
-    private TransformSpace lastSpace;
-
     /** Camera view belonging to the captured placement; guides combine it with the drag's fixed basis. */
     private final Matrix4f lastCameraView = new Matrix4f();
     private boolean hasLastCameraView;
@@ -186,7 +183,6 @@ public class Gizmo
         state.sphereLocalRadius = this.lastSphereLocalRadius;
         state.viewportScale = this.viewportScale;
         state.viewportHeight = this.viewportHeight;
-        state.space = this.lastSpace;
         state.handleMask = this.handleMask;
         state.sphereHovered = this.sphereHovered;
     }
@@ -202,7 +198,6 @@ public class Gizmo
         this.lastSphereLocalRadius = state.sphereLocalRadius;
         this.viewportScale = state.viewportScale;
         this.viewportHeight = state.viewportHeight;
-        this.lastSpace = state.space;
         this.handleMask = state.handleMask;
         this.sphereHovered = state.sphereHovered;
     }
@@ -284,10 +279,15 @@ public class Gizmo
         this.viewportScale = viewportScale > 0F && Float.isFinite(viewportScale) ? viewportScale : 1F;
     }
 
+    public void setViewportHeight(float viewportHeight)
+    {
+        this.viewportHeight = viewportHeight;
+    }
+
     /** Supply the viewport height used by the projection derivative. */
     public void setViewport(Area area)
     {
-        this.viewportHeight = area == null ? 0F : area.h;
+        this.setViewportHeight(area == null ? 0F : area.h);
         if (area == null)
         {
             this.hasLastRenderMatrix = false;
@@ -691,7 +691,7 @@ public class Gizmo
             }
 
             stack.pushPose();
-            MatrixStackUtils.scaleBack(stack);
+            this.removePlacementScale(stack);
             this.captureRenderMatrix(stack);
             this.drawGizmo(stack);
             stack.popPose();
@@ -727,7 +727,7 @@ public class Gizmo
 
         this.handleMask = mask;
         stack.pushPose();
-        MatrixStackUtils.scaleBack(stack);
+        this.removePlacementScale(stack);
         this.captureRenderMatrix(stack);
         stack.popPose();
     }
@@ -798,7 +798,6 @@ public class Gizmo
         float distanceScale = this.getAxesDistanceScale(stack);
 
         stack.pushPose();
-        this.applyViewShear(stack);
         stack.scale(distanceScale, distanceScale, distanceScale);
 
         if (BBSSettings.gizmos.get())
@@ -820,34 +819,7 @@ public class Gizmo
 
         stack.popPose();
 
-        /* The guide shows the real drag axis, so it stays outside the drawing-only shear. */
         this.drawInfiniteLine(stack);
-    }
-
-    /**
-     * In VIEW space, replace the drawing frame's third column with the unit ray from the
-     * gizmo to the eye. This affects only the visual and stencil passes; the captured matrix
-     * and {@link GizmoDrag} basis remain orthonormal for dragging.
-     */
-    private void applyViewShear(PoseStack stack)
-    {
-        if (this.lastSpace != TransformSpace.VIEW)
-        {
-            return;
-        }
-
-        Matrix4f matrix = stack.last().pose();
-        Vector3f toCamera = matrix.getTranslation(new Vector3f()).negate();
-
-        if (toCamera.lengthSquared() < 1.0E-8F)
-        {
-            return;
-        }
-
-        toCamera.normalize();
-        matrix.m20(toCamera.x);
-        matrix.m21(toCamera.y);
-        matrix.m22(toCamera.z);
     }
 
     /**
@@ -1406,7 +1378,7 @@ public class Gizmo
         }
 
         stack.pushPose();
-        MatrixStackUtils.scaleBack(stack);
+        this.removePlacementScale(stack);
         HandleMask previous = this.handleMask;
         this.handleMask = mask;
         try
@@ -1433,7 +1405,6 @@ public class Gizmo
         float distanceScale = this.getAxesDistanceScale(stack);
 
         stack.pushPose();
-        this.applyViewShear(stack);
         stack.scale(distanceScale, distanceScale, distanceScale);
         this.drawStencilHandles(stack);
         stack.popPose();
@@ -1482,6 +1453,17 @@ public class Gizmo
         MatrixStackUtils.restoreMatrices();
     }
 
+    /** Keep object stretch/shear out of both the visible handles and their pick geometry. */
+    private void removePlacementScale(PoseStack stack)
+    {
+        Matrix4f matrix = stack.last().pose();
+        Vector3f translation = matrix.getTranslation(new Vector3f());
+        Matrix3f basis = GizmoDrag.basisOf(matrix);
+
+        matrix.set(new Matrix4f(basis).setTranslation(translation));
+        stack.last().normal().set(basis);
+    }
+
     private void captureRenderMatrix(PoseStack stack)
     {
         /* The drag/pick math (computeWorldOrigin, computeWorldAxes, computeScreenCenter)
@@ -1516,7 +1498,6 @@ public class Gizmo
      */
     public void reorientForSpace(PoseStack stack, TransformSpace space, Matrix4f cameraView, Matrix3f globalAxes)
     {
-        this.lastSpace = cameraView == null ? null : space;
         this.hasLastCameraView = cameraView != null;
 
         if (cameraView != null)
@@ -1733,7 +1714,6 @@ public class Gizmo
         private float sphereLocalRadius;
         private float viewportScale = 1F;
         private float viewportHeight;
-        private TransformSpace space;
         private HandleMask handleMask = HandleMask.ALL;
         private boolean sphereHovered;
     }

@@ -177,14 +177,14 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     private boolean isSectionExpanded(UIKeyframeSheet.Section section)
     {
-        return this.sectionFolds.getOrDefault(section.id(), Boolean.TRUE) && this.isSectionVisible(section);
+        return this.sectionFolds.getOrDefault(section.id(), Boolean.FALSE) && this.isSectionVisible(section);
     }
 
     private boolean isSectionVisible(UIKeyframeSheet.Section section)
     {
         for (UIKeyframeSheet.Section parent = this.sectionParents.get(section); parent != null; parent = this.sectionParents.get(parent))
         {
-            if (!this.sectionFolds.getOrDefault(parent.id(), Boolean.TRUE))
+            if (!this.sectionFolds.getOrDefault(parent.id(), Boolean.FALSE))
             {
                 return false;
             }
