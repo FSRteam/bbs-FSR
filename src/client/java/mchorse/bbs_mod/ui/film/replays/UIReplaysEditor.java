@@ -930,6 +930,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
                 if (this.iconBar.getParent() != null) {
                     this.iconBar.removeFromParent();
                 }
+                this.allToggle.removeFromParent();
+                this.iconBar.prepend(this.allToggle);
                 if (this.sectionsToggle.getParent() != null) {
                     this.sectionsToggle.removeFromParent();
                 }

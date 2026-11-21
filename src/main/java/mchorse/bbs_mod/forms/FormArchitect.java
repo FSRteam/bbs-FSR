@@ -61,9 +61,9 @@ public class FormArchitect extends MapFactory<Form, Void>
     {
         Form form = super.create(type);
 
-        for (Consumer<Form> modifier : MODIFIERS)
+        for (int i = 0; i < MODIFIERS.size(); i++)
         {
-            modifier.accept(form);
+            MODIFIERS.get(i).accept(form);
         }
 
         return form;

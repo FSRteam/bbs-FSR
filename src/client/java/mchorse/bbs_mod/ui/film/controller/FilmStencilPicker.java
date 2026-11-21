@@ -49,6 +49,7 @@ import static mchorse.bbs_mod.ui.film.controller.UIFilmController.*;
 /** View-local stencil rendering and deferred input intent ownership. */
 public class FilmStencilPicker
 {
+    private static final int REPLAY_STENCIL_OFFSET = Gizmo.STENCIL_MAX + 1;
     private final UIFilmController controller;
 
     public FilmStencilPicker(UIFilmController controller)

@@ -122,10 +122,10 @@ public class UIFormList extends UIElement
         this.categoryFilter = new UIIcon(Icons.FILTER, this::openMorphCategoryFilter);
         this.categoryFilter.tooltip(UIKeys.MORPHING_FILTER_CATEGORIES, Direction.TOP);
         this.categoryFilter.w(20);
-        this.collapseAll = new UIIcon(Icons.MOVE_UP, (b) -> this.setAllExpanded(false));
+        this.collapseAll = new UIIcon(Icons.COLLAPSE_ALL, (b) -> this.setAllExpanded(false));
         this.collapseAll.tooltip(UIKeys.FORMS_LIST_COLLAPSE_ALL, Direction.TOP);
         this.collapseAll.w(20);
-        this.expandAll = new UIIcon(Icons.MOVE_DOWN, (b) -> this.setAllExpanded(true));
+        this.expandAll = new UIIcon(Icons.EXPAND_ALL, (b) -> this.setAllExpanded(true));
         this.expandAll.tooltip(UIKeys.FORMS_LIST_EXPAND_ALL, Direction.TOP);
         this.expandAll.w(20);
         this.bar.add(this.categoryFilter, this.collapseAll, this.expandAll, this.search, this.edit, this.close);

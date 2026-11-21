@@ -2180,21 +2180,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
             {
                 rp.keyframes.copyOver(recorder.keyframes, 0);
 
-                Form form = rp.form.get();
-
-                if (form != null)
-                {
-                    for (Map.Entry<String, KeyframeChannel> entry : recorder.properties.properties.entrySet())
-                    {
-                        KeyframeChannel channel = rp.properties.getOrCreate(form, entry.getKey());
-
-                        if (channel != null && entry.getValue() != null)
-                        {
-                            channel.copyOver(entry.getValue(), 0);
-                        }
-                    }
-                }
-
                 f.hp.set(recorder.hp);
                 f.hunger.set(recorder.hunger);
                 f.xpLevel.set(recorder.xpLevel);
