@@ -41,6 +41,7 @@ import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.IValueNotifier;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.core.ValuePlacement;
+import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.settings.values.mc.ValueItemStack;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
@@ -191,9 +192,9 @@ public abstract class UIClip <T extends Clip> extends UIElement
         this.editor = editor;
 
         this.enabled = this.toggle(UIKeys.CAMERA_PANELS_ENABLED, clip.enabled);
-        this.title = new UITextbox(1000, (t) -> this.clip.title.set(t));
+        this.title = this.textbox(1000, this.clip.title);
         this.title.tooltip(UIKeys.CAMERA_PANELS_TITLE_TOOLTIP);
-        this.layer = new UITrackpad((v) -> this.editor.editMultiple(this.clip.layer, v.intValue()));
+        this.layer = this.bind(new UITrackpad((v) -> this.editor.editMultiple(this.clip.layer, v.intValue())), () -> this.layer.setValue(this.clip.layer.get()));
         this.layer.limit(0, Integer.MAX_VALUE, true).tooltip(UIKeys.CAMERA_PANELS_LAYER);
         this.tick = new UITrackpad((v) -> this.editor.editMultiple(this.clip.tick, (int) TimeUtils.fromTime(v)));
         this.tick.limit(0, Integer.MAX_VALUE, true).tooltip(UIKeys.CAMERA_PANELS_TICK);
@@ -255,8 +256,22 @@ public abstract class UIClip <T extends Clip> extends UIElement
         return section;
     }
 
-    /** Pair each property's edit callback with its fill/undo refresh. */
+    /** Read the property when drawn; the element protects its active edits. */
+    protected <E extends UIElement> E bind(E element, Runnable filler)
+    {
+        element.valueBinding(filler);
+
+        return element;
+    }
+
+    /** Retain the legacy descriptor and its selection/undo refresh behavior. */
     protected <E> E bind(E element, Runnable filler)
+    {
+        return this.bindOnDemand(element, filler);
+    }
+
+    /** Refresh expensive widget reads on selection, undo, or an edit landing. */
+    protected <E> E bindOnDemand(E element, Runnable filler)
     {
         this.fillers.add(filler);
 
@@ -292,6 +307,13 @@ public abstract class UIClip <T extends Clip> extends UIElement
         return this.bind(trackpad, () -> trackpad.setValue(value.get()));
     }
 
+    protected UITextbox textbox(int maxLength, ValueString value)
+    {
+        UITextbox textbox = new UITextbox(maxLength, (text) -> this.editor.editMultiple(value, (target) -> target.set(text)));
+
+        return this.bind(textbox, () -> textbox.setText(value.get()));
+    }
+
     protected UIColor color(ValueInt value)
     {
         UIColor color = new UIColor((c) -> this.editor.editMultiple(value, (target) -> target.set(c)));
@@ -303,14 +325,14 @@ public abstract class UIClip <T extends Clip> extends UIElement
     {
         UIItemStack itemStack = new UIItemStack((stack) -> this.editor.editMultiple(value, (target) -> target.set(stack)));
 
-        return this.bind(itemStack, () -> itemStack.setStack(value.get()));
+        return this.bindOnDemand(itemStack, () -> itemStack.setStack(value.get()));
     }
 
     protected UIPlacement placement(ValuePlacement value, Placement defaultPlacement)
     {
         UIPlacement placement = new UIPlacement(defaultPlacement, (p) -> this.editor.editMultiple(value, (target) -> target.set(p.copy())));
 
-        return this.bind(placement, () -> placement.setPlacement(value.get()));
+        return this.bindOnDemand(placement, () -> placement.setPlacement(value.get()));
     }
 
     protected UIPropTransform transform(ValueTransform value)
@@ -347,9 +369,7 @@ public abstract class UIClip <T extends Clip> extends UIElement
         TimeUtilsClient.configure(this.tick, 0);
         TimeUtilsClient.configure(this.duration, 1);
 
-        this.title.setText(this.clip.title.get());
         this.title.placeholder(IKey.constant(this.editor.getClipDisplayName(this.clip)));
-        this.layer.setValue(this.clip.layer.get());
         this.tick.setValue(TimeUtils.toTime(this.clip.tick.get()));
         this.duration.setValue(TimeUtils.toTime(this.clip.duration.get()));
         this.envelope.fillData();
