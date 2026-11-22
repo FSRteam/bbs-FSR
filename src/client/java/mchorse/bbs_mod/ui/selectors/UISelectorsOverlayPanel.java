@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.selectors;
 
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.selectors.EntitySelector;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -18,7 +19,6 @@ import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceLocation;
 
@@ -26,6 +26,9 @@ import java.util.List;
 
 public class UISelectorsOverlayPanel extends UIOverlayPanel
 {
+    /** Width of the selector list beside the property editor. */
+    public static final int SIDE_WIDTH = 150;
+
     public UISelectorList selectors;
 
     public UIElement column;
@@ -126,7 +129,7 @@ public class UISelectorsOverlayPanel extends UIOverlayPanel
             }).label(UIKeys.SELECTORS_CONTEXT_REMOVE).enabled(this.current != null);
         });
 
-        this.column = UI.column(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
+        this.column = UI.scrollView(UIConstants.MARGIN, UIConstants.SCROLL_PADDING,
             this.enabled,
             this.form,
             UI.labelRow(UIKeys.SELECTORS_ENTITY_ID, this.entity).marginTop(UIConstants.SECTION_GAP),
@@ -135,8 +138,8 @@ public class UISelectorsOverlayPanel extends UIOverlayPanel
             this.nbt
         );
 
-        this.selectors.relative(this.content).w(1F).hTo(this.column.area);
-        this.column.relative(this.content).y(1F).w(1F).anchor(0F, 1F);
+        this.selectors.relative(this.content).w(SIDE_WIDTH).h(1F);
+        this.column.relative(this.content).x(SIDE_WIDTH).w(1F, -SIDE_WIDTH).h(1F);
 
         this.add(this.column, this.selectors);
         this.onClose((e) -> BBSModClient.getSelectors().save());
@@ -170,6 +173,10 @@ public class UISelectorsOverlayPanel extends UIOverlayPanel
     {
         super.renderBackground(context);
 
-        this.content.area.render(context.batcher, Colors.A100);
+        this.content.area.render(context.batcher, BBSSettings.baseSurface());
+
+        int x = this.content.area.x;
+
+        context.batcher.box(x, this.content.area.y, x + SIDE_WIDTH, this.content.area.ey(), BBSSettings.chromeSurface());
     }
 }
