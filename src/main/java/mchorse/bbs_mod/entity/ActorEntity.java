@@ -20,6 +20,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
@@ -354,6 +355,22 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
             if (lastForm != null) lastForm.onDemorph(this);
             if (form != null) form.onMorph(this);
         }
+
+        this.refreshDimensions();
+    }
+
+    @Override
+    public EntityDimensions getDefaultDimensions(Pose pose)
+    {
+        if (this.form == null || !this.form.hitbox.get())
+        {
+            return super.getDefaultDimensions(pose);
+        }
+
+        float height = this.form.hitboxHeight.get() * (pose == Pose.CROUCHING ? this.form.hitboxSneakMultiplier.get() : 1F);
+
+        return EntityDimensions.scalable(this.form.hitboxWidth.get(), height)
+            .withEyeHeight(this.form.hitboxEyeHeight.get() * height);
     }
 
     @Override

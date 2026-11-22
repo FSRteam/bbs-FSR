@@ -822,11 +822,15 @@ public class ClientNetwork
                 return;
             }
 
-            UIDashboard dashboard = BBSModClient.getDashboard();
-            UIFilmPanel panel = dashboard.getPanel(UIFilmPanel.class);
-
-            panel.updateActors(filmId, actors);
             BBSModClient.getFilms().updateActors(filmId, actors);
+
+            UIDashboard dashboard = BBSModClient.getDashboardIfCreated();
+            UIFilmPanel panel = dashboard == null ? null : dashboard.getPanel(UIFilmPanel.class);
+
+            if (panel != null)
+            {
+                panel.updateActors(filmId, BBSModClient.getFilms().getActors(filmId));
+            }
         });
     }
 
