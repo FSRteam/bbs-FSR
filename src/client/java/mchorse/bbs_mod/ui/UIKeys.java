@@ -40,6 +40,8 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MATERIAL_CULLING_MODEL = L10n.lang("bbs.ui.forms.editors.material.culling.model");
     public static final IKey FORMS_EDITORS_MATERIAL_CULLING_OFF = L10n.lang("bbs.ui.forms.editors.material.culling.off");
     public static final IKey FORMS_EDITORS_MATERIAL_CULLING_ON = L10n.lang("bbs.ui.forms.editors.material.culling.on");
+    public static final IKey FORMS_EDITORS_MATERIAL_GLOW = L10n.lang("bbs.ui.forms.editors.material.glow");
+    public static final IKey FORMS_EDITORS_MATERIAL_GLOW_TOOLTIP = L10n.lang("bbs.ui.forms.editors.material.glow-tooltip");
     public static final IKey FORMS_EDITORS_MATERIAL_LAYER = L10n.lang("bbs.ui.forms.editors.material.layer");
     public static final IKey FORMS_EDITORS_MATERIAL_LAYER_AUTO = L10n.lang("bbs.ui.forms.editors.material.layer.auto");
     public static final IKey FORMS_EDITORS_MATERIAL_LAYER_CUTOUT = L10n.lang("bbs.ui.forms.editors.material.layer.cutout");
