@@ -4,7 +4,6 @@ import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import java.util.function.Supplier;
 import org.joml.Matrix3f;
 import org.lwjgl.opengl.GL11;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -12,7 +11,6 @@ import com.mojang.blaze3d.vertex.VertexSorting;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.render.multiview.ViewRenderState;
-import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.film.FilmControllerContext;
 import mchorse.bbs_mod.film.FilmEntityRenderer;
 import mchorse.bbs_mod.film.FilmTarget;
@@ -39,11 +37,8 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.Pair;
-import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.client.rendering.context.IBbsWorldRenderContext;
 import net.minecraft.client.Minecraft;
-import com.mojang.blaze3d.shaders.Uniform;
-import net.minecraft.client.renderer.ShaderInstance;
 import com.mojang.blaze3d.vertex.PoseStack;
 import static mchorse.bbs_mod.ui.film.controller.UIFilmController.*;
 
@@ -467,31 +462,9 @@ public class FilmStencilPicker
             }
 
             int index = this.stencil.getIndex();
-            Texture texture = this.stencil.getFramebuffer().getMainTexture();
             Pair<Form, String> pair = this.stencil.getPicked();
-            int w = texture.width;
-            int h = texture.height;
 
-            ShaderInstance previewProgram = BBSShaders.getPickerPreviewProgram();
-            Supplier<ShaderInstance> getPickerPreviewProgram = BBSShaders::getPickerPreviewProgram;
-            Uniform target = previewProgram.getUniform("Target");
-
-            if (target != null)
-            {
-                target.set(index);
-            }
-
-            Uniform highlight = previewProgram.getUniform("HighlightColor");
-
-            if (highlight != null)
-            {
-                int color = BBSSettings.stencilHighlightColor.get();
-
-                highlight.set(Colors.getR(color), Colors.getG(color), Colors.getB(color), Colors.getA(color));
-            }
-
-            RenderSystem.enableBlend();
-            context.batcher.texturedBox(getPickerPreviewProgram, texture.id, Colors.WHITE, area.x, area.y, area.w, area.h, 0, h, w, 0, w, h);
+            this.stencil.renderPreview(context, area);
 
             if (altPressed)
             {

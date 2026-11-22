@@ -129,6 +129,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
             .labels(UIKeys.SCENE_REPLAYS_CONTEXT_COPY, UIKeys.SCENE_REPLAYS_CONTEXT_PASTE);
 
         this.multi().sorting();
+        this.emptyState(UIKeys.SCENE_REPLAYS_EMPTY, BBSSettings::deepSurface);
         this.context((menu) ->
         {
             Film film = this.panel.getData();
@@ -275,18 +276,17 @@ public class UIReplayList extends UIList<ReplayListEntry>
             return;
         }
 
-        this.current.clear();
+        List<ReplayListEntry> replays = new ArrayList<>();
 
-        for (int i = 0; i < this.list.size(); i++)
+        for (ReplayListEntry entry : this.list)
         {
-            ReplayListEntry e = this.list.get(i);
-
-            if (e.isReplay())
+            if (entry.isReplay())
             {
-                this.current.add(i);
+                replays.add(entry);
             }
         }
 
+        this.selection.setAll(replays);
     }
 
     private void selectAllReplays()
@@ -1551,11 +1551,11 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         UIOverlay.addOverlay(this.getContext(), new UIConfirmOverlayPanel(UIKeys.STRUCTURE_CUT_TITLE, message, (confirmed) ->
         {
-            if (confirmed)
+            if (confirmed && this.panel.getData() == film)
             {
                 StructureCut.request(id, min, max, (ok) ->
                 {
-                    if (ok)
+                    if (ok && this.panel.getData() == film)
                     {
                         this.addStructureReplay(id, min, size);
                     }

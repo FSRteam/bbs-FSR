@@ -1591,6 +1591,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.renderingView = true;
         Gizmo.INSTANCE.captureVisualState(this.previousVisualState);
         Gizmo.INSTANCE.restoreVisualState(this.visualState);
+        Gizmo.INSTANCE.forgetPlacement();
         RenderSystem.enableDepthTest();
 
         try
@@ -1659,7 +1660,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
     private void renderOrbitCenterMarker(IBbsWorldRenderContext context)
     {
-        if (this.getPovMode() != CAMERA_MODE_ORBIT || !BBSSettings.editorOrbitCenterMarker.get())
+        if (this.getPovMode() != CAMERA_MODE_ORBIT || this.isViewFlying() || !BBSSettings.editorOrbitCenterMarker.get())
         {
             return;
         }

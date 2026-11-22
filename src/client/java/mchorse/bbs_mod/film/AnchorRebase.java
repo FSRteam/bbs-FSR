@@ -16,7 +16,8 @@ public final class AnchorRebase
     /**
      * Rebase {@code to}'s local transform so it produces the world transform previously produced
      * by {@code from}. Relative replays intentionally have no absolute world frame and therefore
-     * cannot be rebased.
+     * cannot be rebased. Both anchors are measured at their settled value, so interpolation
+     * state does not affect the result.
      */
     public static boolean keepWorldTransform(Map<String, IEntity> entities, IEntity entity, Replay replay,
         float transition, Anchor from, Anchor to)
@@ -29,7 +30,7 @@ public final class AnchorRebase
         Anchor target = to.copy();
         target.transform.identity();
         Matrix4f world = FilmMatrices.getAnchorMatrix(entities, entity, replay, 0D, 0D, 0D,
-            transition, from);
+            transition, from.copy());
         Matrix4f frame = FilmMatrices.getAnchorMatrix(entities, entity, replay, 0D, 0D, 0D,
             transition, target);
 

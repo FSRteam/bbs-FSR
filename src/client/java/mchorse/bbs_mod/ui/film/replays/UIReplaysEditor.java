@@ -1198,23 +1198,10 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
         boolean inside = area.isInside(context);
         StencilFormFramebuffer stencil = controller.getStencil();
 
-        if (controller.isViewFlying() && inside) {
-            if (context.mouseButton == 0 && controller.orbit.enabled) {
-                long generation = controller.orbit.startGesture(context);
+        if (controller.isViewFlying() && inside && context.mouseButton == 2) {
+            long generation = this.filmPanel.dashboard.orbitUI.startGesture(context);
 
-                return generation != 0L;
-            }
-            if (context.mouseButton == 2) {
-                if (controller.orbit.enabled) {
-                    long generation = controller.orbit.startGesture(context);
-
-                    return generation != 0L;
-                } else {
-                    long generation = this.filmPanel.dashboard.orbitUI.startGesture(context);
-
-                    return generation != 0L;
-                }
-            }
+            return generation != 0L;
         }
 
         if (controller.isViewFlying()) {
