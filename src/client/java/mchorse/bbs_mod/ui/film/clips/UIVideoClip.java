@@ -4,9 +4,9 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.audio.AudioReader;
 import mchorse.bbs_mod.camera.clips.misc.VideoClientClip;
+import mchorse.bbs_mod.camera.data.Placement;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
-import mchorse.bbs_mod.settings.values.IValueNotifier;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.film.clips.widgets.UIPlacement;
@@ -74,34 +74,12 @@ public class UIVideoClip extends UIAudioClip<VideoClientClip>
             UIUtils.openFolder(folder);
         });
 
-        this.loop = new UIToggle(UIKeys.CAMERA_PANELS_VIDEO_LOOP, (b) -> this.editor.editMultiple(this.clip.loop, (value) ->
-        {
-            value.set(b.getValue());
-        }));
-        this.fullscreen = new UIToggle(UIKeys.CAMERA_PANELS_IMAGE_FULLSCREEN, (b) -> this.editor.editMultiple(this.clip.fullscreen, (value) ->
-        {
-            value.set(b.getValue());
-        }));
-        this.smooth = new UIToggle(UIKeys.CAMERA_PANELS_IMAGE_SMOOTH, (b) -> this.editor.editMultiple(this.clip.smooth, (value) ->
-        {
-            value.set(b.getValue());
-        }));
-        this.color = new UIColor((c) -> this.editor.editMultiple(this.clip.color, (value) ->
-        {
-            value.set(c);
-        })).withAlpha();
-        this.placement = new UIPlacement((p) -> this.editor.editMultiple(this.clip.placement, (value) ->
-        {
-            value.set(p.copy());
-        }));
-        this.transform = new UIPropTransform().callbacks(
-            () -> this.editor.editMultiple(this.clip.transform, IValueNotifier::preNotify),
-            () -> this.editor.editMultiple(this.clip.transform, (t) ->
-            {
-                t.set(this.transform.getTransform().copy());
-                t.postNotify();
-            })
-        );
+        this.loop = this.toggle(UIKeys.CAMERA_PANELS_VIDEO_LOOP, this.clip.loop);
+        this.fullscreen = this.toggle(UIKeys.CAMERA_PANELS_IMAGE_FULLSCREEN, this.clip.fullscreen);
+        this.smooth = this.toggle(UIKeys.CAMERA_PANELS_IMAGE_SMOOTH, this.clip.smooth);
+        this.color = this.color(this.clip.color).withAlpha();
+        this.placement = this.placement(this.clip.placement, new Placement());
+        this.transform = this.transform(this.clip.transform);
     }
 
     @Override
@@ -133,16 +111,4 @@ public class UIVideoClip extends UIAudioClip<VideoClientClip>
         this.panels.add(this.section(UIKeys.CAMERA_PANELS_IMAGE_TRANSFORM, this.transform));
     }
 
-    @Override
-    public void fillData()
-    {
-        super.fillData();
-
-        this.loop.setValue(this.clip.loop.get());
-        this.fullscreen.setValue(this.clip.fullscreen.get());
-        this.smooth.setValue(this.clip.smooth.get());
-        this.color.setColor(this.clip.color.get());
-        this.placement.setPlacement(this.clip.placement.get());
-        this.transform.setTransform(this.clip.transform.get());
-    }
 }
