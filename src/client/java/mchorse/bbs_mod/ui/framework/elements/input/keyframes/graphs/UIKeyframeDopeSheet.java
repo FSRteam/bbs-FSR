@@ -1234,10 +1234,17 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         context.batcher.unclip(context);
     }
 
+    /**
+     * Paint over the tracks before the first tick and after the last one.
+     *
+     * <p>The rows run the full width of the view, so the field outside the film is what is left
+     * once they are covered back up — and it drops to the floor of the tonal ladder, below every
+     * surface a keyframe can sit on.</p>
+     */
     private void renderOutOfRangeShading(UIContext context, BufferBuilder builder, Matrix4f matrix, Area area)
     {
         int timelineBottom = TimelineRulerRenderer.getTimelineBottom(area);
-        int contentY = Math.min(area.ey(), timelineBottom + 1);
+        int contentY = Math.min(area.ey(), timelineBottom);
 
         if (contentY >= area.ey())
         {
@@ -1250,7 +1257,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             int leftEx = Math.min(startX, area.ex());
 
-            context.batcher.box(area.x, contentY, leftEx, area.ey(), BBSSettings.chromeSurface());
+            context.batcher.box(area.x, contentY, leftEx, area.ey(), BBSSettings.sunkenSurface());
         }
 
         int endX = this.keyframes.toGraphX(this.keyframes.getDuration());
@@ -1259,7 +1266,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             int rightX = Math.max(endX, area.x);
 
-            context.batcher.box(rightX, contentY, area.ex(), area.ey(), BBSSettings.chromeSurface());
+            context.batcher.box(rightX, contentY, area.ex(), area.ey(), BBSSettings.sunkenSurface());
         }
     }
 
@@ -1268,7 +1275,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         Area area = this.keyframes.area;
         int w = this.keyframes.getLabelWidth();
 
-        context.batcher.box(area.x + w - 1, area.y, area.x + w, area.ey(), BBSSettings.dividerColor());
         context.batcher.clip(area.x, area.y, w, area.h, context);
 
         for (Map.Entry<UIKeyframeSheet.Section, Integer> entry : this.sectionYCache.entrySet())

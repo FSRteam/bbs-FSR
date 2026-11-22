@@ -8,6 +8,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.Area;
+import mchorse.bbs_mod.ui.utils.renderers.TimelineRulerRenderer;
 import mchorse.bbs_mod.utils.Pair;
 import mchorse.bbs_mod.utils.interps.Interpolation;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -19,7 +20,8 @@ import java.util.List;
 
 public interface IUIKeyframeGraph
 {
-    public static final int TOP_MARGIN = 25;
+    /** The first track starts right under the ruler - no gap left where a divider used to sit. */
+    public static final int TOP_MARGIN = TimelineRulerRenderer.RULER_BLOCK_HEIGHT;
 
     public void resetView();
 
