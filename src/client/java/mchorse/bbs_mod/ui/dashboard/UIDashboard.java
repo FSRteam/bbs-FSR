@@ -133,7 +133,7 @@ public class UIDashboard extends UIBaseMenu
         this.settings = new UIIcon(Icons.SETTINGS, (b) -> this.openSettings());
         this.selectors = new UIIcon(Icons.PROPERTIES, (b) ->
         {
-            UIOverlay.addOverlayRight(this.context, new UISelectorsOverlayPanel(), 240);
+            UIOverlay.addOverlay(this.context, new UISelectorsOverlayPanel(), 430, 300);
         });
         this.registerAnchor(BBSDashboardAnchors.SETTINGS, null, () -> this.settings);
         this.registerAnchor(BBSDashboardAnchors.SELECTORS, null, () -> this.selectors);

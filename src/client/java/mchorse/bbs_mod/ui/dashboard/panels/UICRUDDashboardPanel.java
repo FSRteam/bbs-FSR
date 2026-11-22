@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.dashboard.panels;
 
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.overlay.UICRUDOverlayPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -21,6 +22,7 @@ public abstract class UICRUDDashboardPanel extends UISidebarDashboardPanel
 
         this.overlay = this.createOverlayPanel();
         this.openOverlay = new UIIcon(Icons.MORE, (b) -> this.openDataManager());
+        this.openOverlay.tooltip(UIKeys.PANELS_KEYS_OPEN_DATA_MANAGER);
 
         this.actions().common(this.openOverlay);
 
