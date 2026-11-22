@@ -11,7 +11,10 @@ is a contract, how to refuse to load on the wrong BBS, and where extensions run.
 without `BBSApi.VERSION` changing with them. An API marked `@Experimental` may change without
 a version bump; check its documentation before depending on it.
 
-Everything outside that package is BBS's own business and moves without notice. An addon
+Types named by a public API signature, including `Form`, `Clip`, `FormArchitect` and the factory
+interfaces, share that contract. The signature snapshot records these references.
+
+Other classes outside that package are BBS internals and move without notice. An addon
 reaching into it is on its own, and the breakage shows up in the game rather than on the build.
 
 ## Getting in
@@ -137,6 +140,10 @@ exposes its files under the `my_addon:` resource namespace. Register language fi
 `RegisterL10nEvent` before the first language load. `RegisterSettingsEvent` and
 `RegisterClientSettingsEvent` are siblings; subscribe to `BaseRegisterSettingsEvent` when one
 handler should handle both sides' settings events.
+
+Give addon-defined IDs and added value keys a namespace, such as `my_addon:wobble`. Unclaimed
+namespaced values, missing form and clip types, and unreadable tracks or property channels retain
+their saved data while the addon is absent, so the data can be read when the addon returns.
 
 ## Editor extensions
 
