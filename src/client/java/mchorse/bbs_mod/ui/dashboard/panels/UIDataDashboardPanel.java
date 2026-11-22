@@ -19,7 +19,6 @@ import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
-import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.repos.IRepository;
 
 import java.io.File;
@@ -528,8 +527,8 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
     @Override
     public void showInList(String id)
     {
-        this.overlay.namesList.setCurrentFile(id);
         this.openDataManager();
+        this.overlay.namesList.setCurrentFile(id);
     }
 
     private boolean isCurrentData(String id)
@@ -741,17 +740,6 @@ public abstract class UIDataDashboardPanel <T extends ValueGroup> extends UICRUD
     @Override
     public void render(UIContext context)
     {
-        if (this.data == null)
-        {
-            double ticks = context.getTickTransition() % 15D;
-            double factor = Math.abs(ticks / 15D * 2 - 1F);
-
-            int x = this.openOverlay.area.x - 10 + (int) Interpolations.SINE_INOUT.interpolate(-10, 0, factor);
-            int y = this.openOverlay.area.my();
-
-            context.batcher.icon(Icons.ARROW_RIGHT, x, y, 0.5F, 0.5F);
-        }
-
         super.render(context);
 
         if (!this.editor.isEnabled() && this.data != null)

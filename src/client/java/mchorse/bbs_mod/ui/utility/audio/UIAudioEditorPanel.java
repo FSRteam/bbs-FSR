@@ -44,7 +44,7 @@ public class UIAudioEditorPanel extends UIEditorDashboardPanel implements IUITab
         this.onAppear(this::onPanelAppeared);
         this.onDisappear(this::onPanelDisappeared);
 
-        this.pickAudio = new UIIcon(Icons.MORE, (b) -> UIOverlay.addOverlay(this.getContext(), new UISoundOverlayPanel(this::openAudio)));
+        this.pickAudio = new UIIcon(Icons.MORE, (b) -> this.openDataManager());
         this.plause = new UIIcon(() ->
         {
             SoundPlayer player = this.audioEditor.getPlayer();
@@ -89,6 +89,12 @@ public class UIAudioEditorPanel extends UIEditorDashboardPanel implements IUITab
     }
 
     @Override
+    public IKey getListLabel()
+    {
+        return UIKeys.AUDIO_LANDING_LIST;
+    }
+
+    @Override
     protected String getLandingId()
     {
         return this.getOpenId();
@@ -103,7 +109,16 @@ public class UIAudioEditorPanel extends UIEditorDashboardPanel implements IUITab
     @Override
     public void openDataManager()
     {
-        this.pickAudio.clickItself();
+        UIOverlay.addOverlay(this.getContext(), new UISoundOverlayPanel(this::openAudio));
+    }
+
+    @Override
+    public void showInList(String id)
+    {
+        UISoundOverlayPanel panel = new UISoundOverlayPanel(this::openAudio);
+
+        UIOverlay.addOverlay(this.getContext(), panel);
+        panel.set(id);
     }
 
     @Override
@@ -115,12 +130,12 @@ public class UIAudioEditorPanel extends UIEditorDashboardPanel implements IUITab
     @Override
     public void requestNames()
     {
-        this.landing.fillNames(UISoundOverlayPanel.getSoundEvents());
+        this.fillNames(UISoundOverlayPanel.getSoundEvents());
     }
 
     private void openAudio(Link link)
     {
-        this.tabs.pick(link == null ? null : link.toString());
+        this.pickData(link == null ? null : link.toString());
     }
 
     @Override
@@ -143,10 +158,11 @@ public class UIAudioEditorPanel extends UIEditorDashboardPanel implements IUITab
                 this.audioEditor.getColorCodes().addAll(colors);
             }
 
-            BBSSettings.recentData.touch("audio", opened.toString());
+            BBSSettings.recentData.touch(this.getRecentType(), opened.toString());
         }
 
         this.audioEditor.setVisible(opened != null);
+        this.editor.setVisible(opened != null);
         this.syncLanding();
         this.tabs.setOpenId(opened == null ? null : opened.toString());
     }
