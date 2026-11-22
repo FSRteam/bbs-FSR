@@ -51,6 +51,20 @@ public class UIReplayPropertiesPanel extends UIElement
     private UIReplayList list;
     private Replay replay;
 
+    /** Read the displayed replay while writes keep using the selected replays. */
+    private <E extends UIElement> E bound(E element, Consumer<Replay> read)
+    {
+        element.valueBinding(() ->
+        {
+            if (this.replay != null)
+            {
+                read.accept(this.replay);
+            }
+        });
+
+        return element;
+    }
+
     public UIReplayPropertiesPanel(UIFilmPanel filmPanel)
     {
         this.filmPanel = filmPanel;
@@ -71,31 +85,31 @@ public class UIReplayPropertiesPanel extends UIElement
         });
         this.pickEdit.pick.tooltip(UIKeys.SCENE_REPLAYS_CONTEXT_PICK_FORM);
         this.pickEdit.edit.tooltip(UIKeys.SCENE_REPLAYS_CONTEXT_EDIT_FORM);
-        this.enabled = new UIToggle(UIKeys.CAMERA_PANELS_ENABLED, (b) ->
+        this.enabled = this.bound(new UIToggle(UIKeys.CAMERA_PANELS_ENABLED, (b) ->
         {
             this.edit((replay) -> replay.enabled.set(b.getValue()));
             filmPanel.getController().createEntities();
-        });
-        this.label = new UITextbox(1000, (s) -> this.edit((replay) -> replay.label.set(s)));
+        }), (shown) -> this.enabled.setValue(shown.enabled.get()));
+        this.label = this.bound(new UITextbox(1000, (s) -> this.edit((replay) -> replay.label.set(s))), (shown) -> this.label.setText(shown.label.get()));
         this.label.textbox.setPlaceholder(UIKeys.FILM_REPLAY_LABEL);
-        this.nameTag = new UITextbox(1000, (s) -> this.edit((replay) -> replay.nameTag.set(s)));
+        this.nameTag = this.bound(new UITextbox(1000, (s) -> this.edit((replay) -> replay.nameTag.set(s))), (shown) -> this.nameTag.setText(shown.nameTag.get()));
         this.nameTag.textbox.setPlaceholder(UIKeys.FILM_REPLAY_NAME_TAG);
-        this.shadow = new UIToggle(UIKeys.CAMERA_PANELS_ENABLED, (b) -> this.edit((replay) -> replay.shadow.set(b.getValue())));
-        this.shadowSize = new UITrackpad((v) -> this.edit((replay) -> replay.shadowSize.set(v.floatValue())));
+        this.shadow = this.bound(new UIToggle(UIKeys.CAMERA_PANELS_ENABLED, (b) -> this.edit((replay) -> replay.shadow.set(b.getValue()))), (shown) -> this.shadow.setValue(shown.shadow.get()));
+        this.shadowSize = this.bound(new UITrackpad((v) -> this.edit((replay) -> replay.shadowSize.set(v.floatValue()))), (shown) -> this.shadowSize.setValue(shown.shadowSize.get()));
         this.shadowSize.tooltip(UIKeys.FILM_REPLAY_SHADOW_SIZE);
-        this.shadowFollow = new UIToggle(UIKeys.FILM_REPLAY_SHADOW_FOLLOW, (b) -> this.edit((replay) -> replay.shadowFollow.set(b.getValue())));
+        this.shadowFollow = this.bound(new UIToggle(UIKeys.FILM_REPLAY_SHADOW_FOLLOW, (b) -> this.edit((replay) -> replay.shadowFollow.set(b.getValue()))), (shown) -> this.shadowFollow.setValue(shown.shadowFollow.get()));
         this.shadowFollow.tooltip(UIKeys.FILM_REPLAY_SHADOW_FOLLOW_TOOLTIP);
-        this.shadowOffsetX = new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.shadowOffset, (value) -> value.get().x = v)));
+        this.shadowOffsetX = this.bound(new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.shadowOffset, (value) -> value.get().x = v))), (shown) -> this.shadowOffsetX.setValue(shown.shadowOffset.get().x));
         this.shadowOffsetX.tooltip(UIKeys.FILM_REPLAY_SHADOW_OFFSET);
-        this.shadowOffsetY = new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.shadowOffset, (value) -> value.get().y = v)));
+        this.shadowOffsetY = this.bound(new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.shadowOffset, (value) -> value.get().y = v))), (shown) -> this.shadowOffsetY.setValue(shown.shadowOffset.get().y));
         this.shadowOffsetY.tooltip(UIKeys.FILM_REPLAY_SHADOW_OFFSET);
-        this.shadowOffsetZ = new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.shadowOffset, (value) -> value.get().z = v)));
+        this.shadowOffsetZ = this.bound(new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.shadowOffset, (value) -> value.get().z = v))), (shown) -> this.shadowOffsetZ.setValue(shown.shadowOffset.get().z));
         this.shadowOffsetZ.tooltip(UIKeys.FILM_REPLAY_SHADOW_OFFSET);
-        this.looping = new UITrackpad((v) -> this.edit((replay) -> replay.looping.set(v.intValue())));
+        this.looping = this.bound(new UITrackpad((v) -> this.edit((replay) -> replay.looping.set(v.intValue()))), (shown) -> this.looping.setValue(shown.looping.get()));
         this.looping.limit(0).integer().tooltip(UIKeys.FILM_REPLAY_LOOPING_TOOLTIP);
-        this.actor = new UIToggle(UIKeys.FILM_REPLAY_ACTOR, (b) -> this.edit((replay) -> replay.actor.set(b.getValue())));
+        this.actor = this.bound(new UIToggle(UIKeys.FILM_REPLAY_ACTOR, (b) -> this.edit((replay) -> replay.actor.set(b.getValue()))), (shown) -> this.actor.setValue(shown.actor.get()));
         this.actor.tooltip(UIKeys.FILM_REPLAY_ACTOR_TOOLTIP);
-        this.actorPickup = new UIToggle(UIKeys.FILM_REPLAY_ACTOR_PICKUP, (b) -> this.edit((replay) -> replay.actorPickup.set(b.getValue())));
+        this.actorPickup = this.bound(new UIToggle(UIKeys.FILM_REPLAY_ACTOR_PICKUP, (b) -> this.edit((replay) -> replay.actorPickup.set(b.getValue()))), (shown) -> this.actorPickup.setValue(shown.actorPickup.get()));
         this.actorPickup.tooltip(UIKeys.FILM_REPLAY_ACTOR_PICKUP_TOOLTIP);
         this.fp = new UIToggle(UIKeys.FILM_REPLAY_FP, (b) ->
         {
@@ -117,12 +131,13 @@ public class UIReplayPropertiesPanel extends UIElement
                 first.fp.set(b.getValue());
             }
         });
-        this.relative = new UIToggle(UIKeys.CAMERA_PANELS_RELATIVE, (b) -> this.edit((replay) -> replay.relative.set(b.getValue())));
+        this.bound(this.fp, (shown) -> this.fp.setValue(shown.fp.get()));
+        this.relative = this.bound(new UIToggle(UIKeys.CAMERA_PANELS_RELATIVE, (b) -> this.edit((replay) -> replay.relative.set(b.getValue()))), (shown) -> this.relative.setValue(shown.relative.get()));
         this.relative.tooltip(UIKeys.FILM_REPLAY_RELATIVE_TOOLTIP);
-        this.relativeOffsetX = new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.relativeOffset, (value) -> value.get().x = v)));
-        this.relativeOffsetY = new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.relativeOffset, (value) -> value.get().y = v)));
-        this.relativeOffsetZ = new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.relativeOffset, (value) -> value.get().z = v)));
-        this.axesPreview = new UIToggle(UIKeys.FILM_REPLAY_AXES_PREVIEW, (b) -> this.edit((replay) -> replay.axesPreview.set(b.getValue())));
+        this.relativeOffsetX = this.bound(new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.relativeOffset, (value) -> value.get().x = v))), (shown) -> this.relativeOffsetX.setValue(shown.relativeOffset.get().x));
+        this.relativeOffsetY = this.bound(new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.relativeOffset, (value) -> value.get().y = v))), (shown) -> this.relativeOffsetY.setValue(shown.relativeOffset.get().y));
+        this.relativeOffsetZ = this.bound(new UITrackpad((v) -> this.edit((replay) -> BaseValue.edit(replay.relativeOffset, (value) -> value.get().z = v))), (shown) -> this.relativeOffsetZ.setValue(shown.relativeOffset.get().z));
+        this.axesPreview = this.bound(new UIToggle(UIKeys.FILM_REPLAY_AXES_PREVIEW, (b) -> this.edit((replay) -> replay.axesPreview.set(b.getValue()))), (shown) -> this.axesPreview.setValue(shown.axesPreview.get()));
         this.pickAxesPreviewBone = new UIButton(UIKeys.FILM_REPLAY_PICK_AXES_PREVIEW, (b) ->
         {
             Replay replay = filmPanel.replayEditor.getReplay();
@@ -208,24 +223,6 @@ public class UIReplayPropertiesPanel extends UIElement
         if (replay != null)
         {
             this.pickEdit.setForm(replay.form.get());
-            this.enabled.setValue(replay.enabled.get());
-            this.label.setText(replay.label.get());
-            this.nameTag.setText(replay.nameTag.get());
-            this.shadow.setValue(replay.shadow.get());
-            this.shadowSize.setValue(replay.shadowSize.get());
-            this.shadowFollow.setValue(replay.shadowFollow.get());
-            this.shadowOffsetX.setValue(replay.shadowOffset.get().x);
-            this.shadowOffsetY.setValue(replay.shadowOffset.get().y);
-            this.shadowOffsetZ.setValue(replay.shadowOffset.get().z);
-            this.looping.setValue(replay.looping.get());
-            this.actor.setValue(replay.actor.get());
-            this.actorPickup.setValue(replay.actorPickup.get());
-            this.fp.setValue(replay.fp.get());
-            this.relative.setValue(replay.relative.get());
-            this.relativeOffsetX.setValue(replay.relativeOffset.get().x);
-            this.relativeOffsetY.setValue(replay.relativeOffset.get().y);
-            this.relativeOffsetZ.setValue(replay.relativeOffset.get().z);
-            this.axesPreview.setValue(replay.axesPreview.get());
         }
     }
 
