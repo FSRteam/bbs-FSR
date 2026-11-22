@@ -28,7 +28,9 @@ import java.util.List;
 
 public class UIDashboardPanels extends UIElement
 {
-    private static final int TASKBAR_HEIGHT = 20;
+    /** Thickness of the bar on every docked edge. */
+    public static final int BAR = 20;
+    private static final int TASKBAR_HEIGHT = BAR;
     public static final Direction[] SIDES = {Direction.BOTTOM, Direction.TOP, Direction.LEFT, Direction.RIGHT};
     private static final int REVEAL_STRIP = 16;
     private static final long REVEAL_HOVER_MS = 350L;
@@ -199,6 +201,7 @@ public class UIDashboardPanels extends UIElement
 
     public void open()
     {
+        this.setSide(getSettingsSide());
         this.resetTaskbarAutoHide();
         this.opened = true;
 
@@ -326,6 +329,14 @@ public class UIDashboardPanels extends UIElement
     public UIIcon registerPanel(UIDashboardPanel panel, IKey tooltip, Icon icon)
     {
         return this.registerPanel(this.panels.size(), panel, tooltip, icon);
+    }
+
+    public UIIcon pin(UIIcon icon, IKey tooltip)
+    {
+        icon.tooltip(tooltip, this.side.opposite());
+        this.pinned.add(icon);
+
+        return icon;
     }
 
     public UIIcon replacePanel(UIDashboardPanel current, UIDashboardPanel replacement, IKey tooltip, Icon icon)

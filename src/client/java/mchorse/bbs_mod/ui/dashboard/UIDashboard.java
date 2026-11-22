@@ -58,7 +58,6 @@ import mchorse.bbs_mod.ui.utils.UIChalkboard;
 import mchorse.bbs_mod.ui.utils.UIThemeBackdrop;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.pose.Transform;
@@ -132,18 +131,17 @@ public class UIDashboard extends UIBaseMenu
         this.settingsPanel = new UISettingsOverlayPanel();
 
         this.settings = new UIIcon(Icons.SETTINGS, (b) -> this.openSettings());
-        this.settings.tooltip(UIKeys.CONFIG_TITLE, Direction.TOP);
         this.selectors = new UIIcon(Icons.PROPERTIES, (b) ->
         {
             UIOverlay.addOverlayRight(this.context, new UISelectorsOverlayPanel(), 240);
         });
-        this.selectors.tooltip(UIKeys.SELECTORS_TITLE, Direction.TOP);
         this.registerAnchor(BBSDashboardAnchors.SETTINGS, null, () -> this.settings);
         this.registerAnchor(BBSDashboardAnchors.SELECTORS, null, () -> this.selectors);
         this.chalkboard = new UIChalkboard();
         this.chalkboard.full(this.getRoot());
 
-        this.panels.pinned.add(this.settings, this.selectors);
+        this.panels.pin(this.settings, UIKeys.CONFIG_TITLE);
+        this.panels.pin(this.selectors, UIKeys.SELECTORS_TITLE);
         this.getRoot().prepend(this.orbitUI);
         this.getRoot().add(this.orbitKeysUI);
         this.getRoot().add(this.chalkboard);
