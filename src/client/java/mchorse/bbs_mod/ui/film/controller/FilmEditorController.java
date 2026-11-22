@@ -240,6 +240,7 @@ public class FilmEditorController extends BaseFilmController
 
                 FilmEntityRenderer.renderEntity(FilmControllerContext.instance
                     .setup(this.getEntities(), entity, replay, context)
+                    .relative(replay.relative.get())
                     .color(Colors.setA(color, alpha))
                     .transition(0F));
 
