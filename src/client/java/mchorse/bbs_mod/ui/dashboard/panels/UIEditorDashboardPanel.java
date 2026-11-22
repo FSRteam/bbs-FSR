@@ -143,7 +143,15 @@ public abstract class UIEditorDashboardPanel extends UIDashboardPanel implements
     {
         if (this.landing != null)
         {
-            this.landing.setVisible(this.getLandingId() == null);
+            boolean visible = this.getLandingId() == null;
+            boolean wasVisible = this.landing.isVisible();
+
+            this.landing.setVisible(visible);
+
+            if (visible && !wasVisible)
+            {
+                this.requestNames();
+            }
         }
     }
 

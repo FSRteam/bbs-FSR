@@ -20,10 +20,7 @@ public abstract class UICRUDDashboardPanel extends UISidebarDashboardPanel
         super(dashboard);
 
         this.overlay = this.createOverlayPanel();
-        this.openOverlay = new UIIcon(Icons.MORE, (b) ->
-        {
-            UIOverlay.addOverlay(this.getContext(), this.overlay, 200, 0.9F);
-        });
+        this.openOverlay = new UIIcon(Icons.MORE, (b) -> this.openDataManager());
 
         this.actions().common(this.openOverlay);
 
@@ -36,7 +33,7 @@ public abstract class UICRUDDashboardPanel extends UISidebarDashboardPanel
 
         if (context != null)
         {
-            this.openOverlay.clickItself(context);
+            UIOverlay.addOverlay(context, this.overlay, 200, 0.9F);
         }
     }
 

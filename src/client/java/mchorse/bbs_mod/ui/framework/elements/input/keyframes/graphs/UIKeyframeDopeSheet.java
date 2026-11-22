@@ -211,19 +211,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         return true;
     }
 
-    private boolean isWithinSection(UIKeyframeSheet.Section section, UIKeyframeSheet.Section ancestor)
-    {
-        for (UIKeyframeSheet.Section current = section; current != null; current = this.sectionParents.get(current))
-        {
-            if (ancestor.equals(current))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private int getSectionDepth(UIKeyframeSheet.Section section)
     {
         int depth = 0;
@@ -517,17 +504,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             this.setSectionExpanded(section, expanded);
         }
 
-        if (!expanded)
-        {
-            for (UIKeyframeSheet sheet : this.sheets)
-            {
-                if (sheet.section != null)
-                {
-                    sheet.selection.clear();
-                }
-            }
-        }
-
         this.updateScrollSize();
         this.pickSelected();
     }
@@ -537,17 +513,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         boolean expanded = !this.isSectionExpanded(section);
 
         this.setSectionExpanded(section, expanded);
-
-        if (!expanded)
-        {
-            for (UIKeyframeSheet sheet : this.sheets)
-            {
-                if (this.isWithinSection(sheet.section, section))
-                {
-                    sheet.selection.clear();
-                }
-            }
-        }
 
         this.updateScrollSize();
         this.pickSelected();
@@ -944,31 +909,12 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     {
         this.folds.set(sheet.id, expanded);
 
-        if (!expanded)
-        {
-            sheet.selection.clear();
-        }
-
         for (UIKeyframeSheet child : sheet.children)
         {
             if (branch)
             {
                 this.setFolded(child, expanded, true);
             }
-            else if (!expanded)
-            {
-                clearSelectionBelow(child);
-            }
-        }
-    }
-
-    private static void clearSelectionBelow(UIKeyframeSheet sheet)
-    {
-        sheet.selection.clear();
-
-        for (UIKeyframeSheet child : sheet.children)
-        {
-            clearSelectionBelow(child);
         }
     }
 

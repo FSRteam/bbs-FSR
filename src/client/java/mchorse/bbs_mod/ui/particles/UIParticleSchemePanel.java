@@ -1211,6 +1211,18 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
     }
 
     @Override
+    public IKey getCreateLabel()
+    {
+        return UIKeys.SNOWSTORM_LANDING_NEW;
+    }
+
+    @Override
+    public IKey getListLabel()
+    {
+        return UIKeys.SNOWSTORM_LANDING_LIST;
+    }
+
+    @Override
     public ContentType getType()
     {
         return ContentType.PARTICLES;
