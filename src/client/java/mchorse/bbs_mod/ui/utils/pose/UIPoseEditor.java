@@ -184,6 +184,10 @@ public class UIPoseEditor extends UIElement
         this.transform = this.createTransformEditor();
         this.transform.setModel();
 
+        this.material = materialSection(this.color, this.overlay, this.glow);
+        this.material.fields.add(this.boneVisible);
+        this.materialSection = this.material;
+
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
         this.column().vertical().stretch();
@@ -209,10 +213,7 @@ public class UIPoseEditor extends UIElement
     {
         this.removeAll();
 
-        this.material = materialSection(this.color, this.overlay, this.glow);
-        this.material.fields.add(this.boneVisible);
         this.material.setVisible(this.hasBones && !this.poseOnly);
-        this.materialSection = this.material;
 
         UIElement[] fields = {
             UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix),

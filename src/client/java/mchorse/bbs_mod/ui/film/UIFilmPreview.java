@@ -245,21 +245,8 @@ public class UIFilmPreview extends UIElement
         });
         this.recordVideo = new UIIcon(Icons.VIDEO_CAMERA, (b) ->
         {
-            if (this.panel.checkShowNoCamera())
+            if (!this.canExport())
             {
-                return;
-            }
-
-            if (!FFMpegUtils.checkFFMPEG())
-            {
-                UIMessageOverlayPanel panel = new UIMessageOverlayPanel(UIKeys.GENERAL_WARNING, UIKeys.GENERAL_FFMPEG_ERROR_DESCRIPTION);
-                UIIcon guide = new UIIcon(Icons.HELP, (bb) -> UIUtils.openWebLink(UIKeys.GENERAL_FFMPEG_ERROR_GUIDE_LINK.get()));
-
-                guide.tooltip(UIKeys.GENERAL_FFMPEG_ERROR_GUIDE, Direction.LEFT);
-                panel.icons.add(guide);
-
-                UIOverlay.addOverlay(this.getContext(), panel);
-
                 return;
             }
 
@@ -802,9 +789,17 @@ public class UIFilmPreview extends UIElement
 
     private void exportQueueFromTabs()
     {
+        if (this.canExport())
+        {
+            this.panel.startQueueExportFromOpenTabs();
+        }
+    }
+
+    private boolean canExport()
+    {
         if (this.panel.checkShowNoCamera())
         {
-            return;
+            return false;
         }
 
         if (!FFMpegUtils.checkFFMPEG())
@@ -817,10 +812,10 @@ public class UIFilmPreview extends UIElement
 
             UIOverlay.addOverlay(this.getContext(), panel);
 
-            return;
+            return false;
         }
 
-        this.panel.startQueueExportFromOpenTabs();
+        return true;
     }
 
     private void renderAudio()
