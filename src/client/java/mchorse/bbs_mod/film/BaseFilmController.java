@@ -710,7 +710,12 @@ public abstract class BaseFilmController
 
         filmContext.transition = transition;
         filmContext.timeline(replay.properties, replay.getTick(this.getTick()) + transition, this.isTimelinePlaying());
-        boolean worldActor = replay.actor.get() && !this.rendersActorBodies();
+        boolean worldActor = false;
+
+        if (replay.actor.get())
+        {
+            worldActor = !this.rendersActorBodies();
+        }
 
         if (worldActor)
         {
