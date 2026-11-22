@@ -753,7 +753,7 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
                 isPointHover = isPointHover || this.keyframes.getGrabbingArea(context).isInside(x1, y);
             }
 
-            int kc = frame.getColor() != null ? frame.getColor().getRGBColor() | Colors.A100 : sheet.color;
+            int kc = UIKeyframeDopeSheet.keyframeColor(frame, sheet);
             int c = (sheet.selection.has(i) || isPointHover ? Colors.WHITE : kc) | Colors.A100;
 
             if (toRemove)
@@ -790,10 +790,10 @@ public class UIKeyframeGraph implements IUIKeyframeGraph
 
             int c = sheet.selection.has(j) ? BBSSettings.activeColor() & Colors.RGB : 0;
             int mx = this.keyframes.toGraphX(frame.getTick());
-            int mc = c | Colors.A100;
+            int mc = UIKeyframeDopeSheet.keyframeCoreColor(frame, sheet, sheet.selection.has(j));
             IKeyframeShapeRenderer shapeResult = UIKeyframeDopeSheet.renderShape(frame, context, builder, matrix, mx, y, 2, mc);
 
-            if (!frame.getStyle().isFilled()) shapeResult.renderKeyframeBackground(context, builder, matrix, mx, y, 2, mc);
+            shapeResult.renderKeyframeBackground(context, builder, matrix, mx, y, 2, mc);
 
             if (frame.getInterpolation().getInterp() == Interpolations.BEZIER)
             {

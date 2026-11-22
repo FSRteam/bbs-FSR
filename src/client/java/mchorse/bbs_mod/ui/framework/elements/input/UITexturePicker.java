@@ -35,7 +35,6 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
-import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.presets.PresetManager;
@@ -164,7 +163,8 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
         this.copyPasteController = new UICopyPasteController(PresetManager.TEXTURES, "_CopyTexture")
             .supplier(this::copyLink)
             .consumer((data, x, y) -> this.pasteLink(this.parseLink(data)))
-            .canCopy(() -> this.current != null);
+            .canCopy(() -> this.current != null)
+            .labels(UIKeys.TEXTURE_EDITOR_CONTEXT_COPY, UIKeys.TEXTURE_EDITOR_CONTEXT_PASTE);
 
         this.browseContent = new UIElement();
         this.close = new UIIcon(Icons.CLOSE, (b) -> this.close());
@@ -189,14 +189,7 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
         this.buttons.add(this.add, this.remove, this.edit);
 
         this.browser = new UITextureBrowser(this);
-        this.browser.grid.context((menu) ->
-        {
-            /* The presets of the old path text box live on in the grid's context menu */
-            menu.custom(new UIPresetContextMenu(this.copyPasteController)
-                .labels(UIKeys.TEXTURE_EDITOR_CONTEXT_COPY, UIKeys.TEXTURE_EDITOR_CONTEXT_PASTE));
-
-            this.browser.buildContextMenu(menu);
-        });
+        this.browser.grid.context((menu) -> this.copyPasteController.install(menu, this.getContext()));
         this.browser.full(this.browseContent);
 
         this.browseContent.add(this.browser);

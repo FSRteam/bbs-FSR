@@ -64,7 +64,7 @@
 	"bbs.config.personalization.overlay_gradient_border": "Свечение панелей",
 	"bbs.config.personalization.overlay_gradient_border-comment": "Градиентная обводка акцентным цветом вокруг всплывающих панелей и контекстных меню.",
 	"bbs.config.personalization.interface_blur": "Размытие фона",
-	"bbs.config.personalization.interface_blur-comment": "Смягчает мир за полупрозрачными поверхностями. По умолчанию выключено: не проверено вместе с Iris/Sodium.",
+	"bbs.config.personalization.interface_blur-comment": "Смягчает фон за панелями и всплывающими окнами.",
 	"bbs.config.personalization.interface_blur_radius": "Сила размытия фона",
 	"bbs.config.personalization.interface_blur_radius-comment": "Управляет силой размытия фона. Чем выше значение, тем мягче фон.",
 	"bbs.config.timeline.track_width": "Толщина дорожки",

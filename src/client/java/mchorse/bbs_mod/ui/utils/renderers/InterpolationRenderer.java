@@ -29,15 +29,29 @@ public class InterpolationRenderer
         int w = PREVIEW_WIDTH;
         int h = PREVIEW_HEIGHT;
 
-        TooltipStyle style = TooltipStyle.get();
-
         y = MathUtils.clamp(y, 0, context.menu.height - h);
-
         x = MathUtils.clamp(x - (int) (w * anchorX), 0, context.menu.width - w);
         y = MathUtils.clamp(y - (int) (h * anchorY), 0, context.menu.height - h);
 
         Area.SHARED.set(x, y, w, h);
-        style.renderBackground(context, Area.SHARED);
+        renderInterpolationPreview(interp, context, Area.SHARED, duration);
+    }
+
+    /** Draw the preview inside an area already placed by the caller. */
+    public static void renderInterpolationPreview(IInterp interp, UIContext context, Area area, int duration)
+    {
+        if (interp == null)
+        {
+            return;
+        }
+
+        int x = area.x;
+        int y = area.y;
+        int w = area.w;
+        int h = area.h;
+        TooltipStyle style = TooltipStyle.get();
+
+        style.renderBackground(context, area);
 
         Color fg = color.set(style.getForegroundColor(), false);
         int fontColor = style.getTextColor();

@@ -194,9 +194,23 @@ public class UIBoneTreeList extends UIStringList
         this.update();
     }
 
+    /** Fill the runtime bone hierarchy in its own order, using its display labels. */
+    public void fillBones(BoneHierarchy hierarchy, Collection<String> hidden)
+    {
+        this.clear();
+        this.metas.clear();
+
+        if (hierarchy != null)
+        {
+            this.emit(boneHierarchyRoots(hierarchy, hierarchy.getLabels(), hidden == null ? null : hidden::contains), 0, 0, true);
+        }
+
+        this.update();
+    }
+
     /**
      * Fill with a plain list of bone names, no hierarchy — the fallback for forms
-     * whose bones don't come from an {@link IModel} (e.g. mob forms' model parts).
+     * whose bones don't come from a rig at all.
      */
     public void fillFlat(Collection<String> bones)
     {

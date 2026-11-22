@@ -66,7 +66,7 @@ public class UILandingScreen extends UIElement
 
     public UILandingScreen(ILandingHost host)
     {
-        this(host.getRecentType(), host.getTitle(), host::getTabIcon, host::pickData, host::openDataManager, host::getDataFolder);
+        this(host.getRecentType(), host.getTitle(), host::getTabIcon, host::pickData, host::openDataManager, host::getDataFolder, host.getListLabel());
         this.showInList = host::showInList;
 
         if (host.getCreateLabel() != null)
@@ -82,6 +82,12 @@ public class UILandingScreen extends UIElement
     public UILandingScreen(String type, IKey title, Function<String, Icon> icons,
         Consumer<String> open, Runnable manager, Supplier<File> folder)
     {
+        this(type, title, icons, open, manager, folder, UIKeys.PANELS_LANDING_LIST);
+    }
+
+    private UILandingScreen(String type, IKey title, Function<String, Icon> icons,
+        Consumer<String> open, Runnable manager, Supplier<File> folder, IKey listLabel)
+    {
         this.type = type;
         this.showInList = (id) -> manager.run();
         this.card.relative(this).xy(0.5F, 0.5F).wh(460, this.preferredHeight).anchor(0.5F);
@@ -94,7 +100,7 @@ public class UILandingScreen extends UIElement
         this.recentHeading = UI.label(UIKeys.PANELS_LANDING_RECENT);
         this.recentHeading.relative(this.card).xy(170, 202).w(280).h(20);
 
-        this.list = new UILandingRow(Icons.MORE, UIKeys.PANELS_LANDING_LIST, (button) -> manager.run());
+        this.list = new UILandingRow(Icons.MORE, listLabel, (button) -> manager.run());
         this.directory = new UILandingRow(Icons.FOLDER, UIKeys.PANELS_CONTEXT_OPEN, (button) ->
         {
             File path = folder.get();

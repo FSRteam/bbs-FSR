@@ -56,11 +56,10 @@ public class InterpolationTooltip implements ITooltip
 
         int duration = this.duration == null ? 40 : this.duration.get();
 
-        /* The preview sits beside the element, vertically centred on it: ax picks the side.
-         * Placed by TooltipPlacement, so the renderer's own clamping is a no-op. */
+        /* The preview sits beside the element, vertically centred on it: ax picks the side. */
         Direction direction = this.ax < 0.5F ? Direction.LEFT : Direction.RIGHT;
 
         TooltipPlacement.place(context, context.tooltip.area, InterpolationRenderer.PREVIEW_WIDTH, InterpolationRenderer.PREVIEW_HEIGHT, direction, this.margin, 0, Area.SHARED);
-        InterpolationRenderer.renderInterpolationPreview(interpolation, context, Area.SHARED.x, Area.SHARED.y, 0F, 0F, duration);
+        InterpolationRenderer.renderInterpolationPreview(interpolation, context, Area.SHARED, duration);
     }
 }

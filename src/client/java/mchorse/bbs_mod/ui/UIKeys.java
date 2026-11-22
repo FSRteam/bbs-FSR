@@ -497,6 +497,8 @@ public class UIKeys
     public static final IKey FILM_OPEN_HISTORY = L10n.lang("bbs.ui.film.open_history");
     public static final IKey FILM_OPTIONS = L10n.lang("bbs.ui.film.options");
     public static final IKey FILM_TABS_NEW_TAB = L10n.lang("bbs.ui.film.tabs.new_tab");
+    public static final IKey FILM_LANDING_NEW = L10n.lang("bbs.ui.film.landing.new");
+    public static final IKey FILM_LANDING_LIST = L10n.lang("bbs.ui.film.landing.list");
     public static final IKey FILM_TABS_CONTEXT_CLOSE_OTHERS = L10n.lang("bbs.ui.film.tabs.context.close_others");
     public static final IKey FILM_TABS_CONTEXT_CLOSE_LEFT = L10n.lang("bbs.ui.film.tabs.context.close_left");
     public static final IKey FILM_TABS_CONTEXT_CLOSE_RIGHT = L10n.lang("bbs.ui.film.tabs.context.close_right");
@@ -1267,6 +1269,7 @@ public class UIKeys
     public static final IKey PRESETS_SAVE_DESCRIPTION = L10n.lang("bbs.ui.presets.save-description");
     public static final IKey PRESETS_SAVE_TITLE = L10n.lang("bbs.ui.presets.save-title");
     public static final IKey PRESETS_TITLE = L10n.lang("bbs.ui.presets.title");
+    public static final IKey SCENE_REPLAYS_EMPTY = L10n.lang("bbs.ui.scene.replays.empty");
     public static final IKey SCENE_REPLAYS_CONTEXT_ADD = L10n.lang("bbs.ui.scene.replays.context.add");
     public static final IKey SCENE_REPLAYS_CONTEXT_COPY = L10n.lang("bbs.ui.scene.replays.context.copy");
     public static final IKey SCENE_REPLAYS_CONTEXT_DUPE = L10n.lang("bbs.ui.scene.replays.context.dupe");
@@ -1507,6 +1510,10 @@ public class UIKeys
     public static final IKey SNOWSTORM_SPACE_TITLE = L10n.lang("bbs.ui.snowstorm.space.title");
     public static final IKey SNOWSTORM_SPACE_VELOCITY = L10n.lang("bbs.ui.snowstorm.space.velocity");
     public static final IKey SNOWSTORM_TITLE = L10n.lang("bbs.ui.snowstorm.title");
+    public static final IKey SNOWSTORM_LANDING_NEW = L10n.lang("bbs.ui.snowstorm.landing.new");
+    public static final IKey SNOWSTORM_LANDING_LIST = L10n.lang("bbs.ui.snowstorm.landing.list");
+    public static final IKey SUPPORTERS_TUTORIALS = L10n.lang("bbs.ui.supporters.tutorials");
+    public static final IKey SUPPORTERS_WIKI = L10n.lang("bbs.ui.supporters.wiki");
     public static final IKey PARTICLE_EDITOR_TITLE = L10n.lang("bbs.ui.particle_editor.title");
     public static final IKey PARTICLE_EDITOR_LAYOUT_LOCK = L10n.lang("bbs.ui.particle_editor.layout_lock");
     public static final IKey PARTICLE_EDITOR_LAYOUT_UNLOCK = L10n.lang("bbs.ui.particle_editor.layout_unlock");
