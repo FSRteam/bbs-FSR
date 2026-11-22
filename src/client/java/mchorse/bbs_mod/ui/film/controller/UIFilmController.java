@@ -533,12 +533,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
             return;
         }
 
-        this.stopRecording();
-
-        if (this.controlled != null)
-        {
-            this.toggleControl();
-        }
+        String controlledKey = this.controlled == null ? null : CollectionUtils.getKey(this.getEntities(), this.controlled);
 
         if (this.editorController != null)
         {
@@ -552,6 +547,49 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         entities.clear();
         entities.putAll(this.editorController.getEntities());
+
+        this.restoreControl(controlledKey);
+    }
+
+    /** Rebind control by replay ID after stubs change; only a missing body ends the take. */
+    private void restoreControl(String key)
+    {
+        if (key == null)
+        {
+            return;
+        }
+
+        IEntity rebuilt = this.getEntities().get(key);
+
+        if (rebuilt == null)
+        {
+            if (this.previousEntity != null)
+            {
+                this.controlled.setForm(this.playerForm);
+                this.previousEntity = null;
+                this.playerForm = null;
+            }
+
+            this.controlled = null;
+            this.toggleMousePointer(false);
+            this.stopRecording();
+
+            return;
+        }
+
+        if (this.previousEntity != null)
+        {
+            /* The old controller released the borrowed form. Adopt the new copy
+             * without moving the real player or resetting the live mouse stick. */
+            this.controlled.setForm(rebuilt.getForm());
+            this.previousEntity = rebuilt;
+            this.editorController.getEntities().put(key, this.controlled);
+            this.panel.getRunner().getContext().entities.put(key, this.controlled);
+        }
+        else
+        {
+            this.controlled = rebuilt;
+        }
     }
 
     public void shutdown()
@@ -678,7 +716,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
     }
 
-    private boolean canControl()
+    public boolean canControl()
     {
         UIContext context = this.getContext();
 

@@ -2158,7 +2158,7 @@
     "bbs.config.camera.orbit_axis_ortho": "对齐坐标轴时使用正交视图",
     "bbs.config.camera.orbit_axis_ortho-comment": "点击导航球坐标轴时切换为正交视图;离开坐标轴方向后恢复透视。手动切换的正交视图不会被改动。",
     "bbs.config.workspace.keep_frame_on_exit": "退出后保留画面",
-    "bbs.config.workspace.keep_frame_on_exit-comment": "离开影片编辑器后,当前画面继续显示在世界中;再次打开影片编辑器时清除。演员回放仍会随编辑器退出。",
+    "bbs.config.workspace.keep_frame_on_exit-comment": "离开影片编辑器后,当前画面继续显示在世界中;再次打开影片编辑器时清除。",
     "bbs.ui.bone_picker.click_bone": "点击骨骼",
     "bbs.ui.film.controller.keys.toggle_ortho": "正交相机",
     "bbs.ui.forms.editors.model.ik.chain_empty": "选择控制骨骼",

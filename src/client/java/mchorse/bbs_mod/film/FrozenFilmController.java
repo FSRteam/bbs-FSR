@@ -18,11 +18,9 @@ import java.util.Map;
  * {@code FilmEditorController} reads it through {@code isPlaying}). Frozen, the frame is a statue;
  * animated, the forms run their own clock and idle away exactly as they did with the editor open.
  *
- * <p>Deliberately blind to the film's actors ({@link #getActors()} returns {@code null}): those are
- * real entities and the player, steered by the server only while the editor holds them, and a frozen
- * frame that kept driving them would keep re-applying a stale tick's position and rotation &mdash;
- * pinning the player in place after they left the UI. Replays flagged as actors therefore leave with
- * the editor; every other replay stays.
+ * <p>Deliberately blind to the film's actor entities ({@link #getActors()} returns {@code null}):
+ * those real entities and the player remain under server control. Every replay stays in the frame,
+ * including actors, whose bodies are drawn from local copies at the captured tick.
  */
 public class FrozenFilmController extends BaseFilmController
 {
@@ -43,6 +41,12 @@ public class FrozenFilmController extends BaseFilmController
     public Map<String, Integer> getActors()
     {
         return null;
+    }
+
+    @Override
+    protected boolean rendersActorBodies()
+    {
+        return true;
     }
 
     @Override

@@ -2291,7 +2291,7 @@
     "bbs.config.camera.orbit_axis_ortho": "Orthographic on axis snap",
     "bbs.config.camera.orbit_axis_ortho-comment": "When enabled, clicking an axis ball also switches the camera to an orthographic projection, so the view reads as a blueprint, and orbiting away from the axis brings the perspective back. A projection you toggled by hand is never touched.",
     "bbs.config.workspace.keep_frame_on_exit": "Keep frame on exit",
-    "bbs.config.workspace.keep_frame_on_exit-comment": "When you leave BBS from the film editor, the tick that was on screen stays rendered in the world instead of disappearing. The \"Freeze when paused\" toggle keeps ruling it: off, the forms go on idling on that tick. It is taken down when you open the film editor again. Replays marked as actors still leave with the editor, since those are real entities driven by the server.",
+    "bbs.config.workspace.keep_frame_on_exit-comment": "When you leave BBS from the film editor, the tick that was on screen stays rendered in the world instead of disappearing. The \"Freeze when paused\" toggle keeps ruling it: off, the forms go on idling on that tick. It is taken down when you open the film editor again.",
     "bbs.ui.bone_picker.click_bone": "Click on a bone",
     "bbs.ui.film.controller.keys.toggle_ortho": "Orthographic camera",
     "bbs.ui.forms.editors.model.ik.chain_empty": "Pick a controller bone",

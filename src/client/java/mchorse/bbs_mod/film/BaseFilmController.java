@@ -141,6 +141,12 @@ public abstract class BaseFilmController
         return null;
     }
 
+    /** World actors own their bodies; frozen frames render their local replay copies. */
+    protected boolean rendersActorBodies()
+    {
+        return false;
+    }
+
     public abstract Map<String, Integer> getActors();
 
     public abstract int getTick();
@@ -373,7 +379,7 @@ public abstract class BaseFilmController
     /** Publish all replay-side item effects after a controller applies keyframes/actions. */
     protected void applyReplayItemUse(Replay replay, int ticks, IEntity entity)
     {
-        if (replay.actor.get())
+        if (replay.actor.get() && !this.rendersActorBodies())
         {
             return;
         }
@@ -399,19 +405,9 @@ public abstract class BaseFilmController
         replay.keyframes.apply(ticks, actorEntity, List.of(ReplayKeyframes.GROUP_POSITION));
         actorEntity.setHurtTimer(Math.max(hurtTimer, actorEntity.getHurtTimer()));
 
-        /* ActorEntity is teleported to keyframes, so vanilla never sees a floor
-         * collision and never runs its step/sprint effects. Probe the floor with
-         * the recorded delta, then snap back to the exact keyframe position. */
-        double x = replay.keyframes.x.interpolate(ticks);
-        double y = replay.keyframes.y.interpolate(ticks);
-        double z = replay.keyframes.z.interpolate(ticks);
-        boolean grounded = replay.keyframes.grounded.interpolate(ticks) > 0;
-        Vec3 actorPos = actor.position();
-        double dY = y - actorPos.y - (grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D);
-
-        actor.move(MoverType.SELF, new Vec3(x - actorPos.x, dY, z - actorPos.z));
-        actor.setPos(x, y, z);
-        actor.setOnGround(grounded);
+        /* ActionPlayer owns world movement and its floor probe. Keep the client's
+         * visual state without overwriting vanilla's server-position interpolation. */
+        actor.setOnGround(replay.keyframes.grounded.interpolate(ticks) > 0);
         actor.setSprinting(replay.keyframes.sprinting.interpolate(ticks) > 0);
 
         /* The death channel drives the actor's topple rotation and red overlay. ActorEntity
@@ -421,9 +417,6 @@ public abstract class BaseFilmController
 
         if (this.getTransition(editorEntity, 1F) == 0F)
         {
-            actorEntity.setPrevX(actorEntity.getX());
-            actorEntity.setPrevY(actorEntity.getY());
-            actorEntity.setPrevZ(actorEntity.getZ());
             actorEntity.setPrevYaw(actorEntity.getYaw());
             actorEntity.setPrevHeadYaw(actorEntity.getHeadYaw());
             actorEntity.setPrevBodyYaw(actorEntity.getBodyYaw());
@@ -717,8 +710,9 @@ public abstract class BaseFilmController
 
         filmContext.transition = transition;
         filmContext.timeline(replay.properties, replay.getTick(this.getTick()) + transition, this.isTimelinePlaying());
+        boolean worldActor = replay.actor.get() && !this.rendersActorBodies();
 
-        if (replay.actor.get())
+        if (worldActor)
         {
             /* Actor replays render the world ActorEntity instead of the editor
              * entity. The editor entity is still the gizmo's placement source,
@@ -731,7 +725,7 @@ public abstract class BaseFilmController
 
         FilmEntityRenderer.renderEntity(filmContext);
 
-        if (replay.actor.get())
+        if (worldActor)
         {
             Map<String, Integer> actors = this.getActors();
             Integer actorId = actors == null ? null : actors.get(replay.getId());

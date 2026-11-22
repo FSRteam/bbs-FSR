@@ -37,7 +37,7 @@ public class WorldFilmController extends BaseFilmController
     @Override
     public Map<String, Integer> getActors()
     {
-        return BBSModClient.getFilms().actors.get(this.film.getId());
+        return BBSModClient.getFilms().getActors(this.film.getId());
     }
 
     @Override

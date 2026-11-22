@@ -443,6 +443,8 @@ public class Films
 
     public Film remove(String id)
     {
+        this.actors.remove(id);
+
         Iterator<BaseFilmController> it = this.controllers.iterator();
 
         while (it.hasNext())
@@ -463,7 +465,24 @@ public class Films
 
     public void updateActors(String filmId, Map<String, Integer> actors)
     {
-        this.actors.put(filmId, actors);
+        this.updateActors(filmId, actors, false);
+    }
+
+    public void updateActors(String filmId, Map<String, Integer> actors, boolean merge)
+    {
+        if (merge)
+        {
+            this.actors.computeIfAbsent(filmId, key -> new HashMap<>()).putAll(actors);
+        }
+        else
+        {
+            this.actors.put(filmId, new HashMap<>(actors));
+        }
+    }
+
+    public Map<String, Integer> getActors(String filmId)
+    {
+        return this.actors.get(filmId);
     }
 
     public void startRenderFrame(float transition)
