@@ -325,7 +325,7 @@ public class TextureAnimation implements IMapSerializable
         return DataToString.writeSilently(file(textureFile), this.toMcmeta(stripW, stripH), true);
     }
 
-    /* Undo snapshots — the editable state only; the file as read stays with the object */
+    /* Undo snapshots — editable state and the raw sidecar data */
 
     @Override
     public void toData(MapType data)
@@ -333,6 +333,7 @@ public class TextureAnimation implements IMapSerializable
         data.putInt("frametime", this.frametime);
         data.putInt("width", this.width);
         data.putInt("height", this.height);
+        data.put("source", this.source == null ? null : this.source.copy());
 
         ListType list = new ListType();
 
@@ -354,6 +355,8 @@ public class TextureAnimation implements IMapSerializable
         this.frametime = Math.max(1, data.getInt("frametime", DEFAULT_FRAMETIME));
         this.width = data.getInt("width", 0);
         this.height = data.getInt("height", 0);
+        MapType source = data.getMap("source", null);
+        this.source = source == null ? null : (MapType) source.copy();
         this.frames.clear();
 
         for (BaseType frame : data.getList("frames"))

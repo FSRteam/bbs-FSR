@@ -243,6 +243,7 @@ public class Document implements IMapSerializable
     public MapType snapshot()
     {
         MapType data = this.toData();
+        data.putBool("removeAnimationOnSave", this.removeAnimationOnSave);
 
         if (this.animation != null)
         {
@@ -256,10 +257,11 @@ public class Document implements IMapSerializable
     public void restore(MapType data)
     {
         this.fromData(data);
+        this.removeAnimationOnSave = data.getBool("removeAnimationOnSave");
 
         if (data.has("animation"))
         {
-            /* Keep the object: it remembers the .mcmeta as it was read, which the snapshot doesn't carry */
+            /* Reuse the animation object when one is already present. */
             if (this.animation == null)
             {
                 this.animation = new TextureAnimation();
