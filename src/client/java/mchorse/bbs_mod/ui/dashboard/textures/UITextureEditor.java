@@ -554,7 +554,7 @@ public class UITextureEditor extends UIPixelsEditor
                 moving.add(frame);
 
                 /* The slot is counted among the frames that stay */
-                if (i < target)
+                if (i < insertion)
                 {
                     target--;
                 }
