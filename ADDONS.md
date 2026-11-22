@@ -17,6 +17,22 @@ interfaces, share that contract. The signature snapshot records these references
 Other classes outside that package are BBS internals and move without notice. An addon
 reaching into it is on its own, and the breakage shows up in the game rather than on the build.
 
+## Building against FSR
+
+Use a NeoForge 1.21.1 project with Java 21, matching FSR's `gradle.properties`.
+Compile against the current `BBS_FSR_beta_v0.0.11.jar`; for a local dependency, copy it
+into your addon's `libs` directory and add:
+
+```groovy
+dependencies {
+    implementation files("libs/BBS_FSR_beta_v0.0.11.jar")
+}
+```
+
+The addon's `neoforge.mods.toml` declares `bbs` as a required dependency. Install both
+jars when running the addon. The common bootstrap registers the addon during mod
+construction; client event subscribers belong in a client-only bootstrap.
+
 ## Getting in
 
 An addon declares itself in its own `neoforge.mods.toml` and registers from its mod constructor
@@ -145,6 +161,23 @@ Give addon-defined IDs and added value keys a namespace, such as `my_addon:wobbl
 namespaced values, missing form and clip types, and unreadable tracks or property channels retain
 their saved data while the addon is absent, so the data can be read when the addon returns.
 
+## Values on existing forms
+
+`RegisterFormModifiersEvent` adds values to forms created through `FormArchitect`:
+
+```java
+@Subscribe
+public void onFormModifiers(RegisterFormModifiersEvent event)
+{
+    event.register(form -> form.add(new ValueFloat("my_addon:wobble", 0F)));
+}
+```
+
+The catalogue discovers visible values, and their factories provide keyframes. Use
+`RegisterTrackStylesEvent` for the new track's colour and icon. Known forms loaded or
+copied through the factory receive the modifier; palette templates are built directly
+and acquire it when copied into a scene.
+
 ## Editor extensions
 
 - `RegisterFormPanelsEvent`: create and register a fresh panel for each editor. Factories run
@@ -179,6 +212,10 @@ in the pose/matrix pipeline, including typed `FormBone` chain ownership through 
 copies of their positions and block-entity NBT. Frame overlays run on the finished frame in
 registration order.
 
+Register Film listeners once from `BBSReadyEvent` or `BBSClientReadyEvent`. Release
+controller-owned resources in `FilmEvents.SHUTDOWN` that were allocated in `CREATED`.
+`BBSModClient.getFilms().getControllers()` returns the currently playing controllers.
+
 Functional runtime events expose `register` and `unregister`. Remove listeners when their owner
 is unloaded. The annotation event bus keeps FSR's existing shared subscriber table, so
 `EventBus.INSTANCE` and another `EventBus` instance reach the same subscriptions. FSR's internal
@@ -188,3 +225,13 @@ The external fixture in `src/replayKeyframeTest/java/sample/fs26addon` exercises
 consumers, lifecycle ordering, render-context forwarding, editor factories, aliases and
 category shortcuts. Minecraft mixin access and visible rendering still require client smoke
 checks.
+
+## Vanilla access and clip types
+
+`mchorse.bbs_mod.api.compat.VanillaAccess` exposes active-item, item-use and riptide
+state. `mchorse.bbs_mod.api.client.compat.ClientVanillaAccess` exposes the current
+framebuffer through the existing Minecraft accessor. Keep the latter in client code.
+
+Sound-playing Film clips extend `AudioClip`, as `VideoClip` does; the waveform and
+export paths consume that class. `TrackKind` is the built-in enum of track kinds;
+addon values use their factories and the property tracks described above.
