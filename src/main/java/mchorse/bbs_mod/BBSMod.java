@@ -825,6 +825,10 @@ public class BBSMod
                 }
             });
         }
+        else if (event.getTarget() instanceof ActorEntity actor && event.getEntity() instanceof ServerPlayer watcher)
+        {
+            actions.sendActorsToTrackingPlayer(watcher, actor);
+        }
     }
 
     private void onEntityJoinLevel(EntityJoinLevelEvent event)

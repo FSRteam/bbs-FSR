@@ -525,6 +525,22 @@ public class ActionPlayer
         return true;
     }
 
+    /** Re-send the existing full map when a player starts tracking one of this film's bodies. */
+    boolean sendActorsToTrackingPlayer(ServerPlayer player, ActorEntity actor)
+    {
+        for (LivingEntity body : this.actors.values())
+        {
+            if (body == actor)
+            {
+                ServerNetwork.sendActors(player, this.film.getId(), this.actors);
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** Reassert the current replay-to-entity map after a staged replacement. */
     public void resendActors()
     {

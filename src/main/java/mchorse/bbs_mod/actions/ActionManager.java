@@ -2,6 +2,7 @@ package mchorse.bbs_mod.actions;
 
 import mchorse.bbs_mod.actions.types.ActionClip;
 import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.utils.DataPath;
@@ -226,6 +227,17 @@ public class ActionManager
     public ActionRecorder getRecorder(ServerPlayer owner)
     {
         return owner == null ? null : this.recorders.get(owner);
+    }
+
+    public void sendActorsToTrackingPlayer(ServerPlayer player, ActorEntity actor)
+    {
+        for (ActionPlayer runtime : this.players)
+        {
+            if (runtime.sendActorsToTrackingPlayer(player, actor))
+            {
+                return;
+            }
+        }
     }
 
     public ActionPlayer play(ServerPlayer serverPlayer, ServerLevel level, Film film, int tick)
