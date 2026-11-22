@@ -47,7 +47,7 @@ public class FilmBoneWorldProvider implements IWorldTransformProvider
         Replay replay = replayEditor.getReplay();
         IEntity entity = this.panel.getController().getCurrentEntity();
 
-        if (bone == null || bone.a == null || replay == null || entity == null)
+        if (bone == null || bone.a == null || replay == null || replay.relative.get() || entity == null)
         {
             return false;
         }
@@ -55,7 +55,7 @@ public class FilmBoneWorldProvider implements IWorldTransformProvider
         float transition = this.panel.getRunner().isRunning() && replayEditor.getContext() != null
             ? replayEditor.getContext().getTransition()
             : 0F;
-        float tick = this.panel.getCursor() + transition;
+        float tick = replay.getTick(this.panel.getCursor()) + transition;
         Form form = entity.getForm();
 
         /* Push the (possibly perturbed) pose into the model so the matrix cache reflects it. */
