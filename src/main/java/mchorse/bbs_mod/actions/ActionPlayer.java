@@ -396,6 +396,8 @@ public class ActionPlayer
             return;
         }
 
+        tick = replay.getTick((int) tick) + (tick - (int) tick);
+
         int slot = replay.keyframes.getSelectedSlot(tick);
 
         if (this.serverPlayer.getInventory().selected != slot)
@@ -684,6 +686,9 @@ public class ActionPlayer
 
     private boolean applySafely(LivingEntity actor, Replay replay, float tick, boolean ticking)
     {
+        /* Server pose/equipment and client visuals use the same replay-local time. */
+        tick = replay.getTick((int) tick) + (tick - (int) tick);
+
         if (actor instanceof ActorEntity actorEntity)
         {
             actorEntity.setPickUpItems(replay.actorPickup.get());
@@ -908,7 +913,7 @@ public class ActionPlayer
                         actor,
                             this.fakePlayer,
                         this.film,
-                        this.tick,
+                        replay.getTick(this.tick),
                         () -> this.hasRuntimeAuthority(authorityRequired)
                     );
                 });
@@ -1161,7 +1166,9 @@ public class ActionPlayer
 
                 LivingEntity actor = this.actors.get(replay.getId());
 
-                for (Clip clip : replay.actions.getClips(tick))
+                int replayTick = replay.getTick(tick);
+
+                for (Clip clip : replay.actions.getClips(replayTick))
                 {
                     if (!this.hasRuntimeAuthority())
                     {
@@ -1170,12 +1177,12 @@ public class ActionPlayer
                         return;
                     }
 
-                    long relative = (long) tick - clip.tick.get();
+                    long relative = (long) replayTick - clip.tick.get();
 
                     if (clip instanceof ActionClip action && clip.enabled.get()
                         && relative >= 0L && relative < clip.duration.get())
                     {
-                        action.applyRange(actor, this.fakePlayer, this.film, replay, tick);
+                        action.applyRange(actor, this.fakePlayer, this.film, replay, replayTick);
                     }
                 }
             }
