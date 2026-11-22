@@ -7,6 +7,7 @@ import org.lwjgl.opengl.GL11;
 import mchorse.bbs_mod.forms.renderers.utils.FormPbr;
 import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
 import mchorse.bbs_mod.forms.renderers.utils.FormMaterialLevels;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 import mchorse.bbs_mod.forms.forms.utils.FormMaterial;
 import mchorse.bbs_mod.cubic.render.CubicMaterialRenderer;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -1121,8 +1122,9 @@ public class ModelInstance implements IModelInstance
         /* The bake is a function of the pose and the draw's own inputs: a miss redoes what used to happen every
          * pass — capture the seams, decide which bones bend, tessellate them. */
         long epoch = BBSRendering.getSceneFrameId();
-        long key = this.weldKey(model, keys, light, overlay, color, stencilMap);
-        WeldGeometryCache.Entry entry = this.weldCache.find(key);
+        boolean cacheable = RenderFrame.isEnabled();
+        long key = cacheable ? this.weldKey(model, keys, light, overlay, color, stencilMap) : 0L;
+        WeldGeometryCache.Entry entry = cacheable ? this.weldCache.find(key) : null;
         Set<ModelGroup> cpuGroups;
         List<CubicMaterialRenderer.Batch> cpuBatches;
 
@@ -1143,7 +1145,7 @@ public class ModelInstance implements IModelInstance
                     cpuBatches = bake.upload();
                 }
 
-                entry = this.weldCache.acquire(epoch);
+                entry = cacheable ? this.weldCache.acquire(epoch) : null;
 
                 if (entry != null)
                 {

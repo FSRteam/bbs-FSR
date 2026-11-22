@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.cubic.render.vao;
 
 import mchorse.bbs_mod.utils.profiler.BBSProfiler;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
 
 import mchorse.bbs_mod.bobj.BOBJArmature;
 import mchorse.bbs_mod.bobj.BOBJLoader;
@@ -239,7 +240,7 @@ public class BOBJModelVAO
 
     private void updateMesh(StencilMap stencilMap, Matrix4f[] matrices, boolean[] visible, boolean armatureChanged)
     {
-        if (armatureChanged || this.uploadedMatrices == null
+        if (!RenderFrame.isEnabled() || armatureChanged || this.uploadedMatrices == null
             || matrices == null && this.uploadedMatrices.length != 0
             || matrices != null && matrices.length != this.uploadedMatrices.length
             || !Arrays.equals(visible, this.uploadedVisibility)
