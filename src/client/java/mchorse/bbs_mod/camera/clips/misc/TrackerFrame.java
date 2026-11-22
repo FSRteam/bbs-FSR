@@ -4,9 +4,9 @@ import mchorse.bbs_mod.camera.data.Angle;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.film.FilmMatrices;
-import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.forms.renderers.utils.FormFrameCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.utils.MatrixUtils;
 import mchorse.bbs_mod.utils.Pair;
@@ -64,20 +64,14 @@ public class TrackerFrame
      * Resolve the frame of the given bone (attachment group) of the given entity.
      *
      * @param cx camera position X the resulting matrices are relative to
-     * @return {@code null} when the entity has no form, or the form has no such group
+     * @return {@code null} when the entity has no form, its replay is relative,
+     *         or the form has no such group
      */
     public static TrackerFrame resolve(Map<String, IEntity> entities, IEntity entity, String group, double cx, double cy, double cz, float transition)
     {
         Form form = entity == null ? null : entity.getForm();
 
-        if (form == null)
-        {
-            return null;
-        }
-
-        MatrixCache map = FormUtilsClient.getRenderer(form).collectMatrices(entity, transition);
-
-        if (!map.has(group))
+        if (form == null || FilmMatrices.isRelativeReplayEntity(entity))
         {
             return null;
         }
@@ -88,6 +82,17 @@ public class TrackerFrame
         if (totalMatrix.a != null)
         {
             formTransform = totalMatrix.a;
+        }
+
+        /* The tracked pose uses the replay's placement, owner and world policies. */
+        Matrix4f semanticBase = new Matrix4f()
+            .translation((float) cx, (float) cy, (float) cz).mul(formTransform);
+        MatrixCache map = FormFrameCache.collect(null, form, entity, entity,
+            semanticBase, true, true, transition);
+
+        if (!map.has(group))
+        {
+            return null;
         }
 
         formTransform.mul(map.get(group).matrix());
