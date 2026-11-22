@@ -180,7 +180,7 @@ public class UIFrameStrip extends UIItemGrid<TextureAnimation.Frame>
 
         if (frame == null)
         {
-            menu.icon(MenuVerb.ADD, () -> this.panel.insert(visible.size())).label(UIKeys.TEXTURES_FRAMES_ADD);
+            menu.icon(MenuVerb.ADD, () -> this.panel.insert(visible.size())).label(UIKeys.TEXTURES_KEYS_FRAME_ADD_EMPTY);
 
             return;
         }
