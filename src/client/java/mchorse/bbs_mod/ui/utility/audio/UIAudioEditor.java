@@ -13,11 +13,11 @@ import mchorse.bbs_mod.audio.Waveform;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.film.UIClips;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITimelineCanvas;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Scale;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
@@ -620,7 +620,7 @@ public class UIAudioEditor extends UIElement
             this.renderColorCode(context, this.current, true);
         }
 
-        UIClips.renderCursor(context, String.format("%.1f/%.1f", time, waveform.getDuration()), this.area, cursorX);
+        UITimelineCanvas.renderCursor(context, String.format("%.1f/%.1f", time, waveform.getDuration()), this.area, cursorX);
 
         context.batcher.unclip(context);
     }

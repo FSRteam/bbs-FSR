@@ -1074,11 +1074,11 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
         {
             if (actionsMode)
             {
-                this.actionTimeline.clips.scale.view(this.keyframeEditor.view.getXAxis().getMinValue(), this.keyframeEditor.view.getXAxis().getMaxValue());
+                this.actionTimeline.clips.getXAxis().view(this.keyframeEditor.view.getXAxis().getMinValue(), this.keyframeEditor.view.getXAxis().getMaxValue());
             }
             else
             {
-                this.keyframeEditor.view.getXAxis().view(this.actionTimeline.clips.scale.getMinValue(), this.actionTimeline.clips.scale.getMaxValue());
+                this.keyframeEditor.view.getXAxis().view(this.actionTimeline.clips.getXAxis().getMinValue(), this.actionTimeline.clips.getXAxis().getMaxValue());
             }
         }
 

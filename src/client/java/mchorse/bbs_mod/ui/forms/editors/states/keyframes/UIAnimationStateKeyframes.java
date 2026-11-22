@@ -2,7 +2,7 @@ package mchorse.bbs_mod.ui.forms.editors.states.keyframes;
 
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.ui.film.UIClips;
+import mchorse.bbs_mod.ui.framework.elements.utils.UITimelineCanvas;
 import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -97,7 +97,7 @@ public class UIAnimationStateKeyframes extends UIKeyframes
             String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.getDuration());
 
             context.batcher.clip(this.graphArea, context);
-            UIClips.renderCursor(context, label, this.area, cx - 1);
+            UITimelineCanvas.renderCursor(context, label, this.area, cx - 1);
             context.batcher.unclip(context);
         }
 

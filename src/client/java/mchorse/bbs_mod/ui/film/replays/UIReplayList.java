@@ -11,8 +11,6 @@ import mchorse.bbs_mod.data.types.ListType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
-import mchorse.bbs_mod.film.replays.ReplayKeyframes;
-import mchorse.bbs_mod.film.replays.Replays;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -33,41 +31,26 @@ import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
-import mchorse.bbs_mod.ui.framework.elements.UIPanelBase;
 import mchorse.bbs_mod.ui.framework.elements.context.UIContextMenu;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UILabelList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
 import mchorse.bbs_mod.ui.model_blocks.UIModelBlockEntityList;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIFolderOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
-import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
-import mchorse.bbs_mod.ui.framework.elements.utils.UIText;
-import mchorse.bbs_mod.ui.utils.UI;
-import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.utils.CollectionUtils;
-import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.RayTracing;
-import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
-import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
 import mchorse.bbs_mod.utils.presets.PresetManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -82,15 +65,11 @@ import mchorse.bbs_mod.utils.categories.CategoryPath;
 import mchorse.bbs_mod.utils.categories.CategoryTree;
 import java.util.Collections;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.function.Consumer;
 
 /**
@@ -1416,12 +1395,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         if (last != null)
         {
-            this.refreshReplayList();
-            this.update();
-            this.panel.replayEditor.setReplay(last);
-            this.scrollToReplay(last);
-            this.updateFilmEditor();
-            this.saveFilm();
+            this.showNewReplay(last);
         }
     }
 
@@ -1478,12 +1452,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
         Film film = this.panel.getData();
         Replay replay = ReplayFactory.fromCamera(film, cameraId, duration, this.panel.getController().getEntities());
 
-        this.refreshReplayList();
-        this.update();
-        this.panel.replayEditor.setReplay(replay);
-        this.scrollToReplay(replay);
-        this.updateFilmEditor();
-        this.saveFilm();
+        this.showNewReplay(replay);
 
         this.openFormEditor(replay.form, false, null);
     }
@@ -1521,12 +1490,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
         Film film = this.panel.getData();
         Replay replay = ReplayFactory.fromModelBlock(film, modelBlock);
 
-        this.refreshReplayList();
-        this.update();
-        this.panel.replayEditor.setReplay(replay);
-        this.scrollToReplay(replay);
-        this.updateFilmEditor();
-        this.saveFilm();
+        this.showNewReplay(replay);
     }
 
     /**
@@ -1576,12 +1540,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         Replay replay = ReplayFactory.fromStructure(film, id, min, size);
 
-        this.refreshReplayList();
-        this.update();
-        this.panel.replayEditor.setReplay(replay);
-        this.scrollToReplay(replay);
-        this.updateFilmEditor();
-        this.saveFilm();
+        this.showNewReplay(replay);
     }
 
     public void addReplay(Vector3d position, float pitch, float yaw)
@@ -1595,14 +1554,20 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         Replay replay = ReplayFactory.atPosition(film, position, pitch, yaw);
 
+        this.showNewReplay(replay);
+
+        this.openFormEditor(replay.form, false, null);
+    }
+
+    /** Rebuild the list, focus the new replay and preserve the FSR server save. */
+    private void showNewReplay(Replay replay)
+    {
         this.refreshReplayList();
         this.update();
         this.panel.replayEditor.setReplay(replay);
         this.scrollToReplay(replay);
         this.updateFilmEditor();
         this.saveFilm();
-
-        this.openFormEditor(replay.form, false, null);
     }
 
     protected void updateFilmEditor()
@@ -1640,12 +1605,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
         if (last != null)
         {
-            this.refreshReplayList();
-            this.update();
-            this.panel.replayEditor.setReplay(last);
-            this.scrollToReplay(last);
-            this.updateFilmEditor();
-            this.saveFilm();
+            this.showNewReplay(last);
         }
 
     }

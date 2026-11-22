@@ -1,108 +1,46 @@
 package mchorse.bbs_mod.ui.film.replays;
 
-import mchorse.bbs_mod.BBSMod;
-import mchorse.bbs_mod.BBSSettings;
-import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
-import mchorse.bbs_mod.blocks.entities.ModelProperties;
-import mchorse.bbs_mod.camera.Camera;
-import mchorse.bbs_mod.camera.clips.CameraClipContext;
-import mchorse.bbs_mod.camera.data.Position;
-import mchorse.bbs_mod.client.BBSRendering;
-import mchorse.bbs_mod.data.migration.FilmStableIds;
-import mchorse.bbs_mod.data.types.BaseType;
-import mchorse.bbs_mod.data.types.ListType;
-import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.ReplayKeyframes;
-import mchorse.bbs_mod.film.replays.Replays;
-import mchorse.bbs_mod.forms.FormUtils;
-import mchorse.bbs_mod.forms.FormUtilsClient;
-import mchorse.bbs_mod.forms.forms.AnchorForm;
-import mchorse.bbs_mod.forms.forms.BodyPart;
-import mchorse.bbs_mod.forms.forms.Form;
-import mchorse.bbs_mod.forms.forms.StructureForm;
-import mchorse.bbs_mod.forms.structure.StructureCut;
-import mchorse.bbs_mod.forms.structure.StructureSelection;
-import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
-import mchorse.bbs_mod.math.IExpression;
-import mchorse.bbs_mod.math.MathBuilder;
-import mchorse.bbs_mod.resources.Link;
-import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
-import mchorse.bbs_mod.settings.values.core.ValueForm;
-import mchorse.bbs_mod.settings.values.core.ValueLink;
-import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
-import mchorse.bbs_mod.ui.forms.UIFormPalette;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIPanelBase;
-import mchorse.bbs_mod.ui.framework.elements.context.UIContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
-import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UIList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UILabelList;
-import mchorse.bbs_mod.ui.framework.elements.input.list.UISearchList;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
-import mchorse.bbs_mod.ui.model_blocks.UIModelBlockEntityList;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIConfirmOverlayPanel;
-import mchorse.bbs_mod.ui.framework.elements.overlay.UIFolderOverlayPanel;
-import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
-import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
-import mchorse.bbs_mod.ui.framework.elements.utils.MouseGestureOwnership;
 import mchorse.bbs_mod.ui.framework.elements.utils.UIText;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.Label;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
-import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
-import mchorse.bbs_mod.ui.utils.presets.UIPresetContextMenu;
 import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.Direction;
-import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.NaturalOrderComparator;
 import mchorse.bbs_mod.utils.RayTracing;
-import mchorse.bbs_mod.utils.clips.Clip;
-import mchorse.bbs_mod.utils.clips.Clips;
-import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.keyframes.KeyframeChannel;
 import mchorse.bbs_mod.utils.keyframes.factories.KeyframeFactories;
-import mchorse.bbs_mod.utils.pose.Transform;
-import mchorse.bbs_mod.utils.presets.PresetManager;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Vector3d;
-import org.joml.Vector3f;
 
-import mchorse.bbs_mod.utils.categories.Category;
-import mchorse.bbs_mod.utils.categories.CategoryPath;
-import mchorse.bbs_mod.utils.categories.CategoryTree;
-import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.function.Consumer;
 import java.util.function.ToIntFunction;
 
 /** Batch replay operations, their inputs and remembered state. */
@@ -111,7 +49,8 @@ public class UIProcessReplaysPanel extends UIConfirmOverlayPanel
     private static final ProcessReplaysState PROCESS_STATE = new ProcessReplaysState();
     private final UIFilmPanel filmPanel;
     private final Runnable refresh;
-    private final List<ReplayBatchProcessor.VisibleReplay> visibleReplays = new ArrayList<>();
+    private final List<Replay> replays;
+    private final ToIntFunction<Replay> indexOfReplay;
 
     public UIProcessReplaysPanel(UIFilmPanel filmPanel, List<Replay> replays)
     {
@@ -223,27 +162,8 @@ public class UIProcessReplaysPanel extends UIConfirmOverlayPanel
         this.fillsOverlay();
         this.filmPanel = filmPanel;
         this.refresh = refresh;
-        int firstIndex = Integer.MAX_VALUE;
-
-        for (Replay replay : replays)
-        {
-            int index = visibleIndex.applyAsInt(replay);
-
-            if (index >= 0)
-            {
-                firstIndex = Math.min(firstIndex, index);
-            }
-        }
-
-        for (Replay replay : replays)
-        {
-            int index = visibleIndex.applyAsInt(replay);
-
-            if (index >= 0)
-            {
-                this.visibleReplays.add(new ReplayBatchProcessor.VisibleReplay(replay, index, index - firstIndex));
-            }
-        }
+        this.replays = new ArrayList<>(replays);
+        this.indexOfReplay = visibleIndex;
 
         Replay first = replays.get(0);
 
@@ -375,7 +295,31 @@ public class UIProcessReplaysPanel extends UIConfirmOverlayPanel
 
     private List<ReplayBatchProcessor.VisibleReplay> collectVisibleReplays()
     {
-        return new ArrayList<>(this.visibleReplays);
+        int firstIndex = Integer.MAX_VALUE;
+
+        for (Replay replay : this.replays)
+        {
+            int index = this.indexOfReplay.applyAsInt(replay);
+
+            if (index >= 0)
+            {
+                firstIndex = Math.min(firstIndex, index);
+            }
+        }
+
+        List<ReplayBatchProcessor.VisibleReplay> out = new ArrayList<>();
+
+        for (Replay replay : this.replays)
+        {
+            int index = this.indexOfReplay.applyAsInt(replay);
+
+            if (index >= 0)
+            {
+                out.add(new ReplayBatchProcessor.VisibleReplay(replay, index, index - firstIndex));
+            }
+        }
+
+        return out;
     }
 
     private boolean applyAdvanced(UIContext context, List<ReplayBatchProcessor.VisibleReplay> selected, List<String> selectedProperties)

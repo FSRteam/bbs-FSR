@@ -1536,20 +1536,20 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
     {
         if (panel == this.cameraEditor)
         {
-            this.timelineXMin = this.cameraEditor.clips.scale.getMinValue();
-            this.timelineXMax = this.cameraEditor.clips.scale.getMaxValue();
+            this.timelineXMin = this.cameraEditor.clips.getXAxis().getMinValue();
+            this.timelineXMax = this.cameraEditor.clips.getXAxis().getMaxValue();
         }
         else if (panel == this.actionEditor)
         {
-            this.timelineXMin = this.actionEditor.clips.scale.getMinValue();
-            this.timelineXMax = this.actionEditor.clips.scale.getMaxValue();
+            this.timelineXMin = this.actionEditor.clips.getXAxis().getMinValue();
+            this.timelineXMax = this.actionEditor.clips.getXAxis().getMaxValue();
         }
         else if (panel == this.replayEditor)
         {
             if (this.replayEditor.isActionsMode())
             {
-                this.timelineXMin = this.actionEditor.clips.scale.getMinValue();
-                this.timelineXMax = this.actionEditor.clips.scale.getMaxValue();
+                this.timelineXMin = this.actionEditor.clips.getXAxis().getMinValue();
+                this.timelineXMax = this.actionEditor.clips.getXAxis().getMaxValue();
             }
             else if (this.replayEditor.keyframeEditor != null)
             {
@@ -1568,17 +1568,17 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (panel == this.cameraEditor)
         {
-            this.cameraEditor.clips.scale.view(this.timelineXMin, this.timelineXMax);
+            this.cameraEditor.clips.getXAxis().view(this.timelineXMin, this.timelineXMax);
         }
         else if (panel == this.actionEditor)
         {
-            this.actionEditor.clips.scale.view(this.timelineXMin, this.timelineXMax);
+            this.actionEditor.clips.getXAxis().view(this.timelineXMin, this.timelineXMax);
         }
         else if (panel == this.replayEditor)
         {
             if (this.replayEditor.isActionsMode())
             {
-                this.actionEditor.clips.scale.view(this.timelineXMin, this.timelineXMax);
+                this.actionEditor.clips.getXAxis().view(this.timelineXMin, this.timelineXMax);
             }
             else if (this.replayEditor.keyframeEditor != null)
             {
@@ -3305,7 +3305,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         if (this.runner.isRunning())
         {
-            this.cameraEditor.clips.scale.shiftIntoMiddle(this.getCursor());
+            this.cameraEditor.clips.getXAxis().shiftIntoMiddle(this.getCursor());
 
             if (this.replayEditor.keyframeEditor != null)
             {

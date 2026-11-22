@@ -88,7 +88,6 @@ public class UIClips extends UITimelineCanvas
     private boolean canGrab;
     private boolean grabbing;
     private boolean scrubbing;
-    private boolean scrolling;
     private final MouseGestureOwnership gestureOwnership = new MouseGestureOwnership();
     private long gestureGeneration;
     private boolean rollbackGesture;
@@ -1084,7 +1083,7 @@ public class UIClips extends UITimelineCanvas
 
     private void resetView()
     {
-        this.scale.anchor(0F);
+        this.xAxis.anchor(0F);
 
         if (clips != null)
         {
@@ -1092,11 +1091,11 @@ public class UIClips extends UITimelineCanvas
 
             if (duration > 0)
             {
-                this.scale.view(0, duration);
+                this.xAxis.view(0, duration);
             }
             else
             {
-                this.scale.set(0, 1);
+                this.xAxis.set(0, 1);
             }
         }
     }
@@ -1206,7 +1205,7 @@ public class UIClips extends UITimelineCanvas
 
     private FilmMarker getMarkerAt(int mouseX, int mouseY)
     {
-        return this.markers.getMarkerAt(this.area, this.scale, mouseX, mouseY, 0);
+        return this.markers.getMarkerAt(this.area, this.xAxis, mouseX, mouseY, 0);
     }
 
     /**
@@ -1328,7 +1327,7 @@ public class UIClips extends UITimelineCanvas
     {
         if (this.area.isInside(context))
         {
-            this.scale.stopZoom();
+            this.xAxis.stopZoom();
         }
 
         if (this.area.isInside(context) && this.gestureOwnership.isActive())
@@ -1383,7 +1382,7 @@ public class UIClips extends UITimelineCanvas
 
         if (!this.hasEmbeddedView() && !this.isInRuler(mouseY))
         {
-            int tick = (int) Math.floor(this.scale.from(mouseX));
+            int tick = (int) Math.floor(this.xAxis.from(mouseX));
             int layerIndex = this.fromLayerY(mouseY);
             Clip original = this.delegate.getClip();
             Clip clip = this.clips.getClipAt(tick, layerIndex);
@@ -1436,9 +1435,9 @@ public class UIClips extends UITimelineCanvas
                 if (BBSSettings.editorSnapToMarkers.get())
                 {
                     /* TODO: generalize this code. Check also other places getMult() */
-                    int mult = this.scale.getMult() * 2;
-                    int start = (int) this.scale.getMinValue();
-                    int end = (int) this.scale.getMaxValue();
+                    int mult = this.xAxis.getMult() * 2;
+                    int start = (int) this.xAxis.getMinValue();
+                    int end = (int) this.xAxis.getMaxValue();
                     int max = Integer.MAX_VALUE;
 
                     start -= start % mult;
@@ -1569,7 +1568,7 @@ public class UIClips extends UITimelineCanvas
                 return true;
             }
 
-            this.scrolling = true;
+            this.navigating = true;
             this.setMouse(mouseX, mouseY);
 
             return true;
@@ -1595,7 +1594,7 @@ public class UIClips extends UITimelineCanvas
     @Override
     public boolean subMouseScrolled(UIContext context)
     {
-        if (this.area.isInside(context) && !this.scrolling && !this.hasEmbeddedView())
+        if (this.area.isInside(context) && !this.navigating && !this.hasEmbeddedView())
         {
             if (context.mouseWheelHorizontal != 0D)
             {
@@ -1712,6 +1711,12 @@ public class UIClips extends UITimelineCanvas
         }
 
         this.commitMarkerDrag();
+
+        if (this.scrubbing)
+        {
+            this.delegate.setCursor(Math.max(0F, this.fromGraphCursor(context.mouseX)));
+        }
+
         this.finishGesture(true);
 
         return true;
@@ -1817,7 +1822,7 @@ public class UIClips extends UITimelineCanvas
         this.selecting = false;
         this.marquee.reset();
         this.scrubbing = false;
-        this.scrolling = false;
+        this.navigating = false;
         this.selectingLoop = -1;
 
         this.grabbedClips = Collections.emptyList();
@@ -1839,7 +1844,7 @@ public class UIClips extends UITimelineCanvas
     @Override
     protected boolean subKeyPressed(UIContext context)
     {
-        this.scale.stopZoom();
+        this.xAxis.stopZoom();
 
         if (this.embedded != null && context.isPressed(GLFW.GLFW_KEY_ESCAPE))
         {
@@ -1855,14 +1860,14 @@ public class UIClips extends UITimelineCanvas
     @Override
     public void render(UIContext context)
     {
-        if (this.grabbing || this.scrubbing || this.selecting || this.scrolling || this.selectingLoop >= 0
+        if (this.grabbing || this.scrubbing || this.selecting || this.navigating || this.selectingLoop >= 0
             || this.markers.isDragging() || this.hasEmbeddedView())
         {
-            this.scale.stopZoom();
+            this.xAxis.stopZoom();
         }
         else
         {
-            this.scale.updateZoom();
+            this.xAxis.updateZoom();
         }
 
         this.updateScrollSize();
@@ -2220,7 +2225,7 @@ public class UIClips extends UITimelineCanvas
 
     private void handleScrolling(int mouseX, int mouseY)
     {
-        if (this.scrolling)
+        if (this.navigating)
         {
             this.dragTimeBy(mouseX - this.lastX);
             this.vertical.scrollBy(this.lastY - mouseY);
@@ -2229,8 +2234,7 @@ public class UIClips extends UITimelineCanvas
             this.lastX = mouseX;
             this.lastY = mouseY;
 
-            this.scale.setShift(this.scale.getShift());
-            this.scale.calculateMultiplier();
+            this.xAxis.calculateMultiplier();
         }
     }
 
@@ -2284,7 +2288,7 @@ public class UIClips extends UITimelineCanvas
                 context,
                 area,
                 rulerBottom,
-                (int) this.scale.getMinValue(),
+                (int) this.xAxis.getMinValue(),
                 this.clips.calculateDuration(),
                 this::toGraphX,
                 TimeUtils::formatTime
@@ -2342,7 +2346,7 @@ public class UIClips extends UITimelineCanvas
         batcher.clip(this.area, context);
 
         /* Keep marker lines visible over the clips, below the playhead. */
-        this.markers.render(context, this.area, this.scale, 0);
+        this.markers.render(context, this.area, this.xAxis, 0);
 
         float cursor = this.delegate.getTimelineCursor(context.getTransition());
         String label = TimeUtils.formatCursorTime(cursor) + "/" + TimeUtils.formatTime(this.clips.calculateDuration());
@@ -2441,7 +2445,7 @@ public class UIClips extends UITimelineCanvas
      */
     private void renderTickMarkers(UIContext context, int y, int h)
     {
-        int start = (int) this.scale.getMinValue();
+        int start = (int) this.xAxis.getMinValue();
         int duration = this.clips.calculateDuration();
 
         TimelineRulerRenderer.render(
