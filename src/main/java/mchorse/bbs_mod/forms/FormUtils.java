@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -32,6 +33,22 @@ public class FormUtils
     private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
 
     public static final String PATH_SEPARATOR = "/";
+
+    private static final Map<String, String[]> SPLIT_PATHS = new ConcurrentHashMap<>();
+    private static final Map<String, String[]> STRICT_SPLIT_PATHS = new ConcurrentHashMap<>();
+
+    private static String[] splitPath(String path, boolean preserveTrailingEmpty)
+    {
+        if (SPLIT_PATHS.size() + STRICT_SPLIT_PATHS.size() > 4096)
+        {
+            SPLIT_PATHS.clear();
+            STRICT_SPLIT_PATHS.clear();
+        }
+
+        return preserveTrailingEmpty
+            ? STRICT_SPLIT_PATHS.computeIfAbsent(path, (p) -> p.split(PATH_SEPARATOR, -1))
+            : SPLIT_PATHS.computeIfAbsent(path, (p) -> p.split(PATH_SEPARATOR));
+    }
 
     public static boolean isPoseProperty(String name)
     {
@@ -216,7 +233,7 @@ public class FormUtils
 
         /* -1 keeps trailing empty segments, so "/" and "a/" are walked (and rejected) rather than
          * silently collapsing into fewer segments than the path has. */
-        for (String s : path.split(PATH_SEPARATOR, -1))
+        for (String s : splitPath(path, true))
         {
             BodyPart part = s.isEmpty() ? null : (form.parts.get(s) instanceof BodyPart bodyPart ? bodyPart : null);
 
@@ -382,7 +399,7 @@ public class FormUtils
             return null;
         }
 
-        for (String segment : path.split(PATH_SEPARATOR))
+        for (String segment : splitPath(path, false))
         {
             BaseValueBasic property = form.getBasic(segment);
 

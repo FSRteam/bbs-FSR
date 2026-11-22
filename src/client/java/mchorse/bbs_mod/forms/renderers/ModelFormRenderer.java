@@ -673,10 +673,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             }
         }
 
-        /* Render items */
-        this.captureMatrices(model);
+        boolean hasEquipment = !model.getItemsMain().isEmpty() || !model.getItemsOff().isEmpty() || !model.getArmorSlots().isEmpty();
+        boolean hasBodyParts = this.form != null && !this.form.parts.getAllTyped().isEmpty();
 
-        if (stencilMap == null)
+        if (hasBodyParts || (stencilMap == null && hasEquipment))
+        {
+            this.captureMatrices(model);
+        }
+
+        if (stencilMap == null && hasEquipment)
         {
             this.renderItems(target, model, stack, EquipmentSlot.MAINHAND, ItemDisplayContext.THIRD_PERSON_RIGHT_HAND, model.getItemsMain(), color, overlay, light);
             this.renderItems(target, model, stack, EquipmentSlot.OFFHAND, ItemDisplayContext.THIRD_PERSON_LEFT_HAND, model.getItemsOff(), color, overlay, light);

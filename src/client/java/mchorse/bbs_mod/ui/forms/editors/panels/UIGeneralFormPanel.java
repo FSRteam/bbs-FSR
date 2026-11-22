@@ -86,6 +86,10 @@ public class UIGeneralFormPanel extends UIFormPanel
             if (this.form instanceof PoseForm poseForm) poseForm.getBoneTracks().set(b.getValue());
         });
         this.boneTracks.tooltip(UIKeys.FORMS_EDITORS_GENERAL_BONE_TRACKS_TOOLTIP);
+        UIValues.resettable(this.boneTracks, () -> this.form instanceof PoseForm poseForm ? poseForm.getBoneTracks() : null, () ->
+        {
+            if (this.form instanceof PoseForm poseForm) this.boneTracks.setValue(poseForm.getBoneTracks().get());
+        });
         this.trackName = UIValues.textbox(120, () -> this.form.trackName);
         this.trackName.tooltip(UIKeys.FORMS_EDITORS_GENERAL_TRACK_NAME_TOOLTIP);
         this.lighting = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING, (b) -> this.form.lighting.set(b.getValue() ? 1F : 0F));

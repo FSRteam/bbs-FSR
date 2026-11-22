@@ -1289,7 +1289,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
 
         if (this.isBodyPartGizmoMode())
         {
-            return this.editor.getBodyPartGizmoOrigin(transition, this.bodyPartEditor.transform.isLocal());
+            return this.editor.getBodyPartGizmoOrigin(transition, this.bodyPartEditor.transform.getSpace());
         }
 
         return this.editor.getOrigin(transition);
@@ -1332,7 +1332,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
 
         if (this.isBodyPartGizmoMode())
         {
-            return this.editor.getBodyPartGizmoOrigin(transition, true);
+            return this.editor.getBodyPartGizmoOrigin(transition, TransformSpace.LOCAL);
         }
 
         return this.editor.getOriginMatrix(transition);
@@ -1356,7 +1356,7 @@ public class UIFormEditor extends UIElement implements IUIFormList, ICursor, IBo
 
         if (this.isBodyPartGizmoMode())
         {
-            return this.editor.getBodyPartGizmoOrigin(transition, false);
+            return this.editor.getBodyPartGizmoOrigin(transition, TransformSpace.PARENT);
         }
 
         return this.editor.getParentOriginMatrix(transition);

@@ -60,7 +60,7 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
     @Override
     public Matrix4f getOrigin(float transition)
     {
-        return this.getOrigin(transition, this.bonePath(), this.posePanel.poseEditor.transform.isLocal());
+        return this.getOrigin(transition, this.bonePath(), this.getGizmoSpace());
     }
 
     @Override
@@ -72,13 +72,13 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
     @Override
     public Matrix4f getOriginMatrix(float transition)
     {
-        return this.getOrigin(transition, this.bonePath(), true);
+        return this.getOrigin(transition, this.bonePath(), TransformSpace.LOCAL);
     }
 
     @Override
     public Matrix4f getParentOriginMatrix(float transition)
     {
-        return this.getOrigin(transition, this.bonePath(), false);
+        return this.getOrigin(transition, this.bonePath(), TransformSpace.PARENT);
     }
 
     @Override

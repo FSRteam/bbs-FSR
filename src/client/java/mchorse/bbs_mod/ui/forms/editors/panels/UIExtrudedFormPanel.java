@@ -27,8 +27,8 @@ public class UIExtrudedFormPanel extends UIFormPanel<ExtrudedForm>
         });
         this.color = UIValues.color(() -> this.form.color);
         this.color.withAlpha();
-        this.billboard = new UIToggle(UIKeys.FORMS_EDITORS_BILLBOARD_TITLE, false, (b) -> this.form.billboard.set(b.getValue()));
-        this.shading = new UIToggle(UIKeys.FORMS_EDITORS_BILLBOARD_SHADING, false, (b) -> this.form.shading.set(b.getValue()));
+        this.billboard = UIValues.toggle(UIKeys.FORMS_EDITORS_BILLBOARD_TITLE, () -> this.form.billboard);
+        this.shading = UIValues.toggle(UIKeys.FORMS_EDITORS_BILLBOARD_SHADING, () -> this.form.shading);
 
         this.options.add(this.pick, this.color, this.billboard, this.shading);
     }

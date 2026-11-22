@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.forms.renderers.utils;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.forms.forms.ModelForm;
@@ -21,16 +23,16 @@ import java.lang.ref.ReferenceQueue;
  * The PBR sliders' albedo redirection: a material with slider values set gets its own GL copy
  * of the albedo texture, because Iris caches PBR holders BY THE ALBEDO'S GL ID — two forms
  * sharing one texture but with different sliders would otherwise fight over one holder. The
- * variant's key encodes the slider values, so moving a slider naturally lands on a fresh id
- * (and a fresh holder). Iris-only: without a shader pack nothing reads the maps, so the albedo
- * stays the shared original.
+ * variant's key identifies the form, material and albedo frame; slider changes refresh that
+ * variant's tracked PBR holder. Iris-only: without a shader pack nothing reads the maps, so
+ * the albedo stays the shared original.
  */
 public class FormPbr
 {
     /**
-     * Variant key strings, built once per (form, material) instead of concatenated on every draw
-     * call. Weak on the form (identity equals), so closed films drop their entries; the key
-     * itself embeds the identityHashCode, which is stable for the object's lifetime.
+     * Variant key strings are built once per form, material and albedo texture id. Weak owners
+     * release their variants when a form is collected; each owner has a unique lifetime id.
+     * Primitive texture keys preserve animated-frame identity without rebuilding strings per draw.
      */
     private static final ReferenceQueue<ModelForm> RELEASED_FORMS = new ReferenceQueue<>();
     private static final Map<ModelForm, Owner> VARIANT_KEYS = new WeakHashMap<>();
@@ -40,7 +42,7 @@ public class FormPbr
     private static class Owner extends WeakReference<ModelForm>
     {
         private final long id = nextOwner++;
-        private final Map<String, String> keys = new HashMap<>();
+        private final Map<String, Int2ObjectMap<String>> keys = new HashMap<>();
 
         private Owner(ModelForm form)
         {
@@ -49,7 +51,7 @@ public class FormPbr
 
         private void release()
         {
-            this.keys.values().forEach(BBSModClient.getTextures()::deleteVariant);
+            this.keys.values().forEach((byTexture) -> byTexture.values().forEach(BBSModClient.getTextures()::deleteVariant));
             this.keys.clear();
             OWNERS.remove(this);
         }
@@ -110,12 +112,12 @@ public class FormPbr
             VARIANT_KEYS.put(form, owner);
             OWNERS.add(owner);
         }
-        String frameKey = materialKey + ":" + texture.id;
-        String variantKey = owner.keys.get(frameKey);
+        Int2ObjectMap<String> byTexture = owner.keys.computeIfAbsent(materialKey, (key) -> new Int2ObjectOpenHashMap<>());
+        String variantKey = byTexture.get(texture.id);
         if (variantKey == null)
         {
-            variantKey = "pbr:" + owner.id + ":" + frameKey;
-            owner.keys.put(frameKey, variantKey);
+            variantKey = "pbr:" + owner.id + ":" + materialKey + ":" + texture.id;
+            byTexture.put(texture.id, variantKey);
         }
         Texture variant = BBSModClient.getTextures().getVariant(link, variantKey, texture);
 

@@ -15,6 +15,7 @@ import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
+import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.Axis;
@@ -36,6 +37,8 @@ import java.util.function.Consumer;
 public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 {
     public UIPoseFactoryEditor poseEditor;
+
+    private Boolean wide;
 
     public UIPoseKeyframeFactory(Keyframe<Pose> keyframe, UIKeyframes editor)
     {
@@ -78,24 +81,17 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
     @Override
     public void resize()
     {
-        this.poseEditor.removeAll();
+        boolean wide = this.getFlex().getW() > UIPoseEditor.WIDE_WIDTH;
 
-        if (this.getFlex().getW() > 240)
+        if (this.wide == null || this.wide != wide)
         {
-            this.poseEditor.add(UI.row(
-                UI.column(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), this.poseEditor.materialSection, this.poseEditor.transform),
-                UI.column(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups)
-            ));
-        }
-        else
-        {
-            this.poseEditor.add(UI.label(UIKeys.FORMS_EDITOR_BONE), this.poseEditor.groups, UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.poseEditor.fix), this.poseEditor.materialSection, this.poseEditor.transform);
-        }
+            this.wide = wide;
+            this.poseEditor.buildLayout(wide);
 
-        /* Ew... */
-        for (UIElement child : this.scroll.getChildren(UIElement.class))
-        {
-            child.noCulling();
+            for (UIElement child : this.scroll.getChildren(UIElement.class))
+            {
+                child.noCulling();
+            }
         }
 
         super.resize();
@@ -169,6 +165,8 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
 
             this.editor = editor;
             this.keyframe = keyframe;
+
+            this.groups.list.h(UIStringList.DEFAULT_HEIGHT * 4);
 
             ((UIPoseTransforms) this.transform).setKeyframe(this);
         }

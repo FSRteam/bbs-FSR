@@ -10,6 +10,7 @@ import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
+import mchorse.bbs_mod.forms.entities.EntityState;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.entities.StubEntity;
 import mchorse.bbs_mod.forms.forms.BodyPart;
@@ -18,6 +19,7 @@ import mchorse.bbs_mod.forms.forms.MobForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCacheEntry;
+import mchorse.bbs_mod.mixin.EntityInvoker;
 import mchorse.bbs_mod.mixin.LimbAnimatorAccessor;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -897,7 +899,9 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
         this.entity.setOnGround(source.isOnGround());
         this.entity.setShiftKeyDown(source.isSneaking());
         this.entity.setSprinting(source.isSprinting());
-        this.entity.setPose(source.isSneaking() ? net.minecraft.world.entity.Pose.CROUCHING : net.minecraft.world.entity.Pose.STANDING);
+        this.entity.setSwimming(source.isSwimming());
+        ((EntityInvoker) this.entity).bbs$setFlag(EntityState.FALL_FLYING_FLAG, source.isFallFlying());
+        this.entity.setPose(EntityState.pose(source));
         if (this.entity instanceof LivingEntity livingEntity)
         {
             livingEntity.setItemSlot(EquipmentSlot.MAINHAND, source.getEquipmentStack(EquipmentSlot.MAINHAND));

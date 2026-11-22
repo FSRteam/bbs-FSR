@@ -106,6 +106,7 @@ public class UIMaterialFormPanel extends UIFormPanel
         this.layer.addLabel(UIKeys.FORMS_EDITORS_MATERIAL_LAYER_CUTOUT);
         this.layer.addLabel(UIKeys.FORMS_EDITORS_MATERIAL_LAYER_TRANSLUCENT);
         this.layer.tooltip(UIKeys.FORMS_EDITORS_MATERIAL_LAYER_TOOLTIP);
+        UIValues.resettable(this.layer, () -> this.form.renderLayer, () -> this.layer.setValue(this.form.renderLayer.get()));
 
         this.culling = new UICirculate((b) -> this.materialValue().culling.set(b.getValue()));
         this.culling.addLabel(UIKeys.FORMS_EDITORS_MATERIAL_CULLING_MODEL);

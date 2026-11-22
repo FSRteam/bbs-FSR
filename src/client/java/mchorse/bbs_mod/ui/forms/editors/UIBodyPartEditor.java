@@ -13,10 +13,12 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIconToggles;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.bones.UIBonePicker;
+import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Pair;
 
 import java.util.ArrayList;
@@ -30,6 +32,7 @@ public class UIBodyPartEditor extends UIScrollView
     public UIToggle inheritPosition;
     public UIToggle inheritRotation;
     public UIToggle inheritScale;
+    public UIIconToggles inherit;
     public UIBonePicker bone;
     public UIPropTransform transform;
 
@@ -131,6 +134,12 @@ public class UIBodyPartEditor extends UIScrollView
             }
         });
 
+        this.inherit = new UIIconToggles(null)
+            .add(Icons.ALL_DIRECTIONS, UIKeys.INHERIT_POSITION, () -> this.part.inheritPosition)
+            .add(Icons.ORBIT, UIKeys.INHERIT_ROTATION, () -> this.part.inheritRotation)
+            .add(Icons.SCALE, UIKeys.INHERIT_SCALE, () -> this.part.inheritScale)
+            .resettable();
+
         this.transform = new UIPropTransform().callbacks(() -> this.part.transform).barBackground();
         this.transform.enableHotkeys(this.editor::isBodyPartGizmoMode);
         this.transform.hotkeyDrag(() -> this.editor.buildHotkeyDrag(this.transform));
@@ -156,7 +165,7 @@ public class UIBodyPartEditor extends UIScrollView
 
         if (!FormUtilsClient.getBones(form).isEmpty())
         {
-            this.add(this.pick, this.bone, this.useTarget, this.inheritPosition, this.inheritRotation, this.inheritScale, this.transform);
+            this.add(this.pick, this.bone, this.inherit.labelRow(UIKeys.INHERIT_TITLE), this.useTarget, this.transform);
         }
         else
         {

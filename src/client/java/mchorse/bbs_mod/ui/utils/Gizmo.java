@@ -689,6 +689,11 @@ public class Gizmo
 
     public void render(PoseStack stack)
     {
+        this.render(stack, HandleMask.ALL);
+    }
+
+    public void render(PoseStack stack, HandleMask mask)
+    {
         BBSProfiler.begin(BBSProfiler.Timer.GIZMO);
 
         try
@@ -697,6 +702,8 @@ public class Gizmo
             {
                 return;
             }
+
+            this.handleMask = mask == null ? HandleMask.ALL : mask;
 
             stack.pushPose();
             this.removePlacementScale(stack);
@@ -733,7 +740,7 @@ public class Gizmo
             return;
         }
 
-        this.handleMask = mask;
+        this.handleMask = mask == null ? HandleMask.ALL : mask;
         stack.pushPose();
         this.removePlacementScale(stack);
         this.captureRenderMatrix(stack);
@@ -1419,7 +1426,7 @@ public class Gizmo
         stack.pushPose();
         this.removePlacementScale(stack);
         HandleMask previous = this.handleMask;
-        this.handleMask = mask;
+        this.handleMask = mask == null ? HandleMask.ALL : mask;
         try
         {
             this.drawStencilAxes(stack, map);
@@ -1785,17 +1792,4 @@ public class Gizmo
         private boolean sphereHovered;
     }
 
-    public void render(PoseStack stack, HandleMask mask)
-    {
-        HandleMask previous = this.handleMask;
-        this.handleMask = mask;
-        try
-        {
-            this.render(stack);
-        }
-        finally
-        {
-            this.handleMask = previous;
-        }
-    }
 }

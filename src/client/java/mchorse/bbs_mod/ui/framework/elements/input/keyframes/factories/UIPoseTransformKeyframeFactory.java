@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
@@ -11,6 +12,7 @@ import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
+import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
@@ -44,7 +46,7 @@ public class UIPoseTransformKeyframeFactory extends UIKeyframeFactory<PoseTransf
                 UIPoseTransforms.apply(editor, keyframe, (poseT) -> poseT.fix = v.floatValue());
             }
         });
-        this.fix.limit(0D, 1D).increment(1D).values(0.1, 0.05D, 0.2D);
+        this.fix.limit(0D, 1D).increment(0.1D).values(0.1, 0.05D, 0.2D);
         this.fix.tooltip(UIKeys.POSE_CONTEXT_FIX_TOOLTIP);
         this.fix.setValue(keyframe.getValue().fix);
 
@@ -70,19 +72,22 @@ public class UIPoseTransformKeyframeFactory extends UIKeyframeFactory<PoseTransf
 
         this.glow = new UISliderTrackpad((v) -> UIPoseTransforms.apply(editor, keyframe, (p) -> p.lighting = v.floatValue()));
         this.glow.limit(0D, 1D).increment(0.1D);
+        this.glow.tooltip(UIKeys.FORMS_EDITORS_MATERIAL_GLOW_TOOLTIP);
         this.glow.setValue(keyframe.getValue().lighting);
         this.overlay = new UIColor((c) -> UIPoseTransforms.apply(editor, keyframe, (p) -> p.overlay.set(c))).withAlpha();
+        this.overlay.tooltip(UIKeys.FORMS_EDITORS_MATERIAL_OVERLAY_TOOLTIP);
         this.overlay.setColor(keyframe.getValue().overlay.getARGBColor());
         this.boneVisible = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_VISIBLE, keyframe.getValue().visible,
             (b) -> UIPoseTransforms.apply(editor, keyframe, (p) -> p.visible = b.getValue()));
 
-        /* Same labelRow grid as the pose editor, which this panel mirrors. */
+        UISection material = UIPoseEditor.materialSection(this.color, this.overlay, this.glow);
+
+        material.fields.add(this.boneVisible);
+
         this.scroll.add(
             UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix),
-            UI.labelRow(UIKeys.FORMS_EDITORS_MATERIAL_COLOR, this.color),
-            UI.labelRow(UIKeys.FORMS_EDITORS_MATERIAL_OVERLAY, this.overlay),
-            UI.labelRow(UIKeys.POSE_CONTEXT_GLOW, this.glow), this.boneVisible,
-            this.transform
+            this.transform,
+            material
         );
     }
 

@@ -7,7 +7,6 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
-import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
@@ -23,7 +22,6 @@ import mchorse.bbs_mod.ui.utils.context.MenuIcon;
 import mchorse.bbs_mod.ui.utils.context.MenuVerb;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
-import mchorse.bbs_mod.ui.utils.resizers.AutomaticResizer;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UIDataContextMenu;
 import mchorse.bbs_mod.utils.CollectionUtils;
@@ -38,6 +36,7 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -46,8 +45,9 @@ import java.util.function.Consumer;
 
 public class UIPoseEditor extends UIElement
 {
-    /** The bone list never shrinks below this height when it gets stretched to fill the panel. */
-    private static final int MIN_LIST_HEIGHT = UIStringList.DEFAULT_HEIGHT * 4;
+    public static final int WIDE_WIDTH = (UIConstants.VALUE_WIDTH + 80) * 2;
+
+    private static final Map<String, Boolean> SECTION_FOLDS = new HashMap<>();
 
     public UIBoneList groups;
     public UISliderTrackpad fix;
@@ -57,6 +57,7 @@ public class UIPoseEditor extends UIElement
     public UIColor overlay;
     public UIToggle boneVisible;
     public UISection materialSection;
+    public UISection material;
     public UICirculate glintMode;
     public UIColor glintColor;
     public UITrackpad glintSpeed;
@@ -65,6 +66,7 @@ public class UIPoseEditor extends UIElement
     public UIPropTransform transform;
 
     private boolean poseOnly;
+    private boolean hasBones = true;
     private String group = "";
     private Pose pose;
     protected IModel model;
@@ -91,7 +93,11 @@ public class UIPoseEditor extends UIElement
     {
         this.groups = new UIBoneList(this::pickBones);
         this.groups.onFiltered = this::afterFilter;
-        this.groups.list.h(UIStringList.DEFAULT_HEIGHT * 8 - 8);
+        boolean expands = this.stretchesBoneList();
+
+        this.groups.list.h(UIStringList.DEFAULT_HEIGHT * 8 - 8).expand(expands);
+        this.groups.expand(expands);
+        this.expand(expands);
         this.groups.list.context(() ->
         {
             UIDataContextMenu menu = new UIDataContextMenu(PoseManager.INSTANCE, this.group, () -> this.pose.toData(), this::pastePose);
@@ -139,12 +145,6 @@ public class UIPoseEditor extends UIElement
             (b) -> this.forEachSelectedPose((p) -> this.setVisible(p, b.getValue())));
         this.boneVisible.context((menu) -> menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY,
             () -> this.applyChildren((p) -> this.setVisible(p, this.boneVisible.getValue()))));
-        this.materialSection = new UISection(UIKeys.FORMS_EDITORS_MATERIAL);
-        this.materialSection.fields.add(
-            UI.labelRow(UIKeys.FORMS_EDITORS_MATERIAL_COLOR, this.color),
-            UI.labelRow(UIKeys.FORMS_EDITORS_MATERIAL_OVERLAY, this.overlay),
-            UI.labelRow(UIKeys.POSE_CONTEXT_GLOW, this.glow), this.boneVisible);
-        this.materialSection.setExpanded(false);
         this.glintMode = new UICirculate((c) -> this.applyGlintModeToSelection(c.getValue()));
         this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_OFF);
         this.glintMode.addLabel(UIKeys.POSE_CONTEXT_GLINT_FULL);
@@ -187,82 +187,55 @@ public class UIPoseEditor extends UIElement
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
         this.column().vertical().stretch();
-        /* Both rows ride the same labelRow grid, so the fix trackpad and the colour
-         * swatch pin to one divider column. The lighting toggle keeps its own name
-         * and takes the label slot of its row — it used to sit in a bare row that
-         * spanned the full width and ignored that column. */
-        this.add(
-            this.groups,
-            UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix),
-            this.materialSection,
-            this.transform,
-            this.glintSection
-        );
+        this.buildLayout(false);
     }
 
-    @Override
-    public void resize()
+    /** Material rows shared by the whole-pose and per-bone keyframe editors. */
+    public static UISection materialSection(UIColor color, UIColor overlay, UISliderTrackpad lighting)
     {
-        if (this.stretchesBoneList())
-        {
-            this.stretchBoneList();
-        }
+        UISection section = new UISection(UIKeys.FORMS_EDITORS_MATERIAL).remember(SECTION_FOLDS, "material", false);
 
-        super.resize();
+        section.fields.add(
+            UI.labelRow(UIKeys.FORMS_EDITORS_MATERIAL_COLOR, color),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MATERIAL_OVERLAY, overlay),
+            UI.labelRow(UIKeys.FORMS_EDITORS_MATERIAL_GLOW, lighting)
+        );
+
+        return section;
     }
 
-    /**
-     * Whether the bone list grows to fill the viewport. Only the film editor's pose keyframe editor
-     * opts in; the form pose editor keeps the list at its fixed height, so the collapsible sections
-     * below it (transform, shape keys) lay out predictably instead of fighting the stretch.
-     */
+    /** Build both arrangements from the same fields, preserving FSR visibility and glint controls. */
+    public void buildLayout(boolean wide)
+    {
+        this.removeAll();
+
+        this.material = materialSection(this.color, this.overlay, this.glow);
+        this.material.fields.add(this.boneVisible);
+        this.material.setVisible(this.hasBones && !this.poseOnly);
+        this.materialSection = this.material;
+
+        UIElement[] fields = {
+            UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix),
+            this.transform,
+            this.material,
+            this.glintSection
+        };
+
+        if (wide)
+        {
+            this.add(UI.row(UI.column(fields), UI.column(this.groups).expand(this.groups.isExpanding())).expand(this.isExpanding()));
+        }
+        else
+        {
+            this.add(this.groups);
+            this.add(fields);
+        }
+    }
+
+    /** Legacy subclass hook; its choice now feeds the shared layout expansion. */
     protected boolean stretchesBoneList()
     {
-        return false;
-    }
-
-    private void stretchBoneList()
-    {
-        UIScrollView viewport = this.getViewport();
-
-        if (viewport == null || this.area.h <= 0 || this.groups.getParent() == null)
-        {
-            return;
-        }
-
-        int target = viewport.area.ey() - this.getViewportPadding(viewport);
-        int height = this.groups.list.getFlex().getH() + (target - this.area.ey());
-
-        this.groups.list.h(Math.max(height, MIN_LIST_HEIGHT));
-    }
-
-    private UIScrollView getViewport()
-    {
-        UIElement element = this.getParent();
-
-        while (element != null)
-        {
-            if (element instanceof UIScrollView)
-            {
-                return (UIScrollView) element;
-            }
-
-            element = element.getParent();
-        }
-
-        return null;
-    }
-
-    /** The scroll content lays itself out with this much padding at the bottom; leaving exactly
-     *  that gap below the list is what keeps the panel from overflowing into a stray scrollbar. */
-    private int getViewportPadding(UIScrollView viewport)
-    {
-        if (viewport.getFlex().post instanceof AutomaticResizer resizer)
-        {
-            return resizer.padding;
-        }
-
-        return UIConstants.SCROLL_PADDING;
+        return true;
     }
 
     private void applyChildren(Consumer<PoseTransform> consumer)
@@ -500,6 +473,8 @@ public class UIPoseEditor extends UIElement
     private void afterFilter(boolean reset)
     {
         boolean hasBones = this.groups.hasBones();
+
+        this.hasBones = hasBones;
 
         this.fix.setVisible(hasBones && !this.poseOnly);
         this.color.setVisible(hasBones && !this.poseOnly);

@@ -16,6 +16,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.text.UITextarea;
 import mchorse.bbs_mod.ui.framework.elements.input.text.utils.TextLine;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIListOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 import mchorse.bbs_mod.utils.colors.Color;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -77,12 +78,19 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
         });
         this.color = new UIColor((c) -> this.form.color.set(new Color().set(c))).withAlpha();
         this.paused = new UIToggle(UIKeys.FORMS_EDITORS_VANILLA_PARTICLE_PAUSED, (b) -> this.form.paused.set(b.getValue()));
-        this.slim = new UIToggle(UIKeys.FORMS_EDITOR_SLIM, (b) ->
+        this.slim = UIValues.toggle(UIKeys.FORMS_EDITOR_SLIM, () -> this.form.slim);
+        this.slim.callback = (b) ->
         {
             this.form.slim.set(b.getValue());
             this.refreshPoseEditor();
-        });
+        };
         this.slim.tooltip(UIKeys.FORMS_EDITOR_SLIM_TOOLTIP);
+        this.slim.resetContext();
+        UIValues.resettable(this.slim, () -> this.form.slim, () ->
+        {
+            this.slim.setValue(this.form.slim.get());
+            this.refreshPoseEditor();
+        });
 
         this.mobNBT = new UITextarea<>((t) ->
         {

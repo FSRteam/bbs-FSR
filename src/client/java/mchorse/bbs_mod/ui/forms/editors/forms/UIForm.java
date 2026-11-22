@@ -71,7 +71,7 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
     public Matrix4f getOrigin(float transition)
     {
-        return this.getOrigin(transition, FormUtils.getPath(this.form), this.generalPanel != null && this.generalPanel.transform.isLocal());
+        return this.getOrigin(transition, FormUtils.getPath(this.form), this.getGizmoSpace());
     }
 
     public TransformSpace getGizmoSpace()
@@ -89,12 +89,12 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
      */
     public Matrix4f getOriginMatrix(float transition)
     {
-        return this.getOrigin(transition, FormUtils.getPath(this.form), true);
+        return this.getOrigin(transition, FormUtils.getPath(this.form), TransformSpace.LOCAL);
     }
 
     public Matrix4f getParentOriginMatrix(float transition)
     {
-        return this.getOrigin(transition, FormUtils.getPath(this.form), false);
+        return this.getOrigin(transition, FormUtils.getPath(this.form), TransformSpace.PARENT);
     }
 
     public Vector3f getRotationOffset(float transition)
@@ -127,6 +127,16 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     public Matrix4f getBodyPartGizmoOrigin(float transition, boolean local)
     {
         return this.getOrigin(transition, FormUtils.getPath(this.form), local);
+    }
+
+    public Matrix4f getBodyPartGizmoOrigin(float transition, TransformSpace space)
+    {
+        return this.getBodyPartGizmoOrigin(transition, space.placesOnOwnFrame());
+    }
+
+    protected Matrix4f getOrigin(float transition, String path, TransformSpace space)
+    {
+        return this.getOrigin(transition, path, space.placesOnOwnFrame());
     }
 
     protected Matrix4f getOrigin(float transition, String path, boolean local)
