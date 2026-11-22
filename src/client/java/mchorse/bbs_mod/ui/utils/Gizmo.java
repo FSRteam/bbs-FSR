@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.utils;
 
 import mchorse.bbs_mod.utils.profiler.BBSProfiler;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -158,6 +159,19 @@ public class Gizmo
      *  and the deferred bone-vs-sphere pick needs both), so its highlight gets a
      *  private buffer it can own outright. */
     private final StencilFormFramebuffer sphereHighlight = new StencilFormFramebuffer();
+
+    private final Matrix4f lastMaskMatrix = new Matrix4f();
+    private final Matrix4f lastMaskProjection = new Matrix4f();
+    private int lastMaskX;
+    private int lastMaskY;
+    private int lastMaskW;
+    private int lastMaskH;
+    private int lastMaskAreaX;
+    private int lastMaskAreaY;
+    private int lastMaskAreaW;
+    private int lastMaskAreaH;
+    private float lastMaskAxesScale;
+    private boolean maskValid;
 
     /** Driven by {@link GizmoInteraction}'s per-frame hover pass. When true the
      *  sphere highlight is composited over the viewport (the screen-space hover
@@ -480,31 +494,119 @@ public class Gizmo
             return;
         }
 
+        /* The highlight only ever lights the sphere's own footprint, so both the mask and the
+         * composite live in that footprint's rectangle rather than the whole viewport. */
+        Vector2f center = new Vector2f();
+
+        if (!this.computeScreenCenter(projection, area.x, area.y, area.w, area.h, center))
+        {
+            return;
+        }
+
+        float radius = this.computeScreenRadius(projection, area.x, area.y, area.w, area.h);
+
+        if (radius <= 0F)
+        {
+            return;
+        }
+
+        int margin = 4;
+        int rectX = Math.max(area.x, (int) Math.floor(center.x - radius) - margin);
+        int rectY = Math.max(area.y, (int) Math.floor(center.y - radius) - margin);
+        int rectEndX = Math.min(area.ex(), (int) Math.ceil(center.x + radius) + margin);
+        int rectEndY = Math.min(area.ey(), (int) Math.ceil(center.y + radius) + margin);
+        int rw = rectEndX - rectX;
+        int rh = rectEndY - rectY;
+
+        if (rw <= 0 || rh <= 0)
+        {
+            return;
+        }
+
         Minecraft mc = Minecraft.getInstance();
+        float pixelScale = mc.getWindow().getWidth() / (float) Math.max(1, context.menu.width);
+        int pw = Math.max(1, Math.min(512, Math.round(rw * pixelScale)));
+        int ph = Math.max(1, Math.min(512, Math.round(rh * pixelScale)));
+        float scaleX = pw / (float) rw;
+        float scaleY = ph / (float) rh;
 
         this.sphereHighlight.setup(Link.bbs("gizmo_sphere_highlight"));
 
-        int[] previousViewport = UIUtils.currentViewport();
-        int w = mc.getWindow().getScreenWidth();
-        int h = mc.getWindow().getScreenHeight();
         Texture texture = this.sphereHighlight.getFramebuffer().getMainTexture();
 
-        if (texture.width != w || texture.height != h)
+        /* Grow-only, so a pixel of rectangle jitter doesn't reallocate the texture per frame. */
+        if (texture.width < pw || texture.height < ph)
         {
-            this.sphereHighlight.resize(w, h);
+            this.sphereHighlight.resize(Math.max(texture.width, pw), Math.max(texture.height, ph));
         }
 
-        this.sphereHighlight.apply();
+        float axesScale = BBSSettings.axesScale.get();
+        boolean moved = !this.maskValid
+            || this.lastMaskX != rectX || this.lastMaskY != rectY
+            || this.lastMaskW != pw || this.lastMaskH != ph
+            || this.lastMaskAreaX != area.x || this.lastMaskAreaY != area.y
+            || this.lastMaskAreaW != area.w || this.lastMaskAreaH != area.h
+            || Float.compare(this.lastMaskAxesScale, axesScale) != 0
+            || !this.lastMaskMatrix.equals(this.lastSphereMatrix)
+            || !this.lastMaskProjection.equals(projection);
 
-        RenderSystem.disableDepthTest();
-        RenderSystem.setShaderColor(STENCIL_TRACKBALL / 255F, 0F, 0F, 1F);
-        this.rings.drawSphere(this.lastSphereMatrix, projection);
-        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
-        RenderSystem.enableDepthTest();
+        if (moved)
+        {
+            context.batcher.flush();
 
-        this.sphereHighlight.unbind();
-        mc.getMainRenderTarget().bindWrite(false);
-        UIUtils.restoreViewport(previousViewport);
+            boolean scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+
+            if (scissor)
+            {
+                GlStateManager._disableScissorTest();
+            }
+
+            int[] previousViewport = UIUtils.currentViewport();
+
+            this.sphereHighlight.getFramebuffer().bind();
+            this.sphereHighlight.getFramebuffer().clear();
+
+            /* The sphere projects in the viewport's NDC; the viewport is oversized and offset so
+             * the rectangle's slice of it lands on the mask (GUI y runs down, GL y runs up). */
+            GL11.glViewport(
+                Math.round(-(rectX - area.x) * scaleX),
+                Math.round(-(area.ey() - rectY - rh) * scaleY),
+                Math.round(area.w * scaleX),
+                Math.round(area.h * scaleY)
+            );
+
+            RenderSystem.disableDepthTest();
+            RenderSystem.setShaderColor(STENCIL_TRACKBALL / 255F, 0F, 0F, 1F);
+            this.rings.drawSphere(this.lastSphereMatrix, projection);
+            RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+            RenderSystem.enableDepthTest();
+
+            this.sphereHighlight.unbind();
+
+            /* beginWrite(false) + an explicitly saved viewport: the "main" framebuffer
+             * is the video one while a film renders, so letting it set the viewport
+             * would resize the UI's. */
+            mc.getMainRenderTarget().bindWrite(false);
+            UIUtils.restoreViewport(previousViewport);
+
+            if (scissor)
+            {
+                GlStateManager._enableScissorTest();
+            }
+
+            this.lastMaskMatrix.set(this.lastSphereMatrix);
+            this.lastMaskProjection.set(projection);
+            this.lastMaskX = rectX;
+            this.lastMaskY = rectY;
+            this.lastMaskW = pw;
+            this.lastMaskH = ph;
+            this.lastMaskAreaX = area.x;
+            this.lastMaskAreaY = area.y;
+            this.lastMaskAreaW = area.w;
+            this.lastMaskAreaH = area.h;
+            this.lastMaskAxesScale = axesScale;
+            this.maskValid = true;
+        }
 
         ShaderInstance previewProgram = BBSShaders.getPickerPreviewProgram();
         Uniform target = previewProgram.getUniform("Target");
@@ -524,7 +626,7 @@ public class Gizmo
         }
 
         RenderSystem.enableBlend();
-        context.batcher.texturedBox(BBSShaders::getPickerPreviewProgram, texture.id, Colors.WHITE, area.x, area.y, area.w, area.h, 0, texture.height, texture.width, 0, texture.width, texture.height);
+        context.batcher.texturedBox(BBSShaders::getPickerPreviewProgram, texture.id, Colors.WHITE, rectX, rectY, rw, rh, 0, ph, pw, 0, texture.width, texture.height);
     }
 
     /**
@@ -1522,6 +1624,14 @@ public class Gizmo
          * coordinate frame the gizmo is actually drawn in. */
         this.lastRenderMatrix.set(modelView(stack));
         this.hasLastRenderMatrix = true;
+    }
+
+    /** Drop the previous placement before a new scene captures its gizmo. */
+    public void forgetPlacement()
+    {
+        this.hasLastRenderMatrix = false;
+        this.hasLastSphereMatrix = false;
+        this.lastSphereLocalRadius = 0F;
     }
 
     /**

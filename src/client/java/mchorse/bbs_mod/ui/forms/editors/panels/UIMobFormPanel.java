@@ -148,7 +148,7 @@ public class UIMobFormPanel extends UIPoseFormPanel<MobForm>
             return;
         }
 
-        this.bindPose(this.form, "");
+        this.bindPose(this.form, this.form.mobID.get());
         BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(this.form);
 
         this.poseEditor.migratePose(hierarchy);

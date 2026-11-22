@@ -21,6 +21,7 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
 import mchorse.bbs_mod.ui.framework.elements.input.drag.TransformSpace;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.joml.Matrices;
@@ -46,6 +47,11 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
 
         this.buttonTabs.activeEdge(Direction.RIGHT);
         this.keys().register(Keys.FILM_CONTROLLER_CYCLE_EDITORS, this::cyclePanels);
+    }
+
+    public UIPoseEditor getPoseEditor()
+    {
+        return null;
     }
 
     public UIPropTransform getEditableTransform()
@@ -115,6 +121,12 @@ public abstract class UIForm <T extends Form> extends UIPanelBase<UIFormPanel<T>
     public boolean editsModelPartTranslate(UIPropTransform transform)
     {
         return false;
+    }
+
+    /** Additive Euler base for a pose transform, or null when this form has no pose editor. */
+    public Vector3f poseRotationBase(UIPropTransform transform, float transition)
+    {
+        return null;
     }
 
     /**

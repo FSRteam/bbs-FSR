@@ -885,6 +885,8 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
     @Override
     protected void renderUserModel(UIContext context)
     {
+        Gizmo.INSTANCE.forgetPlacement();
+
         if (this.form == null)
         {
             return;

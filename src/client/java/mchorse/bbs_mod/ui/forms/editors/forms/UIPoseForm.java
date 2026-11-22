@@ -25,6 +25,7 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
         posePanel.poseEditor.transform.worldTransform(new FormBoneWorldProvider(this));
     }
 
+    @Override
     public UIPoseEditor getPoseEditor()
     {
         return this.posePanel.poseEditor;
@@ -85,6 +86,24 @@ public abstract class UIPoseForm <T extends Form & PoseForm> extends UIForm<T>
     public Vector3f getRotationOffset(float transition)
     {
         return this.getRotationOffset(transition, this.bonePath());
+    }
+
+    @Override
+    public Vector3f poseRotationBase(UIPropTransform transform, float transition)
+    {
+        if (transform != this.posePanel.poseEditor.transform)
+        {
+            return null;
+        }
+
+        String bone = this.posePanel.poseEditor.getTransformBone();
+
+        if (bone == null || bone.isEmpty())
+        {
+            return null;
+        }
+
+        return FormUtils.additivePoseRotationBase(this.form.getPose(), bone, this.getEvaluatedRotation(transition, this.bonePath()));
     }
 
     protected String bonePath()

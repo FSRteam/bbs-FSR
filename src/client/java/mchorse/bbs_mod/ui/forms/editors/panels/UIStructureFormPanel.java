@@ -69,7 +69,7 @@ public class UIStructureFormPanel extends UIFormPanel<StructureForm>
     /** One axis of the origin offset, colored like the axis it moves along. */
     private UITrackpad createOriginTrackpad(int color, IKey axis)
     {
-        UITrackpad trackpad = new UITrackpad((v) -> this.updateOrigin());
+        UITrackpad trackpad = new UITrackpad((v) -> this.updateOrigin()).onlyNumbers();
 
         trackpad.tooltip(IKey.constant("%s (%s)").format(L10n.lang("bbs.ui.forms.editors.structure.origin"), axis));
         trackpad.textbox.setColor(color);

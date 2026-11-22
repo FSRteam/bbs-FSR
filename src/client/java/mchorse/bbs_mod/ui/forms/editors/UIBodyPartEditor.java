@@ -7,6 +7,7 @@ import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.BodyPart;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
+import mchorse.bbs_mod.forms.renderers.BoneHierarchy;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.Keys;
@@ -106,10 +107,19 @@ public class UIBodyPartEditor extends UIScrollView
             }
             else
             {
-                List<String> bones = new ArrayList<>(FormUtilsClient.getBones(this.owner));
+                BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(this.owner);
 
-                bones.sort(String::compareToIgnoreCase);
-                picker.list(bones);
+                if (hierarchy.getBones().isEmpty())
+                {
+                    List<String> bones = new ArrayList<>(FormUtilsClient.getBones(this.owner));
+
+                    bones.sort(String::compareToIgnoreCase);
+                    picker.list(bones);
+                }
+                else
+                {
+                    picker.bones(hierarchy, null);
+                }
             }
 
             picker.none().set(this.part.bone.get());
