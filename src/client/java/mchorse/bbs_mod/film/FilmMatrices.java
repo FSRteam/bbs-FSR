@@ -1,7 +1,8 @@
 package mchorse.bbs_mod.film;
 
 import mchorse.bbs_mod.api.client.events.FormPoseEvents;
-import mchorse.bbs_mod.film.replays.PerLimbService;
+import mchorse.bbs_mod.film.replays.tracks.TrackId;
+import mchorse.bbs_mod.film.replays.tracks.TrackKind;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -440,9 +441,7 @@ public class FilmMatrices
             target = defaultMatrix;
         }
 
-        String mapKey = bonePath.contains(PerLimbService.POSE_BONES)
-            ? bonePath.replace(PerLimbService.POSE_BONES, "")
-            : bonePath;
+        String mapKey = boneMapKey(bonePath);
 
         Form root = FormUtils.getRoot(form);
         FormRenderer<?> renderer = FormUtilsClient.getRenderer(root);
@@ -525,6 +524,14 @@ public class FilmMatrices
         }
 
         return MatrixStackUtils.stripScale(full);
+    }
+
+    /** Matrix-cache key of a bone track, preserving its complete subject path. */
+    static String boneMapKey(String bonePath)
+    {
+        TrackId track = TrackId.parse(bonePath);
+
+        return track != null && track.is(TrackKind.BONE) ? track.subjectPath() : bonePath;
     }
 
     static void markRelativeReplayEntity(IEntity entity, boolean relative)

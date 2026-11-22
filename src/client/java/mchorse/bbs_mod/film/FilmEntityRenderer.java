@@ -7,7 +7,6 @@ import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
-import mchorse.bbs_mod.film.replays.PerLimbService;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -288,7 +287,7 @@ public class FilmEntityRenderer
 
     private static void renderAxes(String bone, boolean local, TransformSpace space, Matrix4f gizmoView, StencilMap stencilMap, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame)
     {
-        String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
+        String mapKey = FilmMatrices.boneMapKey(bone);
         Form root = FormUtils.getRoot(form);
         MatrixCache map = FormFrameCache.collect(
             frame,
@@ -338,7 +337,7 @@ public class FilmEntityRenderer
      */
     private static void renderPreviewAxes(String bone, boolean local, Form form, FormRenderingContext context, PoseStack stack, FormFrameCache frame)
     {
-        String mapKey = bone != null && bone.contains(PerLimbService.POSE_BONES) ? bone.replace(PerLimbService.POSE_BONES, "") : bone;
+        String mapKey = FilmMatrices.boneMapKey(bone);
         Form root = FormUtils.getRoot(form);
         MatrixCache map = FormFrameCache.collect(
             frame,
