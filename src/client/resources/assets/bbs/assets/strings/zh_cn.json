@@ -658,6 +658,8 @@
     "bbs.ui.color.recent": "最近使用的颜色",
     "bbs.ui.color.context.favorites.add": "添加到收藏的颜色",
     "bbs.ui.color.context.favorites.remove": "从收藏的颜色中移除",
+    "bbs.ui.color.eyedropper": "从屏幕拾取颜色",
+    "bbs.ui.color.revert": "恢复打开时的颜色",
     "bbs.ui.config.title": "设置",
     "bbs.ui.context.key": "选项 \"%s\"",
     "bbs.ui.context.key_category": "下拉菜单",
