@@ -846,12 +846,8 @@ processResources {
  * it shows up in the diff of the commit that made it, and an accidental one is caught by apiCheck
  * before it ever reaches an addon.
  *
- * Deliberately NOT wired into check/build yet: the API surface is still growing (the addon
- * extension points are being ported batch by batch), so every batch would fail the gate until its
- * snapshot was re-dumped, and a red gate that everyone learns to ignore is worse than none. The
- * snapshot gets taken and the wiring gets added once the surface is frozen, in the final
- * verification batch. Until then these are opt-in: run `gradlew apiDump` after an intended API
- * change and commit api/bbs-api.txt with it. */
+ * The check task includes apiCheck, and build runs check. After an intended API change,
+ * run `gradlew apiDump` and commit api/bbs-api.txt with the code. */
 def apiSnapshotFile = rootProject.file("api/bbs-api.txt")
 
 def collectApiSignatures = {
