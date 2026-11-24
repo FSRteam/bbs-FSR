@@ -25,6 +25,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
@@ -41,6 +42,7 @@ import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class ActionPlayer
 {
@@ -424,6 +426,11 @@ public class ActionPlayer
 
     private boolean tryUpdateReplayEntities()
     {
+        return this.tryUpdateReplayEntities(Map.of());
+    }
+
+    private boolean tryUpdateReplayEntities(Map<String, BaseType> previousForms)
+    {
         if (!FilmPlaybackPolicy.areReplayInputsAllowed(this.film)
             || !this.retryActorRetirements("preflight"))
         {
@@ -433,6 +440,8 @@ public class ActionPlayer
         List<Replay> list = this.film.replays.getList();
         Map<String, LivingEntity> nextActors = new HashMap<>();
         List<LivingEntity> stagedActors = new ArrayList<>();
+        List<ActorFormChange> formChanges = new ArrayList<>();
+        int appliedFormChanges = 0;
 
         try
         {
@@ -455,27 +464,21 @@ public class ActionPlayer
                 }
                 else
                 {
-                    ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY.get(), this.level);
-
-                    stagedActors.add(actor);
-                    actor.setReplayId(replay.getId());
-                    actor.setPickUpItems(replay.actorPickup.get());
-
-                    if (this.type.isTargetedDelivery() && this.serverPlayer != null)
+                    if (this.actors.get(replay.getId()) instanceof ActorEntity actor && !actor.isRemoved())
                     {
-                        actor.setPlaybackAudience(this.serverPlayer.getUUID());
+                        if (previousForms.containsKey(replay.getId())
+                            && !Objects.equals(previousForms.get(replay.getId()), replay.form.toData()))
+                        {
+                            formChanges.add(new ActorFormChange(actor, FormUtils.copy(replay.form.get()),
+                                actor.getForm(), actor.getHealth()));
+                        }
+
+                        nextActors.put(replay.getId(), actor);
                     }
-
-                    actor.setForm(FormUtils.copy(replay.form.get()));
-
-                    if (!this.applySafely(actor, replay, this.tick, false))
+                    else
                     {
-                        this.rollbackStagedActors(stagedActors);
-
-                        return false;
+                        nextActors.put(replay.getId(), this.stageReplayActor(replay, stagedActors));
                     }
-
-                    nextActors.put(replay.getId(), actor);
                 }
             }
 
@@ -489,10 +492,34 @@ public class ActionPlayer
                 }
             }
 
+            for (ActorFormChange change : formChanges)
+            {
+                appliedFormChanges += 1;
+                change.actor().setForm(change.form());
+            }
+
             reconcileBreakProgressSessions(this.breakProgressSessions, list);
         }
         catch (RuntimeException | LinkageError e)
         {
+            for (int i = appliedFormChanges - 1; i >= 0; i--)
+            {
+                ActorFormChange change = formChanges.get(i);
+
+                try
+                {
+                    ActionTeardown.runAll(
+                        () -> change.actor().setForm(change.previousForm()),
+                        () -> change.actor().setHealth(change.health())
+                    );
+                }
+                catch (RuntimeException | LinkageError rollbackError)
+                {
+                    ActionTeardown.append(e, rollbackError);
+                    this.requestForcedStop();
+                }
+            }
+
             Throwable rollbackFailure = this.retireDetachedActors(stagedActors);
 
             if (rollbackFailure != null)
@@ -506,12 +533,67 @@ public class ActionPlayer
             return false;
         }
 
+        this.commitReplayActors(nextActors);
+
+        for (ActorFormChange change : formChanges)
+        {
+            try
+            {
+                ServerNetwork.sendEntityFormToTracking(change.actor(), change.actor());
+            }
+            catch (RuntimeException | LinkageError e)
+            {
+                LOGGER.warn("[BBS-SEM] topic=film.actor_stage phase=form_notify result=partial film={}", this.film.getId(), e);
+            }
+        }
+
+        return true;
+    }
+
+    private record ActorFormChange(ActorEntity actor, Form form, Form previousForm, float health)
+    {}
+
+    private ActorEntity stageReplayActor(Replay replay, List<LivingEntity> stagedActors)
+    {
+        ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY.get(), this.level);
+
+        stagedActors.add(actor);
+        actor.setReplay(this.film.getId(), replay.getId());
+        actor.setPickUpItems(replay.actorPickup.get());
+
+        if (this.type.isTargetedDelivery() && this.serverPlayer != null)
+        {
+            actor.setPlaybackAudience(this.serverPlayer.getUUID());
+        }
+
+        actor.setForm(FormUtils.copy(replay.form.get()));
+
+        if (!this.applySafely(actor, replay, this.tick, false))
+        {
+            throw new IllegalStateException("Could not apply replay actor pose");
+        }
+
+        return actor;
+    }
+
+    private void commitReplayActors(Map<String, LivingEntity> nextActors)
+    {
         Map<String, LivingEntity> previousActors = this.actors;
 
         /* One reference swap is the commit point. A failed pre-commit stage
          * leaves the exact live map untouched; retirement happens afterward
          * and remains owned by actorRetirements until it succeeds. */
         this.actors = nextActors;
+
+        previousActors = new HashMap<>(previousActors);
+
+        for (Map.Entry<String, LivingEntity> entry : nextActors.entrySet())
+        {
+            if (previousActors.get(entry.getKey()) == entry.getValue())
+            {
+                previousActors.remove(entry.getKey());
+            }
+        }
 
         Throwable retirementFailure = this.retireDetachedActors(previousActors.values());
 
@@ -521,6 +603,75 @@ public class ActionPlayer
         }
 
         this.resendActors();
+    }
+
+    private boolean reviveLostActors()
+    {
+        List<String> lost = null;
+
+        for (Map.Entry<String, LivingEntity> entry : this.actors.entrySet())
+        {
+            if (entry.getValue() instanceof ActorEntity actor && actor.isRemoved())
+            {
+                if (lost == null)
+                {
+                    lost = new ArrayList<>();
+                }
+
+                lost.add(entry.getKey());
+            }
+        }
+
+        if (lost == null)
+        {
+            return true;
+        }
+
+        Map<String, LivingEntity> nextActors = new HashMap<>(this.actors);
+        List<LivingEntity> stagedActors = new ArrayList<>();
+
+        try
+        {
+            for (String id : lost)
+            {
+                Replay replay = (Replay) this.film.replays.get(id);
+                LivingEntity previous = this.actors.get(id);
+
+                nextActors.remove(id);
+
+                if (previous.getRemovalReason() != Entity.RemovalReason.KILLED
+                    && replay != null && replay.enabled.get())
+                {
+                    nextActors.put(id, this.stageReplayActor(replay, stagedActors));
+                }
+            }
+
+            for (LivingEntity actor : stagedActors)
+            {
+                if (!this.level.addFreshEntity(actor))
+                {
+                    this.rollbackStagedActors(stagedActors);
+
+                    return false;
+                }
+            }
+        }
+        catch (RuntimeException | LinkageError e)
+        {
+            Throwable rollbackFailure = this.retireDetachedActors(stagedActors);
+
+            if (rollbackFailure != null)
+            {
+                ActionTeardown.append(e, rollbackFailure);
+                this.recordActorRetirementFailure("revive_rollback", rollbackFailure);
+            }
+
+            LOGGER.warn("[BBS-SEM] topic=film.actor_stage phase=revive result=rollback film={}", this.film.getId(), e);
+
+            return false;
+        }
+
+        this.commitReplayActors(nextActors);
 
         return true;
     }
@@ -829,6 +980,11 @@ public class ActionPlayer
             return false;
         }
 
+        if (!this.reviveLostActors())
+        {
+            return false;
+        }
+
         for (Map.Entry<String, LivingEntity> entry : this.actors.entrySet())
         {
             Replay replay = (Replay) this.film.replays.get(entry.getKey());
@@ -987,6 +1143,7 @@ public class ActionPlayer
                 || baseValue.getId().equals("enabled")
                 || baseValue.getId().equals("fp")
                 || baseValue.getId().equals("replays");
+            Map<String, BaseType> previousActorForms = refreshActors ? new HashMap<>() : Map.of();
             boolean stateWasApplied = this.firstPersonStateApplied;
             Replay previousFirstPerson = FilmPlaybackPolicy.findEnabledFirstPersonReplay(this.film);
             boolean firstPersonRefreshAttempted = false;
@@ -1001,6 +1158,21 @@ public class ActionPlayer
                     this.requestFullResync();
 
                     return;
+                }
+
+                if (refreshActors)
+                {
+                    for (Map.Entry<String, LivingEntity> entry : this.actors.entrySet())
+                    {
+                        Replay replay = (Replay) this.film.replays.get(entry.getKey());
+
+                        if (entry.getValue() instanceof ActorEntity && replay != null)
+                        {
+                            BaseType form = replay.form.toData();
+
+                            previousActorForms.put(entry.getKey(), form == null ? null : form.copy());
+                        }
+                    }
                 }
 
                 baseValue.fromData(data);
@@ -1042,7 +1214,9 @@ public class ActionPlayer
 
                 nextDuration = this.film.calculateDuration();
 
-                if (refreshActors && !this.tryUpdateReplayEntities())
+                if (refreshActors && !(previousActorForms.isEmpty()
+                    ? this.tryUpdateReplayEntities()
+                    : this.tryUpdateReplayEntities(previousActorForms)))
                 {
                     throw new IllegalStateException("Could not refresh replay actors");
                 }

@@ -748,7 +748,7 @@ public class ClientNetwork
 
             BaseType decoded = NetworkDataDecoder.decode(bytes);
 
-            if (!(decoded instanceof MapType))
+            if (!(decoded instanceof MapType data))
             {
                 return;
             }
@@ -764,12 +764,23 @@ public class ClientNetwork
 
                 try
                 {
-                    Form form = FormUtils.fromData(decoded);
                     Entity entity = level.getEntity(entityId);
 
-                    if (form != null && entity instanceof IEntityFormProvider provider)
+                    if (entity instanceof IEntityFormProvider provider)
                     {
-                        provider.setForm(form);
+                        if (data.isEmpty())
+                        {
+                            provider.setForm(null);
+                        }
+                        else
+                        {
+                            Form form = FormUtils.fromData(decoded);
+
+                            if (form != null)
+                            {
+                                provider.setForm(form);
+                            }
+                        }
                     }
                 }
                 catch (RuntimeException | LinkageError exception)

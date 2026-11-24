@@ -60,6 +60,7 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     private boolean despawn;
     private boolean pickUpItems = true;
     private final List<ItemStack> pickedUp = new ArrayList<>();
+    private String filmId = "";
     private String replayId = "";
     @Nullable
     private UUID playbackAudience;
@@ -88,6 +89,17 @@ public class ActorEntity extends LivingEntity implements IEntityFormProvider
     public String getReplayId()
     {
         return this.replayId;
+    }
+
+    public void setReplay(String filmId, String replayId)
+    {
+        this.filmId = filmId;
+        this.setReplayId(replayId);
+    }
+
+    public String getFilmId()
+    {
+        return this.filmId;
     }
 
     public void setReplayId(String replayId)

@@ -1362,7 +1362,24 @@ public class ServerNetwork
                 }
                 else if (restart)
                 {
-                    if (actionPlayer != null)
+                    if (actionPlayer != null
+                        && actionPlayer.type == PlayerType.FILM_EDITOR
+                        && actionPlayer.getServerPlayer() == player
+                        && actionPlayer.getLevel() == player.serverLevel())
+                    {
+                        actions.restoreDamage(actionPlayer.getLevel());
+                        actionPlayer.syncing = true;
+                        actionPlayer.playing = false;
+                        actionPlayer.seekTo(tick);
+
+                        if (!actionPlayer.tryResendActors())
+                        {
+                            throw new IllegalStateException("Could not resend rewound film actors");
+                        }
+
+                        sendStopFilm(player, canonicalId);
+                    }
+                    else if (actionPlayer != null)
                     {
                         ActionPlayer expected = actionPlayer;
 
@@ -3101,7 +3118,9 @@ public class ServerNetwork
 
     public static void sendEntityForm(ServerPlayer player, IEntityFormProvider actor)
     {
-        crusher.send(player, CLIENT_ENTITY_FORM, FormUtils.toData(actor.getForm()), (packetByteBuf) ->
+        MapType data = FormUtils.toData(actor.getForm());
+
+        crusher.send(player, CLIENT_ENTITY_FORM, data == null ? new MapType() : data, (packetByteBuf) ->
         {
             packetByteBuf.writeInt(actor.getEntityId());
         });
@@ -3109,7 +3128,9 @@ public class ServerNetwork
 
     public static void sendEntityFormToTracking(Entity trackedEntity, IEntityFormProvider actor)
     {
-        crusher.sendToPlayersTrackingEntity(trackedEntity, CLIENT_ENTITY_FORM, FormUtils.toData(actor.getForm()), (packetByteBuf) ->
+        MapType data = FormUtils.toData(actor.getForm());
+
+        crusher.sendToPlayersTrackingEntity(trackedEntity, CLIENT_ENTITY_FORM, data == null ? new MapType() : data, (packetByteBuf) ->
         {
             packetByteBuf.writeInt(actor.getEntityId());
         });
