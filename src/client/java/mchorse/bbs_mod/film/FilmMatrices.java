@@ -224,7 +224,7 @@ public class FilmMatrices
 
             if (form != null)
             {
-                Pair<Matrix4f, Float> totalMatrix = getTotalMatrix(entities, form.anchor.get(), basic, cameraX, cameraY, cameraZ, transition, i + 1, fullMatrix, placementAware, frame);
+                Pair<Matrix4f, Float> totalMatrix = getTotalMatrix(entities, form.anchor.get(), basic, cameraX, cameraY, cameraZ, transition, i + 1, false, placementAware, frame);
 
                 if (totalMatrix.a != null)
                 {

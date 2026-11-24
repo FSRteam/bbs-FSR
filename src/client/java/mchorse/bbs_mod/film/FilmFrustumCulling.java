@@ -100,10 +100,23 @@ public final class FilmFrustumCulling
             return false;
         }
 
+        if (FilmMatrices.isRelativeReplayEntity(entity))
+        {
+            return false;
+        }
+
         Form form = entity.getForm();
 
         /* An anchored form stands wherever its target does, not at its own entity. */
         if (form == null || hasAnchorTarget(form))
+        {
+            return false;
+        }
+
+        Anchor anchor = form.anchor.get();
+
+        if (anchor != null && (!anchor.transform.isDefault()
+            || anchor.previous != null && !anchor.previous.transform.isDefault()))
         {
             return false;
         }
@@ -118,12 +131,12 @@ public final class FilmFrustumCulling
         ));
     }
 
-    /** Whether the form is anchored onto another replay. */
+    /** Whether the current or previous anchor targets another replay. */
     public static boolean hasAnchorTarget(Form form)
     {
         Anchor anchor = form.anchor.get();
 
-        return anchor != null && anchor.hasTarget();
+        return anchor != null && (anchor.hasTarget() || anchor.previous != null && anchor.previous.hasTarget());
     }
 
     /**

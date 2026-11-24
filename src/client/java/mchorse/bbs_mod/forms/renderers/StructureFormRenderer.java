@@ -358,7 +358,7 @@ public class StructureFormRenderer extends FormRenderer<StructureForm>
             }
 
             consumers.setSubstitute(BBSRendering.getColorConsumer(set));
-            this.renderBlockEntities(matrices, consumers, LightTexture.FULL_BRIGHT, 0);
+            this.renderBlockEntities(matrices, consumers, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
 
             consumers.draw();
         }
