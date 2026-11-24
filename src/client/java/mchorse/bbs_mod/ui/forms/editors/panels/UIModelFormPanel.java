@@ -117,14 +117,14 @@ public class UIModelFormPanel extends UIPoseFormPanel<ModelForm>
      */
     private void buildCemSection()
     {
-        this.cemSitting = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_SITTING, false, (b) -> this.form.cemSitting.set(b.getValue()));
-        this.cemTamed = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_TAMED, false, (b) -> this.form.cemTamed.set(b.getValue()));
-        this.cemAggressive = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_AGGRESSIVE, false, (b) -> this.form.cemAggressive.set(b.getValue()));
-        this.cemOnShoulder = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_ON_SHOULDER, false, (b) -> this.form.cemOnShoulder.set(b.getValue()));
-        this.cemBurning = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_BURNING, false, (b) -> this.form.cemBurning.set(b.getValue()));
-        this.cemInLava = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_IN_LAVA, false, (b) -> this.form.cemInLava.set(b.getValue()));
-        this.cemClimbing = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_CLIMBING, false, (b) -> this.form.cemClimbing.set(b.getValue()));
-        this.cemCrawling = new UIToggle(UIKeys.FORMS_EDITOR_MODEL_CEM_CRAWLING, false, (b) -> this.form.cemCrawling.set(b.getValue()));
+        this.cemSitting = UIValues.toggle(UIKeys.FORMS_EDITOR_MODEL_CEM_SITTING, () -> this.form.cemSitting);
+        this.cemTamed = UIValues.toggle(UIKeys.FORMS_EDITOR_MODEL_CEM_TAMED, () -> this.form.cemTamed);
+        this.cemAggressive = UIValues.toggle(UIKeys.FORMS_EDITOR_MODEL_CEM_AGGRESSIVE, () -> this.form.cemAggressive);
+        this.cemOnShoulder = UIValues.toggle(UIKeys.FORMS_EDITOR_MODEL_CEM_ON_SHOULDER, () -> this.form.cemOnShoulder);
+        this.cemBurning = UIValues.toggle(UIKeys.FORMS_EDITOR_MODEL_CEM_BURNING, () -> this.form.cemBurning);
+        this.cemInLava = UIValues.toggle(UIKeys.FORMS_EDITOR_MODEL_CEM_IN_LAVA, () -> this.form.cemInLava);
+        this.cemClimbing = UIValues.toggle(UIKeys.FORMS_EDITOR_MODEL_CEM_CLIMBING, () -> this.form.cemClimbing);
+        this.cemCrawling = UIValues.toggle(UIKeys.FORMS_EDITOR_MODEL_CEM_CRAWLING, () -> this.form.cemCrawling);
         this.cemHealth = UIValues.trackpad(() -> this.form.cemHealth);
 
         this.cemHealth.limit(0D, 1D).tooltip(UIKeys.FORMS_EDITOR_MODEL_CEM_HEALTH_TOOLTIP);
