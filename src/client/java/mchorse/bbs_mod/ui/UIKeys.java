@@ -63,10 +63,10 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MATERIAL_SMOOTHNESS = L10n.lang("bbs.ui.forms.editors.material.smoothness");
     public static final IKey FORMS_EDITORS_MATERIAL_SSS = L10n.lang("bbs.ui.forms.editors.material.sss");
     public static final IKey FORMS_EDITORS_MATERIAL_WHOLE_FORM = L10n.lang("bbs.ui.forms.editors.material.whole_form");
-    public static final IKey INHERIT_TITLE = L10n.lang("bbs.ui.inherit_title");
-    public static final IKey INHERIT_POSITION = L10n.lang("bbs.ui.inherit_position");
-    public static final IKey INHERIT_ROTATION = L10n.lang("bbs.ui.inherit_rotation");
-    public static final IKey INHERIT_SCALE = L10n.lang("bbs.ui.inherit_scale");
+    public static final IKey INHERIT_TITLE = L10n.lang("bbs.ui.inherit.title");
+    public static final IKey INHERIT_POSITION = L10n.lang("bbs.ui.inherit.position");
+    public static final IKey INHERIT_ROTATION = L10n.lang("bbs.ui.inherit.rotation");
+    public static final IKey INHERIT_SCALE = L10n.lang("bbs.ui.inherit.scale");
     public static final IKey CAMERA_PANELS_CURVES_SUN_HORIZONTAL_ROTATION = L10n.lang("bbs.ui.camera.panels.curves.sun_horizontal_rotation");
     public static final IKey FORMS_EDITORS_VIDEO_TITLE = L10n.lang("bbs.ui.forms.editors.video.title");
     public static final IKey FORMS_EDITORS_VIDEO_BILLBOARD = L10n.lang("bbs.ui.forms.editors.video.billboard");
@@ -1856,6 +1856,7 @@ public class UIKeys
     public static final IKey UTILITY_RELOAD_TEXTURES = L10n.lang("studio.ui.utility.reload_textures");
     public static final IKey UTILITY_RESIZE_WINDOW = L10n.lang("studio.ui.utility.resize");
     public static final IKey UTILITY_TITLE = L10n.lang("studio.ui.utility.title");
+    public static final IKey CONFIG_GIZMO_ELEMENTS = L10n.lang("bbs.config.transformation.gizmo_elements");
     public static final IKey VIDEO_SETTINGS_ARGS = L10n.lang("bbs.ui.video_settings.args");
     public static final IKey VIDEO_SETTINGS_AUDIO = L10n.lang("bbs.ui.video_settings.audio");
     public static final IKey VIDEO_SETTINGS_AUDIO_ARGS = L10n.lang("bbs.ui.video_settings.audio_args");

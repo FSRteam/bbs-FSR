@@ -656,7 +656,7 @@ public class BBSMod
             .register(Link.bbs("remapper"), RemapperClip.class, new ClipFactoryData(Icons.TIME, 0x222222))
             .register(Link.bbs("audio"), AudioClip.class, new ClipFactoryData(Icons.SOUND, 0xffc825))
             .register(Link.bbs("subtitle"), SubtitleClip.class, new ClipFactoryData(Icons.FONT, 0x888899))
-            .register(Link.bbs("image"), ImageClip.class, new ClipFactoryData(Icons.IMAGE, 0x2d4fd2))
+            .register(Link.bbs("image"), ImageClip.class, new ClipFactoryData(Icons.PICTURE, 0x2d4fd2))
             .register(Link.bbs("video"), VideoClip.class, new ClipFactoryData(Icons.VIDEO_CAMERA, 0xd21f3c))
             .register(Link.bbs("curve"), CurveClip.class, new ClipFactoryData(Icons.ARC, 0xff1493))
             .register(Link.bbs("tracker"), TrackerClip.class, new ClipFactoryData(Icons.USER, 0xffffff))

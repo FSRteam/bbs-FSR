@@ -172,7 +172,7 @@ public abstract class UIIconStrip <T> extends UIClickable<T>
                 return -1;
             }
 
-            return Math.min(this.items.size() - 1, (mouseX - this.area.x) * this.items.size() / Math.max(1, this.area.w));
+            return Math.min(this.items.size() - 1, ((mouseX - this.area.x + 1) * this.items.size() - 1) / Math.max(1, this.area.w));
         }
 
         int offset = mouseX - this.getContentX();

@@ -25,7 +25,9 @@ public class UIOverlayPanel extends UIElement
 {
     public static final int MIN_WIDTH = 160;
     public static final int MIN_HEIGHT = 80;
-    private static final int GRIP = 12;
+    /* Keep MIN_HEIGHT for existing callers; resizing follows the migrated 60px floor. */
+    private static final int RESIZE_MIN_HEIGHT = 60;
+    private static final int GRIP = 10;
 
     private UIDraggable grip;
     private boolean resized;
@@ -114,6 +116,7 @@ public class UIOverlayPanel extends UIElement
 
         this.grip = new UIDraggable(this::dragSize);
         this.grip.rendering(this::renderGrip);
+        this.grip.enabled(() -> !(this.getParent() instanceof UIOverlay overlay) || !overlay.isClosing());
         this.grip.cursors(GLFW.GLFW_RESIZE_NWSE_CURSOR, GLFW.GLFW_RESIZE_NWSE_CURSOR);
         this.grip.reference(() -> new Vector2i(this.area.ex(), this.area.ey()));
         this.grip.relative(this).x(1F, -GRIP).y(1F, -GRIP).wh(GRIP, GRIP);
@@ -141,7 +144,7 @@ public class UIOverlayPanel extends UIElement
             int height = (int) ((context.mouseY - origin) / (1F - anchorY));
 
             this.flex.h.max = 0;
-            this.flex.h.set(0F, MathUtils.clamp(height, MIN_HEIGHT, Math.max(parent.area.h, MIN_HEIGHT)));
+            this.flex.h.set(0F, MathUtils.clamp(height, RESIZE_MIN_HEIGHT, Math.max(parent.area.h, RESIZE_MIN_HEIGHT)));
         }
 
         this.resized = true;
@@ -264,6 +267,12 @@ public class UIOverlayPanel extends UIElement
     @Override
     public void render(UIContext context)
     {
+        if (this.moving && this.getParent() instanceof UIOverlay overlay && overlay.isClosing())
+        {
+            this.moveOwnership.cancel();
+            this.moving = false;
+        }
+
         if (this.moving && (context.mouseX != this.lastX || context.mouseY != this.lastY))
         {
             int dx = context.mouseX - this.lastX;

@@ -10,6 +10,7 @@ public class Icons
     public static final Map<String, Icon> ICONS = new HashMap<>();
     public static final Link ATLAS = Link.assets("textures/icons.png");
     private static final Link EDITOR_ATLAS = Link.assets("textures/editor_icons.png");
+    private static final Link MEDIA_ATLAS = Link.assets("textures/media_icons.png");
 
     public static final Icon NONE = new Icon(null, "none", 0, 0);
 
@@ -209,6 +210,7 @@ public class Icons
     public static final Icon PHYSICS = register(new Icon(ATLAS, "physics", 240, 160));
 
     public static final Icon HOTBAR = register(new Icon(ATLAS, "hotbar", 0, 176));
+    public static final Icon PICTURE = register(new Icon(MEDIA_ATLAS, "picture", 64, 176));
     public static final Icon FLIP_HORIZONTAL = register(new Icon(ATLAS, "flip_horizontal", 80, 176));
     public static final Icon FLIP_VERTICAL = register(new Icon(ATLAS, "flip_vertical", 96, 176));
 

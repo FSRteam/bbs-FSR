@@ -79,12 +79,20 @@ public class UIVector3fKeyframeFactory extends UIKeyframeFactory<Vector3f>
 
         Vector3f value = this.getDisplayValue();
 
-        this.x.setValue(value.x);
-        this.y.setValue(value.y);
-        this.z.setValue(value.z);
+        this.fill(this.x, value.x);
+        this.fill(this.y, value.y);
+        this.fill(this.z, value.z);
         this.handlesX.update();
         this.handlesY.update();
         this.handlesZ.update();
+    }
+
+    private void fill(UITrackpad trackpad, float value)
+    {
+        if (!trackpad.isUserEditing())
+        {
+            trackpad.setValue(value);
+        }
     }
 
     private Vector3f getValue()

@@ -436,6 +436,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
         this.keyDude.removeFromParent();
         this.gizmo.cancel();
 
+        this.orbit.stop();
+        this.orbit.resetVelocity();
         this.orbit.enabled = false;
         BBSModClient.getCameraController().remove(this.orbit);
 
@@ -931,7 +933,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
     {
         boolean consumed = this.gizmo.mouseReleased(context);
 
-        this.orbit.stop();
+        this.orbit.stop(context.mouseButton);
 
         return super.subMouseReleased(context) || consumed;
     }

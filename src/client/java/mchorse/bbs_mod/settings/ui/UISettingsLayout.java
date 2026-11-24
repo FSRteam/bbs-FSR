@@ -5,6 +5,7 @@ import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
+import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIconToggles;
 import mchorse.bbs_mod.ui.utils.UI;
@@ -38,7 +39,7 @@ public final class UISettingsLayout
         }
 
         rows = new HashMap<>();
-        register(new ToggleStripRow(L10n.lang("bbs.config.transformation.gizmo_elements"))
+        register(new ToggleStripRow(UIKeys.CONFIG_GIZMO_ELEMENTS)
             .add(BBSSettings.gizmoShowTranslate, Icons.ALL_DIRECTIONS)
             .add(BBSSettings.gizmoShowScale, Icons.SCALE)
             .add(BBSSettings.gizmoShowRotate, Icons.ORBIT)

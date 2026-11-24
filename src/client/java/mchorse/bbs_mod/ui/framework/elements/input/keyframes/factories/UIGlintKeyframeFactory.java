@@ -282,6 +282,19 @@ public class UIGlintKeyframeFactory extends UIKeyframeFactory<GlintControls>
         }
 
         @Override
+        protected Transform getAutoKeyTransform(float tick)
+        {
+            UIKeyframeSheet sheet = this.editor.editor.getGraph().getSheet(this.editor.keyframe);
+            GlintControls sampled = (GlintControls) UIReplaysEditorUtils.sampleKeyframeValue(sheet, tick);
+            String bone = this.editor.primaryBone();
+
+            if (sampled == null || bone == null) return null;
+
+            GlintControl control = sampled.controls.get(bone);
+            return (control == null ? this.editor.baseControl(bone) : control).transform;
+        }
+
+        @Override
         protected Transform getRecordedTransform(int tick)
         {
             UIKeyframeSheet sheet = this.editor.editor.getGraph().getSheet(this.editor.keyframe);

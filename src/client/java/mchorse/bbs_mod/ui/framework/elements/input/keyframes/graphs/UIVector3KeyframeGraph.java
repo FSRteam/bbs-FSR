@@ -393,6 +393,12 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
     @Override
     public void setValue(Object value, boolean unmergeable)
     {
+        this.setValue(value, unmergeable, false);
+    }
+
+    @Override
+    public void setValue(Object value, boolean unmergeable, boolean fromEditor)
+    {
         Keyframe selected = this.getSelected();
 
         if (selected == null)
@@ -401,7 +407,8 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
         }
 
         IKeyframeFactory factory = selected.getFactory();
-        Vector3f keyframe = (Vector3f) factory.copy(selected.getValue());
+        Keyframe target = fromEditor && this.getAutoKeyframeTick() != null ? this.getEditTarget(selected) : selected;
+        Vector3f keyframe = (Vector3f) factory.copy(target.getValue());
         
         if (value instanceof Vector3f)
         {
@@ -416,13 +423,7 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
             else if (this.draggingAxis == 2) keyframe.z = (float) val;
         }
         
-        for (UIKeyframeSheet sheet : this.getSheets())
-        {
-            if (sheet.channel.getFactory() == factory)
-            {
-                sheet.setValue(keyframe, factory.copy(selected.getValue()), unmergeable);
-            }
-        }
+        this.applyValue(factory, keyframe, selected, unmergeable, fromEditor);
     }
 
     private float getValue(Object value, int axis)
