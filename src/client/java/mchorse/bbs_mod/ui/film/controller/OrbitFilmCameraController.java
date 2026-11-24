@@ -116,7 +116,9 @@ public class OrbitFilmCameraController extends OrbitViewportController
     @Override
     protected boolean hasSubject()
     {
-        return this.controller.panel.getData() != null && !this.controller.panel.getData().replays.getList().isEmpty();
+        return this.controller.panel.getData() != null
+            && !this.controller.panel.getData().replays.getList().isEmpty()
+            && !this.isRelativeReplay(this.controller.panel.replayEditor.getReplay());
     }
 
     /** Kept for the call sites that speak of replays; the orbit itself only knows subjects. */
@@ -150,7 +152,7 @@ public class OrbitFilmCameraController extends OrbitViewportController
             target = this.controller.panel.replayEditor.getReplay();
             entity = target == null ? null : this.resolveEntity(target);
 
-            if (entity == null)
+            if (entity == null && !this.isRelativeReplay(target))
             {
                 target = this.anchorReplay;
                 entity = target == null ? null : this.resolveEntity(target);
@@ -221,11 +223,18 @@ public class OrbitFilmCameraController extends OrbitViewportController
         this.anchorYaw = (float) Math.atan2(-axes.m02(), axes.m00());
     }
 
+    /* A relative replay has no absolute world host for an orbit subject or anchor. */
+    private boolean isRelativeReplay(Replay replay)
+    {
+        return replay != null && (replay.relative.get()
+            || FilmMatrices.isRelativeReplayEntity(this.controller.getEntities().get(replay.getId())));
+    }
+
     private IEntity resolveEntity(Replay replay)
     {
         /* Addressed by the replay's stable id, not by its position: the entity map is keyed by id
          * since identity moved off the list index, and a positional lookup would silently miss. */
-        if (replay == null || this.controller.panel.getData() == null)
+        if (replay == null || this.controller.panel.getData() == null || this.isRelativeReplay(replay))
         {
             return null;
         }
@@ -254,7 +263,7 @@ public class OrbitFilmCameraController extends OrbitViewportController
      */
     private Vector3d getOrbitTarget(float transition)
     {
-        IEntity entity = this.controller.getCurrentEntity();
+        IEntity entity = this.resolveEntity(this.controller.panel.replayEditor.getReplay());
 
         if (entity == null)
         {
@@ -265,10 +274,8 @@ public class OrbitFilmCameraController extends OrbitViewportController
         double x = Lerps.lerp(entity.getPrevX(), entity.getX(), transition);
         double y = Lerps.lerp(entity.getPrevY(), entity.getY(), transition);
         double z = Lerps.lerp(entity.getPrevZ(), entity.getZ(), transition);
-        Replay replay = this.controller.panel.replayEditor.getReplay();
-        boolean relative = replay != null && replay.relative.get();
 
-        if (form != null && !relative && !FilmMatrices.isRelativeReplayEntity(entity))
+        if (form != null)
         {
             FormRenderer<?> renderer = FormUtilsClient.getRenderer(form);
 

@@ -7,7 +7,6 @@ import mchorse.bbs_mod.ui.themes.UIThemeMotion;
 import mchorse.bbs_mod.ui.utils.Scroll;
 import mchorse.bbs_mod.ui.utils.motion.UIMotions;
 import mchorse.bbs_mod.ui.utils.motion.UITween;
-import mchorse.bbs_mod.utils.colors.Colors;
 import org.joml.Vector2i;
 import org.lwjgl.glfw.GLFW;
 

@@ -18,15 +18,11 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.list.UIStringList;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
-import mchorse.bbs_mod.utils.Axis;
 import mchorse.bbs_mod.utils.CollectionUtils;
-import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.joml.Vectors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.Pose;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
-import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.List;

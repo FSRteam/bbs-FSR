@@ -9,7 +9,6 @@ import mchorse.bbs_mod.ui.themes.UIThemeMotion;
 import mchorse.bbs_mod.ui.themes.UIThemeMotionTracks;
 import mchorse.bbs_mod.ui.utils.motion.UIMotions;
 import mchorse.bbs_mod.ui.utils.motion.UITween;
-import mchorse.bbs_mod.utils.colors.Colors;
 import org.lwjgl.glfw.GLFW;
 
 public abstract class UIContextMenu extends UIElement

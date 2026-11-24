@@ -49,7 +49,6 @@ import mchorse.bbs_mod.ui.utils.motion.UIMotionEasings;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
 
 import java.util.Arrays;
-import java.util.function.Consumer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;

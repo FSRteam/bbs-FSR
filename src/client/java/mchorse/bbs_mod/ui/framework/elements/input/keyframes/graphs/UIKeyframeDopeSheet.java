@@ -809,12 +809,6 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     }
 
     @Override
-    public void pickKeyframe(Keyframe keyframe)
-    {
-        this.keyframes.pickKeyframe(keyframe);
-    }
-
-    @Override
     public void selectKeyframe(Keyframe keyframe)
     {
         this.clearSelection();
