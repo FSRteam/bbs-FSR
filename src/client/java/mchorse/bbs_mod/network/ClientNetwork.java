@@ -764,23 +764,24 @@ public class ClientNetwork
 
                 try
                 {
-                    Entity entity = level.getEntity(entityId);
-
-                    if (entity instanceof IEntityFormProvider provider)
+                    if (data.isEmpty())
                     {
-                        if (data.isEmpty())
+                        Entity entity = level.getEntity(entityId);
+
+                        if (entity instanceof IEntityFormProvider provider)
                         {
                             provider.setForm(null);
                         }
-                        else
-                        {
-                            Form form = FormUtils.fromData(decoded);
 
-                            if (form != null)
-                            {
-                                provider.setForm(form);
-                            }
-                        }
+                        return;
+                    }
+
+                    Form form = FormUtils.fromData(decoded);
+                    Entity entity = level.getEntity(entityId);
+
+                    if (form != null && entity instanceof IEntityFormProvider provider)
+                    {
+                        provider.setForm(form);
                     }
                 }
                 catch (RuntimeException | LinkageError exception)

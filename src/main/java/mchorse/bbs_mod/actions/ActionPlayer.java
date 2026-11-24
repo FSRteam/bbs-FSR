@@ -429,6 +429,29 @@ public class ActionPlayer
         return this.tryUpdateReplayEntities(Map.of());
     }
 
+    private ActorEntity stageReplayActor(Replay replay, List<LivingEntity> stagedActors)
+    {
+        ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY.get(), this.level);
+
+        stagedActors.add(actor);
+        actor.setReplay(this.film.getId(), replay.getId());
+        actor.setPickUpItems(replay.actorPickup.get());
+
+        if (this.type.isTargetedDelivery() && this.serverPlayer != null)
+        {
+            actor.setPlaybackAudience(this.serverPlayer.getUUID());
+        }
+
+        actor.setForm(FormUtils.copy(replay.form.get()));
+
+        if (!this.applySafely(actor, replay, this.tick, false))
+        {
+            throw new IllegalStateException("Could not apply replay actor pose");
+        }
+
+        return actor;
+    }
+
     private boolean tryUpdateReplayEntities(Map<String, BaseType> previousForms)
     {
         if (!FilmPlaybackPolicy.areReplayInputsAllowed(this.film)
@@ -552,29 +575,6 @@ public class ActionPlayer
 
     private record ActorFormChange(ActorEntity actor, Form form, Form previousForm, float health)
     {}
-
-    private ActorEntity stageReplayActor(Replay replay, List<LivingEntity> stagedActors)
-    {
-        ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY.get(), this.level);
-
-        stagedActors.add(actor);
-        actor.setReplay(this.film.getId(), replay.getId());
-        actor.setPickUpItems(replay.actorPickup.get());
-
-        if (this.type.isTargetedDelivery() && this.serverPlayer != null)
-        {
-            actor.setPlaybackAudience(this.serverPlayer.getUUID());
-        }
-
-        actor.setForm(FormUtils.copy(replay.form.get()));
-
-        if (!this.applySafely(actor, replay, this.tick, false))
-        {
-            throw new IllegalStateException("Could not apply replay actor pose");
-        }
-
-        return actor;
-    }
 
     private void commitReplayActors(Map<String, LivingEntity> nextActors)
     {
