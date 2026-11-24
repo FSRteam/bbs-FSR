@@ -1208,6 +1208,12 @@ public class UIFilmPreview extends UIElement
 
             this.hud.label(context, PreviewHud.Anchor.BOTTOM_CENTER, hint, BBSSettings.textColor(), Colors.A50);
         }
+        else if (this.panel.dashboard.orbitUI.isFreeLook())
+        {
+            String hint = UIKeys.FILM_CONTROLLER_FREE_LOOK_TOOLTIP.format(KeyCodes.getName(Keys.FLIGHT.getMainKey())).get();
+
+            this.hud.label(context, PreviewHud.Anchor.BOTTOM_CENTER, hint, BBSSettings.textColor(), Colors.A50);
+        }
 
         this.hud.flush(context);
 

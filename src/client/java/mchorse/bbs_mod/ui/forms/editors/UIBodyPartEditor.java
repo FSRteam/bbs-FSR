@@ -77,6 +77,13 @@ public class UIBodyPartEditor extends UIScrollView
         {
             this.part.useTarget.set(b.getValue());
         });
+        this.useTarget.valueBinding(() ->
+        {
+            if (this.part != null)
+            {
+                this.useTarget.setValue(this.part.useTarget.get());
+            }
+        });
 
         this.inheritPosition = new UIToggle(UIKeys.INHERIT_POSITION, (b) -> this.part.inheritPosition.set(b.getValue()));
         this.inheritRotation = new UIToggle(UIKeys.INHERIT_ROTATION, (b) -> this.part.inheritRotation.set(b.getValue()));
@@ -153,6 +160,7 @@ public class UIBodyPartEditor extends UIScrollView
         this.transform = new UIPropTransform().callbacks(() -> this.part.transform).barBackground();
         this.transform.enableHotkeys(this.editor::isBodyPartGizmoMode);
         this.transform.hotkeyDrag(() -> this.editor.buildHotkeyDrag(this.transform));
+        this.transform.valueBinding(() -> this.transform.setTransform(this.part == null ? null : this.part.transform.get()));
 
         this.pick.keys().register(Keys.FORMS_EDIT, this.pick::clickItself);
 

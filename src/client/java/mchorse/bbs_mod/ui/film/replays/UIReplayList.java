@@ -15,6 +15,7 @@ import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.structure.StructureCut;
+import mchorse.bbs_mod.forms.structure.StructureManager;
 import mchorse.bbs_mod.forms.structure.StructureSelection;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
@@ -69,7 +70,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -119,9 +119,11 @@ public class UIReplayList extends UIList<ReplayListEntry>
             menu.icon(MenuVerb.ADD, this::addReplay).label(UIKeys.SCENE_REPLAYS_CONTEXT_ADD);
             menu.icon(MenuVerb.REMOVE, this::removeReplay).label(UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE).enabled(this.hasReplaySelection());
 
+            String folder = this.contextFolderCategoryName == null ? "" : this.contextFolderCategoryName;
+
             if (film != null)
             {
-                menu.action(Icons.FOLDER, UIKeys.SCENE_REPLAYS_CONTEXT_ADD_CATEGORY, () -> this.openAddCategoryOverlay(this.contextFolderCategoryName == null ? "" : this.contextFolderCategoryName));
+                menu.action(Icons.FOLDER, UIKeys.SCENE_REPLAYS_CONTEXT_ADD_CATEGORY, () -> this.openAddCategoryOverlay(folder));
             }
 
             if (film != null && this.contextFolderCategoryName != null)
@@ -158,7 +160,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
                 boolean shift = Window.isShiftPressed();
                 MapType data = Window.getClipboardMap("_CopyKeyframes");
 
-                if (film != null && this.hasReplayCategoryNames())
+                if (film != null)
                 {
                     menu.action(Icons.SHIFT_TO, UIKeys.SCENE_REPLAYS_CONTEXT_MOVE_TO_CATEGORY, this::openMoveToCategoryContextMenu);
                 }
@@ -605,18 +607,6 @@ public class UIReplayList extends UIList<ReplayListEntry>
         super.filter(this.replaySearch);
         this.restoreReplaySelection(keep, false);
         this.update();
-    }
-
-    /**
-     * All category folder names: explicit empty folders plus names used by replays.
-     */
-
-
-    private boolean hasReplayCategoryNames()
-    {
-        Film film = this.panel.getData();
-
-        return film != null && !this.collectCategoryPaths(film).isEmpty();
     }
 
     /**
@@ -1388,7 +1378,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
             /* The legacy index conversion happens inside Replay.fromData; do not duplicate it. */
             BaseValue.edit(replay, (r) -> r.fromData(replayType));
-            replay.category.set("");
+            this.assignReplayCategoryValue(replay, replay.category.get());
 
             last = replay;
         }
@@ -1495,8 +1485,9 @@ public class UIReplayList extends UIList<ReplayListEntry>
 
     /**
      * The wand's region as a replay: saved as a structure, cleared out of the world, and added as a
-     * form standing exactly where the blocks did. Destructive, so it asks first — and the message
-     * names the command that puts the build back, because Minecraft has no undo for this.
+     * form standing exactly where the blocks did. Destructive and without an undo, so it asks first
+     * — and the message names the structure the blocks live on as, since that file is all that is
+     * left of them.
      */
     private void cutSelectionIntoReplay()
     {
@@ -1507,7 +1498,8 @@ public class UIReplayList extends UIList<ReplayListEntry>
             return;
         }
 
-        String id = StructureCut.nextPath(film.getId());
+        String path = StructureCut.nextPath(film.getId());
+        String id = StructureManager.assetId(path);
         BlockPos min = StructureSelection.getMin();
         BlockPos max = StructureSelection.getMax();
         BlockPos size = StructureSelection.getSize();
@@ -1517,7 +1509,7 @@ public class UIReplayList extends UIList<ReplayListEntry>
         {
             if (confirmed && this.panel.getData() == film)
             {
-                StructureCut.request(id, min, max, (ok) ->
+                StructureCut.request(path, min, max, (ok) ->
                 {
                     if (ok && this.panel.getData() == film)
                     {

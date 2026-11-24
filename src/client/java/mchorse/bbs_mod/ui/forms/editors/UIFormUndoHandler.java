@@ -31,7 +31,7 @@ public class UIFormUndoHandler
 
     protected Timer undoTimer = new Timer(1000);
     protected boolean batching;
-    protected Timer batchTimer = new Timer(300);
+    protected Timer batchTimer = new Timer(500);
 
     protected UIElement uiElement;
 

@@ -64,6 +64,7 @@ public class UIReplaysListPanel extends UIElement
         this.search.placeholder(UIKeys.GENERAL_SEARCH);
         this.search.relative(this.content).x(0).y(BAR_HEIGHT).w(1F).h(BAR_HEIGHT);
         this.addReplay = new UIIcon(Icons.ADD, (b) -> this.replays.addReplay());
+        this.addReplay.tooltip(UIKeys.SCENE_REPLAYS_CONTEXT_ADD);
         this.dupeReplay = new UIIcon(Icons.DUPE, (b) -> this.replays.dupeReplay());
         this.removeReplay = new UIIcon(Icons.REMOVE, (b) -> this.replays.removeReplay());
         this.presets = new UIIcon(Icons.MORE, (b) -> this.replays.openReplayPresets());

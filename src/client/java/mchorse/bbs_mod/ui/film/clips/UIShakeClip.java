@@ -33,8 +33,8 @@ public class UIShakeClip extends UIClip<ShakeClip>
         this.shakeAmount = this.trackpad(this.clip.shakeAmount);
         this.shakeAmount.tooltip(UIKeys.CAMERA_PANELS_SHAKE_AMOUNT, Direction.BOTTOM);
 
-        this.noise = this.bind(new UIToggle(UIKeys.CAMERA_PANELS_SHAKE_NOISE, (b) -> this.clip.noise.set(b.getValue())), () -> this.noise.setValue(this.clip.noise.get()));
-        this.noise.tooltip(UIKeys.CAMERA_PANELS_SHAKE_NOISE_TOOLTIP);
+        this.noise = this.toggle(UIKeys.CAMERA_PANELS_SHAKE_NOISE, this.clip.noise);
+        this.noise.tooltip(UIKeys.CAMERA_PANELS_SHAKE_NOISE_TOOLTIP, Direction.BOTTOM);
 
         this.active = this.bind(new UIBitToggle((value) -> this.clip.active.set(value)).all(), () -> this.active.setValue(this.clip.active.get()));
     }
@@ -44,7 +44,7 @@ public class UIShakeClip extends UIClip<ShakeClip>
     {
         super.registerPanels();
 
-        this.panels.add(this.section(UIKeys.C_CLIP.get("bbs:shake"), UI.row(UIConstants.MARGIN, 0, 20, this.shake, this.shakeAmount)));
-        this.panels.add(this.noise, this.active);
+        this.panels.add(this.section(UIKeys.C_CLIP.get("bbs:shake"), UI.row(UIConstants.MARGIN, 0, 20, this.shake, this.shakeAmount), this.noise));
+        this.panels.add(this.active);
     }
 }

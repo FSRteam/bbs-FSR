@@ -833,6 +833,10 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
 
                             UIOverlay.addOverlay(this.getContext(), new UIBakeIKOverlayPanel(chains.keySet(), lastTick,
                                     (tips, start, end, step, disable) -> {
+                                        if (this.keyframeEditor != editor || this.replay != replayForEditor) {
+                                            return;
+                                        }
+
                                         if (IKBake.bake(this.film, replayForEditor, tips, start, end, step, disable)) {
                                             this.updateChannelsList();
                                         }

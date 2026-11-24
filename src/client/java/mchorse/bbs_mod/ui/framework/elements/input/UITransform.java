@@ -484,14 +484,14 @@ public abstract class UITransform extends UIElement
             return;
         }
 
-        Supplier<Matrix4f> sampler = () ->
+        Supplier<Matrix4f> sampler = GizmoDrag.freshSampler(() ->
         {
             Matrix4f matrix = new Matrix4f();
 
             this.worldProvider.getWorldMatrix(matrix);
 
             return matrix;
-        };
+        });
 
         Vector3f startTranslate = new Vector3f(transform.translate);
         Vector3f startRotate = new Vector3f(transform.rotate);

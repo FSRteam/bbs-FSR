@@ -1462,6 +1462,7 @@ public class Batcher2D
             shadow
         );
 
+        BBSProfiler.count(BBSProfiler.Section.UI_DRAW_CALLS);
         this.context.drawString(this.font.getRenderer(), label, drawX, drawY, color, shadow);
         /* drawString() calls flushIfUnmanaged() internally which calls flush().
          * flush() re-enables depth test and may change depth func via the text
@@ -1560,6 +1561,7 @@ public class Batcher2D
 
     public void flush()
     {
+        this.flushBatch();
         this.context.flush();
     }
 

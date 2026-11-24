@@ -1075,6 +1075,8 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
         menu.action(Icons.LIST, UIKeys.FILM_OPEN_HISTORY, () ->
         {
+            this.flushUndo();
+
             UIOverlay.addOverlay(this.getContext(), new UIUndoHistoryOverlay(this), 200, 0.6F);
         });
 
@@ -2603,16 +2605,24 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         }
     }
 
+    public void flushUndo()
+    {
+        if (this.undoHandler != null)
+        {
+            this.undoHandler.submitUndo(true);
+        }
+    }
+
     public void undo()
     {
-        this.undoHandler.submitUndo(true);
+        this.flushUndo();
         this.finishFlight(false, "undo");
         if (this.data != null && this.undoHandler.getUndoManager().undo(this.data)) UIUtils.playClick();
     }
 
     public void redo()
     {
-        this.undoHandler.submitUndo(true);
+        this.flushUndo();
         this.finishFlight(false, "redo");
         if (this.data != null && this.undoHandler.getUndoManager().redo(this.data)) UIUtils.playClick();
     }

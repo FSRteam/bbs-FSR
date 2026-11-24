@@ -523,6 +523,8 @@ public class UIModelBlockPanel extends UIDashboardPanel implements GizmoViewport
                 transform,
                 () -> MatrixStackUtils.stripScale(transform.createMatrix())
             ));
+            /* Axis-key cycling also needs the block's local frame when its handles use world axes. */
+            drag.setFrameAxes(new Matrix4f().set(transform.createRotationMatrix()), new Matrix4f());
         }
 
         return drag;

@@ -197,7 +197,7 @@ public class UIDashboard extends UIBaseMenu
 
     public void openSettings()
     {
-        UIOverlay.addOverlay(this.context, this.settingsPanel, 430, 380);
+        UIOverlay.addOverlay(this.context, this.settingsPanel, 430, 400);
     }
 
     private void showAnnoyingPopups()

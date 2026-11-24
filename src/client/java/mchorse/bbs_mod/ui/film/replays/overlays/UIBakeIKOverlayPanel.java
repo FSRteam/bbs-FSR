@@ -40,10 +40,8 @@ public class UIBakeIKOverlayPanel extends UIOverlayPanel
 
         this.chains = new UIStringList((l) -> {});
         this.chains.multi();
-        /* Six rows tall. Upstream follows this with expand(), to take whatever height the fields
-         * below it leave; this build's UIElement has no such method (only h/w/full), so the list
-         * keeps the fixed height and the dialog is sized for it. */
-        this.chains.h(UIStringList.DEFAULT_HEIGHT * 6);
+        /* Six rows is the minimum; the list takes whatever height the fields below it leave. */
+        this.chains.h(UIStringList.DEFAULT_HEIGHT * 6).expand();
         this.chains.background();
         this.chains.tooltip(UIKeys.FILM_REPLAY_BAKE_IK_CHAINS);
         this.chains.add(tips);

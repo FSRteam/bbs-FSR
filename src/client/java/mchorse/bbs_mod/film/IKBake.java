@@ -520,7 +520,7 @@ public class IKBake
                     }
                 }
 
-                this.renderer.solveIK(model, world, 0F);
+                this.renderer.solveIK(model, this.replay.relative.get() ? null : world, 0F);
 
                 /* The solved pivot frames, collected once and only when a BOBJ bone stretched —
                  * its share has to be brought into its own frame (see stretchTranslate). */
