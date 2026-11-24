@@ -739,6 +739,10 @@ public class UIUnifiedPickOverlayPanel extends UIOverlayPanel
                     matrices.popPose();
                 }
             }
+            else if (this.mode == PickerMode.MOB)
+            {
+                context.batcher.icon(Icons.MORPH, Colors.A50 | Colors.WHITE, iconLeft + 1, iconTop + 1);
+            }
 
             int textX = iconLeft + LIST_ICON_SLOT + LIST_ICON_GAP;
             int maxW = this.area.w - (textX - x) - LIST_ICON_GAP;

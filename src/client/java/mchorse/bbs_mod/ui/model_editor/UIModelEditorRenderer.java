@@ -905,9 +905,12 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
         {
             /* The same deferred translucency the form editor's viewport gets: semi-transparent
              * pixels draw after the opaque ones, sorted, without hiding bones behind them. */
-            FormTranslucentQueue.begin();
-            FormUtilsClient.render(this.form, formContext);
-            FormTranslucentQueue.flush();
+            try (FormTranslucentQueue.PreviewScope preview = FormTranslucentQueue.openPreview())
+            {
+                FormUtilsClient.render(this.form, formContext);
+                preview.flush();
+            }
+
             this.captureBones(context);
         }
 
