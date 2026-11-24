@@ -204,6 +204,7 @@ public class FormRenderLast
         private final Matrix3f worldNormal;
         private final int light;
         private final int overlay;
+        private final boolean deathPoseApplied;
         private final int color;
         private final float transition;
         private final boolean ui;
@@ -232,6 +233,7 @@ public class FormRenderLast
             this.worldNormal = world == null ? null : new Matrix3f(world.normal());
             this.light = context.light;
             this.overlay = context.overlay;
+            this.deathPoseApplied = context.deathPoseApplied;
             this.color = context.color;
             this.transition = context.transition;
             this.ui = context.ui;
@@ -263,6 +265,7 @@ public class FormRenderLast
             context.simulationOwner = this.simulationOwner;
             context.allowWorldTargetOverrides = this.allowWorldTargetOverrides;
             context.allowWorldCollisions = this.allowWorldCollisions;
+            context.deathPoseApplied = this.deathPoseApplied;
             context.ui = this.ui;
             context.modelRenderer = this.modelRenderer;
             context.modelRendererTick = this.modelRendererTick;

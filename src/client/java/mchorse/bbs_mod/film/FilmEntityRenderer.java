@@ -5,6 +5,7 @@ import mchorse.bbs_mod.api.client.events.FilmGizmoEvents;
 import mchorse.bbs_mod.api.client.events.FormPoseEvents;
 import mchorse.bbs_mod.camera.data.Point;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.renderer.DeathPose;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.forms.FormUtils;
@@ -182,6 +183,8 @@ public class FilmEntityRenderer
              * label separately at the position of the body-owning world entity. */
             if (!context.gizmoOnly)
             {
+                DeathPose.apply(stack, entity.getDeathTime(), transition);
+                formContext.deathPoseApplied();
                 FormUtilsClient.render(form, formContext);
             }
 

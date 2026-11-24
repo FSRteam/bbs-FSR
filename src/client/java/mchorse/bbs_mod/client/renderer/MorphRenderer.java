@@ -67,6 +67,7 @@ public class MorphRenderer
 
                 FormRenderingContext context = new FormRenderingContext()
                     .set(FormRenderType.ENTITY, morph.entity, matrixStack, i, overlay, g)
+                    .deathPoseApplied()
                     .camera(Minecraft.getInstance().gameRenderer.getMainCamera());
 
                 FilmActorTimeline.apply(player, context);
@@ -139,6 +140,7 @@ public class MorphRenderer
 
             renderForm(form, new FormRenderingContext()
                 .set(FormRenderType.ENTITY, owner.entity, matrixStack, i, o, g)
+                .deathPoseApplied()
                 .camera(Minecraft.getInstance().gameRenderer.getMainCamera()));
 
             matrixStack.popPose();

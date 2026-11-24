@@ -27,6 +27,8 @@ public class FormRenderingContext
     public boolean allowWorldCollisions;
     public int light;
     public int overlay;
+    /** The visible body host already supplied this draw's death roll. */
+    public boolean deathPoseApplied;
     public float transition;
     public float viewportHeight;
     public final Camera camera = new Camera();
@@ -71,6 +73,7 @@ public class FormRenderingContext
         this.allowWorldCollisions = this.type.hasWorldHost();
         this.light = light;
         this.overlay = overlay;
+        this.deathPoseApplied = false;
         this.transition = transition;
         this.viewportHeight = 0F;
         this.stencilMap = null;
@@ -110,6 +113,14 @@ public class FormRenderingContext
         this.camera.rotation.set(MathUtils.toRad(-camera.getXRot()), MathUtils.toRad(camera.getYRot()), 0F);
         this.camera.fov = MathUtils.toRad(Minecraft.getInstance().options.fov().get());
         this.camera.view.identity().rotate(camera.rotation().conjugate(this.cameraRotation));
+
+        return this;
+    }
+
+    /** Keep nested forms from applying a second roll to their host body. */
+    public FormRenderingContext deathPoseApplied()
+    {
+        this.deathPoseApplied = true;
 
         return this;
     }

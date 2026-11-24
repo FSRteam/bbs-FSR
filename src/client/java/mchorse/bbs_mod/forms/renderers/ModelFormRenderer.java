@@ -1205,10 +1205,9 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             boolean noBlend = cutout || renderLayer == Form.LAYER_SOLID || renderLayer == Form.LAYER_CUTOUT;
             boolean suspendQueue = irisWorld || renderLayer == Form.LAYER_SOLID || renderLayer == Form.LAYER_CUTOUT;
 
-            /* Death topple from the replay's death channel. Vanilla entities get this from
-             * the renderer reading livingEntity.deathTime; BBS's own models render outside
-             * the vanilla entity renderer, so apply the same Z-axis fall rotation here. */
-            if (context.entity != null)
+            /* Direct previews retain their replay death fallback. Actor, Morph and Film
+             * body hosts have already supplied the roll before this model's facing transform. */
+            if (context.entity != null && !context.deathPoseApplied)
             {
                 float death = context.entity.getDeath();
 

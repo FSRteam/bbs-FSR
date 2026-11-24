@@ -386,17 +386,38 @@ public class MobFormRenderer extends FormRenderer<MobForm> implements ITickable
                         FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
                     }
 
-                    Minecraft.getInstance().getEntityRenderDispatcher().render(
-                        this.entity,
-                        0D,
-                        0D,
-                        0D,
-                        0F,
-                        transition,
-                        context.stack,
-                        consumers,
-                        light
-                    );
+                    LivingEntity deathProxy = context.deathPoseApplied && this.entity instanceof LivingEntity living
+                        ? living : null;
+                    int deathTime = deathProxy == null ? 0 : deathProxy.deathTime;
+
+                    try
+                    {
+                        if (deathProxy != null)
+                        {
+                            /* Only the native rotation driver is suppressed. The logical
+                             * entity death and supplied red overlay stay with the host. */
+                            deathProxy.deathTime = 0;
+                        }
+
+                        Minecraft.getInstance().getEntityRenderDispatcher().render(
+                            this.entity,
+                            0D,
+                            0D,
+                            0D,
+                            0F,
+                            transition,
+                            context.stack,
+                            consumers,
+                            light
+                        );
+                    }
+                    finally
+                    {
+                        if (deathProxy != null)
+                        {
+                            deathProxy.deathTime = deathTime;
+                        }
+                    }
 
                     mobContext.completeMatrices();
                 }

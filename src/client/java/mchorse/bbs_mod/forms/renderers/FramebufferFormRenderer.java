@@ -371,7 +371,6 @@ public class FramebufferFormRenderer extends FormRenderer<FramebufferForm>
             /* No raw bind here (0a3d78437): the draw binds its own samplers, and a bind on whatever
              * texture unit happens to be active would land behind GlStateManager's back - see
              * BillboardFormRenderer. */
-            texture.setFilterMipmap(false, false);
             builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
 
             /* Front */

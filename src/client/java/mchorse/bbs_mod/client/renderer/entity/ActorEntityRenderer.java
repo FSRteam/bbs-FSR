@@ -59,6 +59,7 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         RenderSystem.enableDepthTest();
         FormRenderingContext context = new FormRenderingContext()
             .set(FormRenderType.ENTITY, livingEntity.getEntity(), matrices, light, overlay, tickDelta)
+            .deathPoseApplied()
             .camera(Minecraft.getInstance().gameRenderer.getMainCamera());
 
         FilmActorTimeline.apply(livingEntity, context);

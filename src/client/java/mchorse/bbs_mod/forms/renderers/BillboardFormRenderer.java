@@ -33,6 +33,7 @@ import com.mojang.blaze3d.vertex.VertexBuffer;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
+import org.lwjgl.opengl.GL13;
 
 import java.util.function.Supplier;
 
@@ -211,7 +212,8 @@ public class BillboardFormRenderer<T extends BillboardForm> extends FormRenderer
             BBSModClient.getTextures().bindTexture(texture);
             RenderSystem.setShader(shader);
 
-            texture.bind();
+            RenderSystem.activeTexture(GL13.GL_TEXTURE0);
+            RenderSystem.bindTexture(texture.id);
             texture.setFilterMipmap(this.form.linear.get(), this.form.mipmap.get());
             builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, format);
 
@@ -237,8 +239,18 @@ public class BillboardFormRenderer<T extends BillboardForm> extends FormRenderer
 
                 FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(buffer,
                     () -> capturedShader, texture, modelView, null, origin, planeNormal, true,
-                    () -> texture.setFilterMipmap(linear, mipmap),
-                    () -> texture.setFilterMipmap(false, false)));
+                    () ->
+                    {
+                        RenderSystem.activeTexture(GL13.GL_TEXTURE0);
+                        RenderSystem.bindTexture(texture.id);
+                        texture.setFilterMipmap(linear, mipmap);
+                    },
+                    () ->
+                    {
+                        RenderSystem.activeTexture(GL13.GL_TEXTURE0);
+                        RenderSystem.bindTexture(texture.id);
+                        texture.setFilterMipmap(false, false);
+                    }));
             }
             else
             {
@@ -250,6 +262,8 @@ public class BillboardFormRenderer<T extends BillboardForm> extends FormRenderer
                 this.renderGlint(format, matrix, overlay, light, normal);
             }
 
+            RenderSystem.activeTexture(GL13.GL_TEXTURE0);
+            RenderSystem.bindTexture(texture.id);
             texture.setFilterMipmap(false, false);
 
         }
