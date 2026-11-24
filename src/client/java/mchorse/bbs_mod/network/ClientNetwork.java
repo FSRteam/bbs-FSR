@@ -824,8 +824,12 @@ public class ClientNetwork
 
             BBSModClient.getFilms().updateActors(filmId, actors);
 
-            UIDashboard dashboard = BBSModClient.getDashboardIfCreated();
-            UIFilmPanel panel = dashboard == null ? null : dashboard.getPanel(UIFilmPanel.class);
+            if (BBSModClient.getDashboardIfCreated() == null)
+            {
+                return;
+            }
+
+            UIFilmPanel panel = BBSModClient.getDashboard().getPanel(UIFilmPanel.class);
 
             if (panel != null)
             {
