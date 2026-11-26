@@ -562,7 +562,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
             model.invalidatePreviewPose();
         }
 
-        MatrixCache bones = renderer == null ? null : renderer.collectMatrices(this.entity, this.transition);
+        MatrixCache bones = renderer == null ? null : renderer.collectMatrices(this.entity, this, new Matrix4f(), false, false, this.transition);
 
         return bones != null && bones.has(bone) ? bones.get(bone) : null;
     }
@@ -576,7 +576,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
         FormRenderer renderer = FormUtilsClient.getRenderer(this.form);
 
         this.transition = context.getTransition();
-        this.bones = renderer == null ? null : renderer.collectMatrices(this.entity, this.transition);
+        this.bones = renderer == null ? null : renderer.collectMatrices(this.entity, this, new Matrix4f(), false, false, this.transition);
     }
 
     /**
@@ -895,6 +895,7 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
         FormRenderingContext formContext = new FormRenderingContext()
             .set(FormRenderType.PREVIEW, this.entity, context.batcher.getContext().pose(), LightTexture.pack(15, 15), OverlayTexture.NO_OVERLAY, context.getTransition())
             .camera(this.camera)
+            .simulationOwner(this)
             .modelRenderer(context.getTick());
 
         if (this.firstPerson)
