@@ -3,12 +3,16 @@ package mchorse.bbs_mod.ui.film;
 import mchorse.bbs_mod.camera.clips.IPlaceableClip;
 import mchorse.bbs_mod.camera.clips.misc.OverlayBox;
 import mchorse.bbs_mod.camera.data.Placement;
+import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.core.ValuePlacement;
 import mchorse.bbs_mod.ui.film.clips.widgets.UIPlacement;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.colors.Colors;
+
+import java.util.IdentityHashMap;
+import java.util.Map;
 
 /**
  * The screen manipulator of overlay clips (subtitle, image, video): while such
@@ -38,6 +42,7 @@ public class UIPlacementGizmo
     private float startUnitY;
     private Placement startPlacement;
     private ValuePlacement editedValue;
+    private final Map<ValuePlacement, Placement> previousRuntimeValues = new IdentityHashMap<>();
 
     public UIPlacementGizmo(UIFilmPanel panel)
     {
@@ -115,6 +120,8 @@ public class UIPlacementGizmo
             return false;
         }
 
+        this.cancel();
+
         ValuePlacement value = this.getPlacement();
         OverlayBox box = value == null ? null : this.getBox();
 
@@ -146,6 +153,8 @@ public class UIPlacementGizmo
         this.startUnitY = this.toUnitY(context, viewport);
         this.startPlacement = value.get().copy();
         this.editedValue = value;
+        this.panel.cameraEditor.editMultiple(value, target ->
+            this.previousRuntimeValues.put(target, target.getRuntimeValue()));
 
         return true;
     }
@@ -162,23 +171,55 @@ public class UIPlacementGizmo
             return false;
         }
 
-        this.cancel();
+        this.finishDrag(this.getPlacement() == this.editedValue);
 
         return true;
     }
 
     public void cancel()
     {
+        this.finishDrag(false);
+    }
+
+    private void finishDrag(boolean commit)
+    {
         if (this.mode == MODE_NONE)
         {
             return;
         }
 
+        Map<ValuePlacement, Placement> changed = new IdentityHashMap<>();
+
+        for (Map.Entry<ValuePlacement, Placement> entry : this.previousRuntimeValues.entrySet())
+        {
+            ValuePlacement target = entry.getKey();
+            Placement staged = target.getRuntimeValue();
+
+            target.setRuntimeValue(entry.getValue());
+
+            if (commit && staged != null && staged != entry.getValue() && !staged.equals(target.getOriginalValue()))
+            {
+                changed.put(target, staged.copy());
+            }
+        }
+
         this.mode = MODE_NONE;
         this.startPlacement = null;
         this.editedValue = null;
-        this.panel.getUndoHandler().submitUndo(true);
-        this.panel.cameraEditor.markLastUndoNoMerging();
+        this.previousRuntimeValues.clear();
+
+        for (Map.Entry<ValuePlacement, Placement> entry : changed.entrySet())
+        {
+            entry.getKey().set(entry.getValue(), IValueListener.FLAG_UNMERGEABLE);
+        }
+
+        if (!changed.isEmpty())
+        {
+            this.panel.getUndoHandler().submitUndo(true);
+            this.panel.cameraEditor.markLastUndoNoMerging();
+        }
+
+        this.panel.cameraEditor.fillData();
     }
 
     private void updateDrag(UIContext context, Area viewport, OverlayBox box)
@@ -282,7 +323,11 @@ public class UIPlacementGizmo
 
         if (!value.get().equals(edited))
         {
-            this.panel.cameraEditor.editMultiple(value, (v) -> v.set(edited.copy()));
+            for (ValuePlacement target : this.previousRuntimeValues.keySet())
+            {
+                target.setRuntimeValue(edited.copy());
+            }
+
             this.panel.cameraEditor.fillData();
         }
     }
