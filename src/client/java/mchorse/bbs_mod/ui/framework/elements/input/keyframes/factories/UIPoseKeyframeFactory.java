@@ -60,7 +60,7 @@ public class UIPoseKeyframeFactory extends UIKeyframeFactory<Pose>
              * 2.5 tree style instead of a flat alphabetical list. */
             BoneHierarchy hierarchy = FormUtilsClient.getBoneHierarchy(mobForm);
 
-            this.poseEditor.setPose(keyframe.getValue(), "");
+            this.poseEditor.setPose(keyframe.getValue(), mobForm.mobID.get());
             this.poseEditor.fillGroups(hierarchy, false);
         }
 
