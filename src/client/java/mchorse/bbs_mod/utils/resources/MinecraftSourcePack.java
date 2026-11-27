@@ -21,7 +21,7 @@ import java.util.Optional;
 public class MinecraftSourcePack implements ISourcePack
 {
     private final ResourceManager manager;
-    private Map<String, Object> links = new HashMap<>();
+    private volatile Map<String, Object> links = new HashMap<>();
 
     public MinecraftSourcePack()
     {
@@ -34,18 +34,20 @@ public class MinecraftSourcePack implements ISourcePack
     {
         Map<ResourceLocation, List<Resource>> map = this.manager.listResourceStacks("textures", (location) -> location.getNamespace().equals("minecraft") && location.getPath().endsWith(".png"));
 
+        Map<String, Object> links = new HashMap<>();
+
         for (ResourceLocation id : map.keySet())
         {
             DataPath path = new DataPath(id.getPath());
 
-            this.insert(path);
+            this.insert(links, path);
         }
+
+        this.links = links;
     }
 
-    private void insert(DataPath path)
+    private void insert(Map<String, Object> links, DataPath path)
     {
-        Map<String, Object> links = this.links;
-
         for (String string : path.strings)
         {
             if (string.endsWith(".png"))
