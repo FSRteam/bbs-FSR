@@ -110,7 +110,7 @@ public final class BBSDashboardOverlayHostRegistry
 
     private static void projectCurrent(DashboardOverlayContribution contribution, Projection projection)
     {
-        UIDashboard dashboard = BBSModClient.getDashboardIfCreated();
+        UIDashboard dashboard = BBSModClient.peekDashboard();
 
         if (dashboard == null)
         {
@@ -119,7 +119,8 @@ public final class BBSDashboardOverlayHostRegistry
 
         Runnable action = () ->
         {
-            if (BBSModClient.getDashboardIfCreated() != dashboard)
+            if (BBSModClient.peekDashboard() != dashboard
+                || BBSModClient.getDashboardIfCreated() != dashboard)
             {
                 return;
             }

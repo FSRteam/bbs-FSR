@@ -355,9 +355,20 @@ public class BBSModClient
         return worldExportSession;
     }
 
+    /** Lifecycle identity snapshot; leaves the Dashboard build queue untouched. */
+    public static UIDashboard peekDashboard()
+    {
+        return dashboard;
+    }
+
     /** Returns the dashboard without creating it. Used to avoid creating UI when handling keys (e.g. F6) before user has opened BBS. */
     public static UIDashboard getDashboardIfCreated()
     {
+        if (dashboard != null)
+        {
+            dashboard.finishBuilding();
+        }
+
         return dashboard;
     }
 

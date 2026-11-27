@@ -185,7 +185,7 @@ public final class BBSDashboardPanelHostRegistry
         boolean remove
     )
     {
-        UIDashboard dashboard = BBSModClient.getDashboardIfCreated();
+        UIDashboard dashboard = BBSModClient.peekDashboard();
 
         if (dashboard == null)
         {
@@ -194,7 +194,8 @@ public final class BBSDashboardPanelHostRegistry
 
         Runnable projection = () ->
         {
-            if (BBSModClient.getDashboardIfCreated() != dashboard)
+            if (BBSModClient.peekDashboard() != dashboard
+                || BBSModClient.getDashboardIfCreated() != dashboard)
             {
                 return;
             }
