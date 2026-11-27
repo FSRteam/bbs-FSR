@@ -670,6 +670,14 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
 
         for (int i = EDITORS.size() - 1; i >= 0; i--)
         {
+            if (EDITORS.get(i) != keep && !this.prepareTabRemoval(i + 1))
+            {
+                return;
+            }
+        }
+
+        for (int i = EDITORS.size() - 1; i >= 0; i--)
+        {
             if (EDITORS.get(i) != keep)
             {
                 UITextureEditor editor = EDITORS.remove(i);
@@ -692,6 +700,14 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
 
         for (int i = index - 2; i >= 0; i--)
         {
+            if (!this.prepareTabRemoval(i + 1))
+            {
+                return;
+            }
+        }
+
+        for (int i = index - 2; i >= 0; i--)
+        {
             UITextureEditor editor = EDITORS.remove(i);
 
             editor.removeFromParent();
@@ -707,6 +723,14 @@ public class UITexturePicker extends UIElement implements IImportPathProvider, I
         if (index < 1 || index >= EDITORS.size())
         {
             return;
+        }
+
+        for (int i = EDITORS.size() - 1; i >= index; i--)
+        {
+            if (!this.prepareTabRemoval(i + 1))
+            {
+                return;
+            }
         }
 
         for (int i = EDITORS.size() - 1; i >= index; i--)
