@@ -129,7 +129,12 @@ public class UIModelPreviewPanel extends UIElement
     {
         if (this.animated != null && this.animatedDocument == document && this.animatedRevision == document.revision && !this.animated.textures.isEmpty() && this.animated.textures.get(0).isValid())
         {
-            return true;
+            Texture frame = this.frameOnShow(editor, document);
+
+            if (frame == null || frame.isValid())
+            {
+                return true;
+            }
         }
 
         Pixels flat = editor.flattenLayers();
