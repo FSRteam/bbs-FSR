@@ -46,7 +46,7 @@ public abstract class UIKeyframePropTransform extends UIDeltaPropTransform
 
     protected UIKeyframes getKeyframes()
     {
-        UIKeyframeFactory factory = this.getParent(UIKeyframeFactory.class);
+        UIKeyframeFactory factory = this.getAncestor(UIKeyframeFactory.class);
         return factory == null ? null : factory.editor;
     }
 
