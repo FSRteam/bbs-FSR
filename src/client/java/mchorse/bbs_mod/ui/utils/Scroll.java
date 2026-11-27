@@ -167,7 +167,7 @@ public class Scroll
 
     private UIThemeMotion getSmoothScrollingMotion()
     {
-        if (!BBSSettings.scrollingSmoothness.get() || (this.smoothScrolling != null && !this.smoothScrolling.getAsBoolean()))
+        if (BBSSettings.getScrollSmoothingIntensity() <= 0F || (this.smoothScrolling != null && !this.smoothScrolling.getAsBoolean()))
         {
             return null;
         }
@@ -683,7 +683,8 @@ public class Scroll
             return;
         }
 
-        this.scrollTween.to((float) this.targetScroll, motion, UIMotions.scrollType(motion), UIMotions.scrollEasing(motion));
+        this.scrollTween.to((float) this.targetScroll, motion,
+            UIMotions.scrollType(motion), UIMotions.scrollEasing(motion), BBSSettings.getScrollSmoothingIntensity());
 
         float maximum = Math.max(0, this.scrollSize - this.direction.getSide(this.area));
 

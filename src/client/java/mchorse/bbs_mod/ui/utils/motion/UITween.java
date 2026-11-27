@@ -29,6 +29,7 @@ public class UITween
     private float startVelocity;
     private long startMs;
     private int durationMs;
+    private float timingScale = 1F;
     private float responseSec = UIThemeMotion.DEFAULT_RESPONSE;
     private float damping = UIThemeMotion.DEFAULT_DAMPING;
     private IInterp easing = Interpolations.SINE_OUT;
@@ -54,6 +55,7 @@ public class UITween
         this.startVelocity = 0F;
         this.startMs = 0L;
         this.durationMs = 0;
+        this.timingScale = 1F;
         this.responseSec = UIThemeMotion.DEFAULT_RESPONSE;
         this.damping = UIThemeMotion.DEFAULT_DAMPING;
         this.easing = Interpolations.SINE_OUT;
@@ -74,8 +76,20 @@ public class UITween
 
     public void to(float target, UIThemeMotion spec, UIThemeMotion.MotionType nextType, IInterp nextEasing)
     {
+        this.to(target, spec, nextType, nextEasing, 1F);
+    }
+
+    /** Scale motion timing while retaining the resolved theme and its curve. */
+    public void to(float target, UIThemeMotion spec, UIThemeMotion.MotionType nextType, IInterp nextEasing, float timingScale)
+    {
         int duration = UIMotions.duration(spec);
         float response = nextType == UIThemeMotion.MotionType.SPRING ? UIMotions.response(spec) : 0F;
+
+        if (timingScale != 1F)
+        {
+            duration = Math.round(duration * timingScale);
+            response *= timingScale;
+        }
 
         if ((nextType == UIThemeMotion.MotionType.SPRING ? response <= 0F : duration <= 0))
         {
@@ -84,7 +98,7 @@ public class UITween
             return;
         }
 
-        if (this.target == target)
+        if (this.target == target && (this.settled || this.timingScale == timingScale))
         {
             return;
         }
@@ -104,6 +118,7 @@ public class UITween
         this.startVelocity = this.velocity;
         this.startMs = nowMs;
         this.durationMs = duration;
+        this.timingScale = timingScale;
         this.easing = nextEasing == null ? Interpolations.SINE_OUT : nextEasing;
         this.responseSec = nextType == UIThemeMotion.MotionType.SPRING ? response : UIThemeMotion.DEFAULT_RESPONSE;
         this.damping = nextType == UIThemeMotion.MotionType.SPRING ? spec.damping : UIThemeMotion.DEFAULT_DAMPING;

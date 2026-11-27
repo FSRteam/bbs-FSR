@@ -633,7 +633,10 @@ public class BBSSettings {
 
 	/** Shared strength for smooth scrolling and timeline zoom; zero selects immediate movement. */
 	public static float getScrollSmoothingIntensity() {
-		return scrollingSmoothness.get() ? scrollingSmoothnessIntensity.get() : 0F;
+		/* Before the intensity is registered, retain the legacy motion timing. */
+		return scrollingSmoothness.get()
+			? (scrollingSmoothnessIntensity == null ? 1F : scrollingSmoothnessIntensity.get())
+			: 0F;
 	}
 
 	public static float getFov() {
