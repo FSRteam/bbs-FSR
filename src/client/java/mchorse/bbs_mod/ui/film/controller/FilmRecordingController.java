@@ -111,21 +111,22 @@ public class FilmRecordingController
             return;
         }
 
+        boolean transformRecording = groups != null && groups.contains(ReplayKeyframes.GROUP_TRANSFORM);
+
+        if (transformRecording && this.controller.controlled != null)
+        {
+            this.controller.toggleControl();
+        }
+
         this.recordingTick = this.controller.getTick();
         this.recording = true;
         this.recordingCountdown = Math.max(0, TimeUtils.toTick(BBSSettings.recordingCountdown.get()));
         this.recordingGroups = groups;
-        boolean transformRecording = groups != null && groups.contains(ReplayKeyframes.GROUP_TRANSFORM);
 
         this.recordingOld = transformRecording ? this.controller.getReplay().properties.toData() : this.controller.getReplay().keyframes.toData();
 
         if (transformRecording)
         {
-            if (this.controller.controlled != null)
-            {
-                this.controller.toggleControl();
-            }
-
             this.controller.setMouseMode(0);
         }
         else if (groups != null)
