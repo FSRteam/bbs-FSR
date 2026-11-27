@@ -59,32 +59,36 @@ public class UITextureInfoPanel extends UIElement
 
         this.linear = new UIToggle(UIKeys.TEXTURES_LINEAR, (b) ->
         {
-            if (this.texture != null)
+            Texture texture = this.getSamplingTexture();
+
+            if (texture != null)
             {
+                texture.bind();
                 int filter = b.getValue() ? GL11.GL_LINEAR : GL11.GL_NEAREST;
 
-                if (this.texture.isReallyMipmap())
+                if (texture.isReallyMipmap())
                 {
                     filter = b.getValue() ? GL30.GL_LINEAR_MIPMAP_NEAREST : GL30.GL_NEAREST_MIPMAP_NEAREST;
                 }
 
-                this.texture.bind();
-                this.texture.setFilter(filter);
+                texture.setFilter(filter);
             }
         });
 
         this.mipmap = new UIToggle(UIKeys.TEXTURES_MIPMAP, (b) ->
         {
-            if (this.texture != null)
-            {
-                this.texture.bind();
+            Texture texture = this.getSamplingTexture();
 
-                if (!this.texture.isMipmap())
+            if (texture != null)
+            {
+                texture.bind();
+
+                if (!texture.isMipmap())
                 {
-                    this.texture.generateMipmap();
+                    texture.generateMipmap();
                 }
 
-                this.texture.setParameter(GL30.GL_TEXTURE_MAX_LEVEL, b.getValue() ? 4 : 0);
+                texture.setParameter(GL30.GL_TEXTURE_MAX_LEVEL, b.getValue() ? 4 : 0);
             }
         });
 
@@ -102,6 +106,25 @@ public class UITextureInfoPanel extends UIElement
         this.controls.relative(this).x(PADDING).y(1F, -PADDING).w(1F, -PADDING * 2).anchorY(1F);
 
         this.add(this.controls, this.copy);
+    }
+
+    private Texture getSamplingTexture()
+    {
+        if (this.texture == null || this.texture.isValid())
+        {
+            return this.texture;
+        }
+
+        Texture texture = BBSModClient.getTextures().getTexture(this.link);
+
+        if (texture != null && texture != BBSModClient.getTextures().getError() && texture.isValid())
+        {
+            this.texture = texture;
+
+            return texture;
+        }
+
+        return null;
     }
 
     /** Show a texture, a folder, or nothing. */
@@ -195,8 +218,8 @@ public class UITextureInfoPanel extends UIElement
         context.batcher.textShadow(font.limitToWidth(name, w - 20), x, y + 4);
         y += 22;
 
-        /* Looked up afresh every frame, so an animated texture plays here as it does in the grid;
-         * the one caught at set() stays for the sampling toggles */
+        /* Preview the current animation frame; sampling keeps its captured frame while valid
+         * and resolves a replacement after resource invalidation. */
         Texture texture = this.texture == null ? null : BBSModClient.getTextures().getTexture(this.link);
 
         if (texture != null)
@@ -212,7 +235,7 @@ public class UITextureInfoPanel extends UIElement
             context.batcher.fullTexturedBox(texture, fx, y, fw, fh);
             y += fh + 8;
 
-            context.batcher.text(this.texture.width + " × " + this.texture.height, x, y, Colors.LIGHTER_GRAY);
+            context.batcher.text(texture.width + " × " + texture.height, x, y, Colors.LIGHTER_GRAY);
             y += 12;
 
             if (this.animated)

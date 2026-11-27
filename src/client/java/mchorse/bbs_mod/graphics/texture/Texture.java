@@ -172,7 +172,14 @@ public class Texture
     {
         this.filter = filter;
 
-        this.setParameter(GL11.GL_TEXTURE_MAG_FILTER, filter);
+        int magFilter = switch (filter)
+        {
+            case GL11.GL_NEAREST_MIPMAP_NEAREST, GL11.GL_NEAREST_MIPMAP_LINEAR -> GL11.GL_NEAREST;
+            case GL11.GL_LINEAR_MIPMAP_NEAREST, GL11.GL_LINEAR_MIPMAP_LINEAR -> GL11.GL_LINEAR;
+            default -> filter;
+        };
+
+        this.setParameter(GL11.GL_TEXTURE_MAG_FILTER, magFilter);
         this.setParameter(GL11.GL_TEXTURE_MIN_FILTER, filter);
     }
 
