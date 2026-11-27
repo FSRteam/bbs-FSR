@@ -14,6 +14,11 @@ a version bump; check its documentation before depending on it.
 Types named by a public API signature, including `Form`, `Clip`, `FormArchitect` and the factory
 interfaces, share that contract. The signature snapshot records these references.
 
+The signatures live in [`api/bbs-api.txt`](api/bbs-api.txt). `./gradlew apiCheck` compares the
+compiled common and client API against that snapshot; `check` and `build` run it too. After an
+intentional API change, run `./gradlew apiDump` and commit the snapshot with the code. Bump
+`BBSApi.VERSION` when a stable contract changes in a way an existing addon cannot survive.
+
 Other classes outside that package are BBS internals and move without notice. An addon
 reaching into it is on its own, and the breakage shows up in the game rather than on the build.
 
