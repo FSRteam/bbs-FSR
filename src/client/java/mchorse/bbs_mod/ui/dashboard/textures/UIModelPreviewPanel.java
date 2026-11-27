@@ -32,6 +32,7 @@ public class UIModelPreviewPanel extends UIElement
 
     /* For an animated texture: its images cut from the strip the way the game cuts them, rebuilt when the document changes */
     private AnimatedTexture animated;
+    private Document animatedDocument;
     private int animatedRevision = -1;
 
     public UIModelPreviewPanel(UITexturePainter painter)
@@ -126,7 +127,7 @@ public class UIModelPreviewPanel extends UIElement
      */
     private boolean updateAnimated(UITextureEditor editor, Document document)
     {
-        if (this.animated != null && this.animatedRevision == document.revision && !this.animated.textures.isEmpty() && this.animated.textures.get(0).isValid())
+        if (this.animated != null && this.animatedDocument == document && this.animatedRevision == document.revision && !this.animated.textures.isEmpty() && this.animated.textures.get(0).isValid())
         {
             return true;
         }
@@ -145,6 +146,7 @@ public class UIModelPreviewPanel extends UIElement
             String mcmeta = DataToString.toString(document.animation.toMcmeta(document.width, document.height), true);
 
             this.animated = AnimatedTexture.load(new ByteArrayInputStream(mcmeta.getBytes(StandardCharsets.UTF_8)), flat);
+            this.animatedDocument = document;
             this.animatedRevision = document.revision;
         }
         catch (Exception e)
@@ -169,6 +171,7 @@ public class UIModelPreviewPanel extends UIElement
             this.animated = null;
         }
 
+        this.animatedDocument = null;
         this.animatedRevision = -1;
     }
 
