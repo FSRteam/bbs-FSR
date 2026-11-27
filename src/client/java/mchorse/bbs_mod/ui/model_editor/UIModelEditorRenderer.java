@@ -1032,6 +1032,10 @@ public class UIModelEditorRenderer extends UIFormRenderer implements GizmoViewpo
             Gizmo.INSTANCE.render(stack, maskOf(target));
             RenderSystem.enableDepthTest();
         }
+        else
+        {
+            Gizmo.INSTANCE.captureVisual(stack, maskOf(target));
+        }
 
         stack.popPose();
     }
