@@ -1096,6 +1096,11 @@ public class UIReplayList extends UIList<ReplayListEntry>
                         channel = replay.properties.getOrCreate(replay.form.get(), id);
                     }
 
+                    if (channel == null)
+                    {
+                        continue;
+                    }
+
                     float min = Integer.MAX_VALUE;
 
                     for (Keyframe kf : pastedKeyframes.keyframes)
