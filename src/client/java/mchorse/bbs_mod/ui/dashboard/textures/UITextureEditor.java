@@ -248,6 +248,11 @@ public class UITextureEditor extends UIPixelsEditor
 
         this.undoManager.pushUndo(pixelsUndo);
         this.updateTexture();
+
+        if (!pixelsUndo.pixels.isEmpty())
+        {
+            this.wasChanged();
+        }
     }
 
     private void floodFill(PixelsUndo undo, Pixels pixels, int x, int y, int targetColor, int replacementColor, int ox, int oy)
@@ -291,6 +296,11 @@ public class UITextureEditor extends UIPixelsEditor
             if (this.isAlphaLockEnabled())
             {
                 c.a = current.a;
+            }
+
+            if (c.getARGBColor() == targetColor)
+            {
+                continue;
             }
 
             undo.setColor(pixels, px, py, c);
