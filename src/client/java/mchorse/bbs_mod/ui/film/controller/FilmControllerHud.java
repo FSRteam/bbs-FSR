@@ -56,7 +56,7 @@ public class FilmControllerHud
         UIFilmController scene = this.controller.panel.getController();
         int mode = scene.getMouseMode();
 
-        if (scene.controlled != null && scene.recorder.recording)
+        if (scene.isRecording())
         {
             String tally = scene.recorder.recordingCountdown <= 0
                 ? UIKeys.FILM_CONTROLLER_TICKS.format(this.controller.getTick()).get()
