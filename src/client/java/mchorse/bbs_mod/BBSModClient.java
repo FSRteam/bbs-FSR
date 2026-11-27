@@ -587,6 +587,13 @@ public class BBSModClient
 
         postAddonEvent(new RegisterClientSettingsEvent());
 
+        /* Replace audio clip with client version that plays audio */
+        BBSMod.getFactoryCameraClips()
+            .register(Link.bbs("audio"), AudioClientClip.class, new ClipFactoryData(Icons.SOUND, 0xffc825))
+            .register(Link.bbs("video"), VideoClientClip.class, new ClipFactoryData(Icons.VIDEO_CAMERA, 0xd21f3c))
+            .register(Link.bbs("tracker"), TrackerClientClip.class, new ClipFactoryData(Icons.USER, 0x4cedfc))
+            .register(Link.bbs("curve"), CurveClientClip.class, new ClipFactoryData(Icons.ARC, 0xff1493));
+
         /* The registries behind these fill themselves lazily, on first use, and every one of them
          * puts BBS's own entries in before an addon gets a chance to — a subscriber's register()
          * call is what initializes the class. So the only thing that matters here is that the
@@ -670,13 +677,6 @@ public class BBSModClient
 
         UIKeys.C_KEYBIND_CATGORIES.load(KeyCombo.getCategoryKeys());
         UIKeys.C_KEYBIND_CATGORIES_TOOLTIP.load(KeyCombo.getCategoryKeys());
-
-        /* Replace audio clip with client version that plays audio */
-        BBSMod.getFactoryCameraClips()
-            .register(Link.bbs("audio"), AudioClientClip.class, new ClipFactoryData(Icons.SOUND, 0xffc825))
-            .register(Link.bbs("video"), VideoClientClip.class, new ClipFactoryData(Icons.VIDEO_CAMERA, 0xd21f3c))
-            .register(Link.bbs("tracker"), TrackerClientClip.class, new ClipFactoryData(Icons.USER, 0x4cedfc))
-            .register(Link.bbs("curve"), CurveClientClip.class, new ClipFactoryData(Icons.ARC, 0xff1493));
 
         /* Keybinds */
         ensureKeyMappingsCreated();
