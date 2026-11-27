@@ -1802,8 +1802,7 @@ public class Gizmo
     /**
      * A single pickable handle: its stencil id plus the operation and axes it
      * stands for. {@link #start} resolves a picked stencil id straight to one
-     * of these and dispatches the matching transform — no dependence on the
-     * active display {@link Mode}.
+     * of these and dispatches the matching transform.
      */
     public static enum Handle
     {
@@ -1877,10 +1876,15 @@ public class Gizmo
             return this.ops.contains(op);
         }
 
+        public boolean allowsRotateAxis(Axis axis)
+        {
+            return this.rotateAxes.contains(axis);
+        }
+
         public boolean allows(Handle handle)
         {
             return handle != null && this.allows(handle.op)
-                && (handle.op != Op.ROTATE || this.rotateAxes.contains(handle.axis));
+                && (handle.op != Op.ROTATE || this.allowsRotateAxis(handle.axis));
         }
     }
 
