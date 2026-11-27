@@ -779,6 +779,11 @@ public class UIModelEditorPanel extends UIDataDashboardPanel<ModelConfig>
     public void showGeometry(boolean show)
     {
         if (show && (this.bound == null || !this.bound.isEditable())) return;
+        if (this.geometryMode != show)
+        {
+            this.renderer.stopPicking();
+        }
+
         this.geometryMode = show;
         this.configEditor.setVisible(!show);
         this.syncPreview();

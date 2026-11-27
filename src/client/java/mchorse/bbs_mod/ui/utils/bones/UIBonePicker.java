@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.utils.bones;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.IUITreeEventListener;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -26,7 +27,7 @@ import java.util.function.Supplier;
  * viewport). The host keeps owning the button label via {@link #setLabel}, so
  * host-specific decorations (the IK panel's cycle warning) stay possible.</p>
  */
-public class UIBonePicker extends UIElement
+public class UIBonePicker extends UIElement implements IUITreeEventListener
 {
     public final UIButton button;
     public final UIIcon eyedropper;
@@ -76,6 +77,37 @@ public class UIBonePicker extends UIElement
         this.h(UIConstants.CONTROL_HEIGHT);
         this.row(UIConstants.MARGIN).preferred(0);
         this.add(this.button, this.eyedropper);
+    }
+
+    @Override
+    protected void onRemove(UIElement parent)
+    {
+        try
+        {
+            this.cancelPicking();
+        }
+        finally
+        {
+            super.onRemove(parent);
+        }
+    }
+
+    @Override
+    public void onAddedToTree(UIElement element)
+    {}
+
+    @Override
+    public void onRemovedFromTree(UIElement element)
+    {
+        this.cancelPicking();
+    }
+
+    private void cancelPicking()
+    {
+        if (this.picking && this.viewport != null)
+        {
+            this.viewport.stopPicking();
+        }
     }
 
     /** How to fill the popup when the button is clicked; an empty fill means "nothing to pick" and no popup opens. */

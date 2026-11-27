@@ -319,6 +319,11 @@ public class UIModelConfigEditor extends UIElement
     /** Open a page: it's the one shown, and the preview follows it. */
     private void openTab(Tab tab)
     {
+        if (lastTab != tab && this.modelPanel.renderer != null)
+        {
+            this.modelPanel.renderer.stopPicking();
+        }
+
         if (tab == Tab.PROCEDURAL && this.data != null) this.fillProcedural();
         this.showPage(tab);
         this.modelPanel.refreshPreview();
