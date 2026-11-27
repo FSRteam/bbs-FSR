@@ -206,7 +206,7 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
 
         this.content.area.render(context.batcher, BBSSettings.baseSurface());
 
-        if (this.replays.getList().size() < 3)
+        if (!this.replays.getList().isEmpty() && this.replays.getList().size() < 3)
         {
             UIDataUtils.renderRightClickHere(context, this.replays.area);
         }

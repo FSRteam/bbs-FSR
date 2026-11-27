@@ -2651,7 +2651,7 @@
     "bbs.ui.textures.keys.frame_prev": "上一帧",
     "bbs.ui.camera.timeline.empty_add": "右键点击时间线添加片段",
     "bbs.ui.camera.timeline.empty_pick": "在时间线上选择片段以编辑其属性",
-    "bbs.ui.keyframes.empty_add": "右键点击时间线添加关键帧",
+    "bbs.ui.keyframes.empty_add": "按住 Ctrl 并单击轨道添加关键帧",
     "bbs.ui.keyframes.empty_pick": "在时间线上选择关键帧以编辑其属性",
     "bbs.ui.film.replay.sections.position_rotation": "位置",
     "bbs.ui.film.replay.sections.states": "状态",
