@@ -426,7 +426,7 @@ public class ActionPlayer
 
     private boolean tryUpdateReplayEntities()
     {
-        return this.tryUpdateReplayEntities(Map.of());
+        return this.tryUpdateReplayEntities(Map.of(), true);
     }
 
     private ActorEntity stageReplayActor(Replay replay, List<LivingEntity> stagedActors)
@@ -452,7 +452,7 @@ public class ActionPlayer
         return actor;
     }
 
-    private boolean tryUpdateReplayEntities(Map<String, BaseType> previousForms)
+    private boolean tryUpdateReplayEntities(Map<String, BaseType> previousForms, boolean rebuildCast)
     {
         if (!FilmPlaybackPolicy.areReplayInputsAllowed(this.film)
             || !this.retryActorRetirements("preflight"))
@@ -461,7 +461,9 @@ public class ActionPlayer
         }
 
         List<Replay> list = this.film.replays.getList();
-        Map<String, LivingEntity> nextActors = new HashMap<>();
+        Map<String, LivingEntity> nextActors = rebuildCast
+            ? new HashMap<>()
+            : new HashMap<>(this.actors);
         List<LivingEntity> stagedActors = new ArrayList<>();
         List<ActorFormChange> formChanges = new ArrayList<>();
         int appliedFormChanges = 0;
@@ -498,7 +500,7 @@ public class ActionPlayer
 
                         nextActors.put(replay.getId(), actor);
                     }
-                    else
+                    else if (rebuildCast)
                     {
                         nextActors.put(replay.getId(), this.stageReplayActor(replay, stagedActors));
                     }
@@ -1136,9 +1138,10 @@ public class ActionPlayer
             }
 
             BaseType previous = null;
+            boolean refreshFormsOnly = baseValue.getId().equals("form") && baseValue.getParent() instanceof Replay;
             boolean refreshActors = baseValue == this.film
                 || baseValue.getParent() == this.film.replays
-                || (baseValue.getId().equals("form") && baseValue.getParent() instanceof Replay)
+                || refreshFormsOnly
                 || baseValue.getId().equals("actor")
                 || baseValue.getId().equals("enabled")
                 || baseValue.getId().equals("fp")
@@ -1214,9 +1217,11 @@ public class ActionPlayer
 
                 nextDuration = this.film.calculateDuration();
 
-                if (refreshActors && !(previousActorForms.isEmpty()
-                    ? this.tryUpdateReplayEntities()
-                    : this.tryUpdateReplayEntities(previousActorForms)))
+                if (refreshActors && !(refreshFormsOnly
+                    ? this.tryUpdateReplayEntities(previousActorForms, false)
+                    : previousActorForms.isEmpty()
+                        ? this.tryUpdateReplayEntities()
+                        : this.tryUpdateReplayEntities(previousActorForms, true)))
                 {
                     throw new IllegalStateException("Could not refresh replay actors");
                 }
