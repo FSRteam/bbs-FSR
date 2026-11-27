@@ -74,9 +74,20 @@ public class UIKeyframeEditor extends UITimelinePanel
     @Override
     public void removeFromParent()
     {
+        if (!this.hasParent())
+        {
+            this.editorGeneration++;
+        }
+
+        super.removeFromParent();
+    }
+
+    @Override
+    protected void onRemove(UIElement parent)
+    {
         /* A queued replacement may still be waiting for the current input dispatch to finish. */
         this.editorGeneration++;
-        super.removeFromParent();
+        super.onRemove(parent);
     }
 
     public UIKeyframeEditor target(UIElement target)

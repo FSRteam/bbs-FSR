@@ -912,7 +912,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
     ) {
         Runnable mutation = () -> {
             if (previous != null && previous.getParent() == this) {
-                previous.removeFromParent();
+                this.remove(previous);
             }
 
             if (generation != this.keyframeEditorGeneration || this.keyframeEditor != replacement) {
@@ -921,7 +921,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
 
             for (UIKeyframeEditor mounted : new ArrayList<>(this.getChildren(UIKeyframeEditor.class))) {
                 if (mounted != replacement && mounted.getParent() == this) {
-                    mounted.removeFromParent();
+                    this.remove(mounted);
                 }
             }
 

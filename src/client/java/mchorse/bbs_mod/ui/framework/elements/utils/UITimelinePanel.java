@@ -119,7 +119,12 @@ public abstract class UITimelinePanel extends UIElement
     @Override
     public void removeFromParent()
     {
-        super.removeFromParent();
+        if (this.hasParent())
+        {
+            super.removeFromParent();
+
+            return;
+        }
 
         UIElement panel = this.getPropertiesPanel();
 
@@ -133,6 +138,25 @@ public abstract class UITimelinePanel extends UIElement
             this.emptyStateHost.remove(this.emptyState);
             this.emptyStateHost = null;
         }
+    }
+
+    @Override
+    protected void onRemove(UIElement parent)
+    {
+        UIElement panel = this.getPropertiesPanel();
+
+        if (panel != null)
+        {
+            panel.removeFromParent();
+        }
+
+        if (this.emptyStateHost != null)
+        {
+            this.emptyStateHost.remove(this.emptyState);
+            this.emptyStateHost = null;
+        }
+
+        super.onRemove(parent);
     }
 
     public void setTimelineVisible(boolean visible)

@@ -53,6 +53,7 @@ public class UIReplaysOverlayPanel extends UIOverlayPanel
 
         this.callback = callback;
         this.replays = new UIReplayList((l) -> this.callback.accept(l.isEmpty() ? null : l.get(0)), null, filmPanel);
+        this.replays.emptyState(UIKeys.SCENE_REPLAYS_EMPTY, BBSSettings::baseSurface);
 
         this.keys().register(Keys.DELETE, () -> this.replays.removeReplay())
             .label(UIKeys.SCENE_REPLAYS_CONTEXT_REMOVE)
