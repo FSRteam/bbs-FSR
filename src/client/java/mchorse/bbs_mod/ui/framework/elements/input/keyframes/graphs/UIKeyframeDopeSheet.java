@@ -743,7 +743,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             int y = entry.getValue();
 
-            if (relY >= y && relY < y + this.trackHeight)
+            if (relY >= y && relY < y + this.getTrackHeight(entry.getKey()))
             {
                 return entry.getKey();
             }
@@ -866,7 +866,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             int y = this.getDopeSheetY() + entry.getValue();
 
-            if (context.mouseY >= y && context.mouseY < y + this.trackHeight)
+            if (context.mouseY >= y && context.mouseY < y + (int) this.trackHeight)
             {
                 this.toggleSection(entry.getKey());
 
@@ -1293,19 +1293,21 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
     /** A section header row: the section's accent bar, title and fold arrow, in the label column. */
     private void renderSectionLabel(UIContext context, Area area, UIKeyframeSheet.Section section, int y, int w)
     {
-        if (y + this.trackHeight < area.y || y > area.ey())
+        int height = (int) this.trackHeight;
+
+        if (y + height < area.y || y > area.ey())
         {
             return;
         }
 
-        boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + this.trackHeight;
-        int my = y + (int) this.trackHeight / 2;
+        boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + height;
+        int my = y + height / 2;
         int lx = area.x;
 
-        RowStyle.row(context.batcher, lx, y, w, (int) this.trackHeight, section.color(), true, hover, false);
+        RowStyle.row(context.batcher, lx, y, w, height, section.color(), true, hover, false);
 
         Icon icon = section.icon();
-        boolean hasIcon = icon != null && this.trackHeight >= 12D;
+        boolean hasIcon = icon != null && height >= 12D;
         int iconX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
 
         UISection.renderArrow(context, this.getArrowX(lx, w, hasIcon) + LABEL_ARROW_SIZE / 2F, my, this.isSectionExpanded(section));
@@ -1328,23 +1330,25 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
 
     private void renderSheetLabel(UIContext context, Area area, UIKeyframeSheet sheet, int y, int w)
     {
-        if (y + this.trackHeight < area.y || y > area.ey())
+        int height = this.getTrackHeight(sheet);
+
+        if (y + height < area.y || y > area.ey())
         {
             return;
         }
 
         /* Hover: whole row (label + track area) */
-        boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + this.trackHeight;
-        int my = y + (int) this.trackHeight / 2;
+        boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + height;
+        int my = y + height / 2;
         int lx = area.x;
 
-        RowStyle.row(context.batcher, lx, y, w, (int) this.trackHeight, sheet.color, false, hover, false);
+        RowStyle.row(context.batcher, lx, y, w, height, sheet.color, false, hover, false);
 
         FontRenderer font = context.batcher.getFont();
         int textColor = RowStyle.textColor(hover);
         boolean foldable = this.isFoldable(sheet);
         Icon icon = sheet.getIcon();
-        boolean hasIcon = icon != null && this.trackHeight >= 12D;
+        boolean hasIcon = icon != null && height >= 12D;
         int iconX = lx + w - LABEL_RIGHT_PAD - LABEL_ICON_SIZE;
 
         if (foldable)
@@ -1380,7 +1384,7 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
         {
             int y = this.getDopeSheetY() + entry.getValue();
 
-            if (area.isInside(context) && context.mouseY >= y && context.mouseY < y + this.trackHeight)
+            if (area.isInside(context) && context.mouseY >= y && context.mouseY < y + (int) this.trackHeight)
             {
                 context.batcher.box(area.x, y, area.ex(), y + (int) this.trackHeight, Colors.setA(entry.getKey().color(), 0.12F));
             }
@@ -1402,16 +1406,18 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             return;
         }
 
-        if (y + this.trackHeight < area.y || y > area.ey())
+        int height = this.getTrackHeight(sheet);
+
+        if (y + height < area.y || y > area.ey())
         {
             return;
         }
 
         List keyframes = sheet.channel.getKeyframes();
 
-        boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + this.trackHeight;
-        int my = y + (int) this.trackHeight / 2;
-        int bh = Math.max(2, (int) this.trackHeight);
+        boolean hover = area.isInside(context) && context.mouseY >= y && context.mouseY < y + height;
+        int my = y + height / 2;
+        int bh = Math.max(2, height);
         int row = this.sheetRowCache.getOrDefault(sheet, 0);
 
         int trackWidth = BBSSettings.editorTrackWidth.get();
@@ -1506,13 +1512,15 @@ public class UIKeyframeDopeSheet implements IUIKeyframeGraph
             return;
         }
 
-        if (y + this.trackHeight < area.y || y > area.ey())
+        int height = this.getTrackHeight(sheet);
+
+        if (y + height < area.y || y > area.ey())
         {
             return;
         }
 
         List keyframes = sheet.channel.getKeyframes();
-        int my = y + (int) this.trackHeight / 2;
+        int my = y + height / 2;
         int forcedIndex = 0;
         int cullMinX = area.x - CULL_MARGIN;
         int cullMaxX = area.ex() + CULL_MARGIN;
