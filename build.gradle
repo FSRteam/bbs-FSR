@@ -73,7 +73,8 @@ class BbsTestErrorOutputStream extends OutputStream {
         String value = line.toString(StandardCharsets.UTF_8)
         String upper = value.toUpperCase(Locale.ROOT)
 
-        if (upper.contains('/ERROR]') || upper.contains('[ERROR]') || upper.trim().startsWith('ERROR ')) {
+        if (upper.contains('/ERROR]') || upper.contains('[ERROR]') || upper.trim().startsWith('ERROR ')
+            || value.trim().matches('=== [1-9][0-9]* FAILED ===')) {
             error = true
 
             if (firstErrorLine == null) {
