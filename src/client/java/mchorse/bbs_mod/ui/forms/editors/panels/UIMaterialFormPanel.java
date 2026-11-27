@@ -256,7 +256,7 @@ public class UIMaterialFormPanel extends UIFormPanel
         }
 
         this.materialList.setList(levels);
-        this.materialList.setIndex(this.material == null ? 0 : Math.max(levels.indexOf(this.material), 0));
+        this.materialList.setIndex(this.material == null ? 0 : Math.max(1 + levels.subList(1, levels.size()).indexOf(this.material), 0));
         this.materialList.h(UIStringList.DEFAULT_HEIGHT * Math.min(levels.size(), MAX_VISIBLE_LEVELS));
     }
 
