@@ -183,9 +183,7 @@ final class ModelIKCache
 
         for (ModelIKConfig.Chain chain : config.chains())
         {
-            /* Enabled and weight are live controls. A disabled authored chain can become
-             * active through a film keyframe without changing its immutable topology. */
-            if (chain == null)
+            if (chain == null || !chain.enabled())
             {
                 continue;
             }
