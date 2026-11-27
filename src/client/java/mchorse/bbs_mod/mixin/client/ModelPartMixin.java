@@ -3,6 +3,7 @@ package mchorse.bbs_mod.mixin.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import mchorse.bbs_mod.forms.renderers.MobRenderContext;
+import mchorse.bbs_mod.forms.renderers.utils.DirectVertexConsumer;
 import mchorse.bbs_mod.mob.IBBSModelPart;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Color;
@@ -303,61 +304,4 @@ public abstract class ModelPartMixin implements IBBSModelPart
         args.set(4, FastColor.ARGB32.color(alpha, red, green, blue));
     }
 
-    private static final class DirectVertexConsumer implements VertexConsumer
-    {
-        private final VertexConsumer consumer;
-
-        private DirectVertexConsumer(VertexConsumer consumer)
-        {
-            this.consumer = consumer;
-        }
-
-        @Override
-        public VertexConsumer addVertex(float x, float y, float z)
-        {
-            this.consumer.addVertex(x, y, z);
-
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setColor(int red, int green, int blue, int alpha)
-        {
-            this.consumer.setColor(red, green, blue, alpha);
-
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setUv(float u, float v)
-        {
-            this.consumer.setUv(u, v);
-
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setUv1(int u, int v)
-        {
-            this.consumer.setUv1(u, v);
-
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setUv2(int u, int v)
-        {
-            this.consumer.setUv2(u, v);
-
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setNormal(float x, float y, float z)
-        {
-            this.consumer.setNormal(x, y, z);
-
-            return this;
-        }
-    }
 }

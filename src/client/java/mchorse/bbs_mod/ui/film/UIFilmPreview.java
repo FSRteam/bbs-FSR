@@ -235,7 +235,11 @@ public class UIFilmPreview extends UIElement
         this.recordReplay.context((menu) ->
         {
             menu.action(Icons.KEY, UIKeys.FILM_AUTO_KEYFRAME, BBSSettings.autoKeyframe.get(),
-                () -> BBSSettings.autoKeyframe.set(!BBSSettings.autoKeyframe.get()));
+                () ->
+                {
+                    BBSSettings.autoKeyframe.set(!BBSSettings.autoKeyframe.get());
+                    UIUtils.playClick();
+                });
             menu.action(Icons.DOWNLOAD, UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_INSTANT_KEYFRAMES, this.getViewController().isInstantKeyframes(), () ->
             {
                 this.getViewController().toggleInstantKeyframes();
