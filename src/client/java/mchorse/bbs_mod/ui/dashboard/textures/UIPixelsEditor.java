@@ -2057,6 +2057,7 @@ public class UIPixelsEditor extends UICanvasEditor
                     }
 
                     this.updateTexture();
+                    this.wasChanged();
                 }
 
                 this.undoManager.pushUndo(this.pixelsUndo);
