@@ -471,10 +471,25 @@ public class Keyframe <T> extends BaseValue
 
     public void copyOverExtra(Keyframe<?> a)
     {
-        this.getInterpolation().copy(a.getInterpolation());
-        this.setStyle(a.getStyle());
-        this.setDuration(a.getDuration());
-        this.setMotionShift(a.getMotionShift());
+        this.copyOverExtra(a, true);
+    }
+
+    public void copyOverExtra(Keyframe<?> a, boolean notify)
+    {
+        if (notify)
+        {
+            this.getInterpolation().copy(a.getInterpolation());
+            this.setStyle(a.getStyle());
+            this.setDuration(a.getDuration());
+            this.setMotionShift(a.getMotionShift());
+        }
+        else
+        {
+            this.getInterpolation().fromData(a.getInterpolation().toData());
+            this.style.copy(a.getStyle());
+            this.duration = Math.max(0, a.getDuration());
+            this.setMotionShift(a.getMotionShift(), false);
+        }
 
         this.lx = a.lx;
         this.ly = a.ly;

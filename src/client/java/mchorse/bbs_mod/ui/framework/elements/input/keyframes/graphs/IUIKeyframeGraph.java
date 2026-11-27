@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.settings.values.IValueListener;
 import mchorse.bbs_mod.settings.values.base.BaseValueBasic;
+import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
@@ -38,6 +39,11 @@ public interface IUIKeyframeGraph
 
     public default <T> Keyframe<T> getEditTarget(Keyframe<T> original)
     {
+        return this.getEditTarget(original, true);
+    }
+
+    public default <T> Keyframe<T> getEditTarget(Keyframe<T> original, boolean notify)
+    {
         Float tick = this.getAutoKeyframeTick();
         UIKeyframeSheet sheet = tick == null ? null : this.getSheet(original);
         if (sheet == null)
@@ -45,7 +51,8 @@ public interface IUIKeyframeGraph
             return original;
         }
 
-        Keyframe<T> target = sheet.ensureKeyframe(tick);
+        Keyframe<T> target = notify ? sheet.ensureKeyframe(tick)
+            : UIReplaysEditorUtils.ensureKeyframe(sheet, tick, false);
 
         return target == null ? original : target;
     }
@@ -355,7 +362,9 @@ public interface IUIKeyframeGraph
     public default void applyValue(IKeyframeFactory factory, Object value, Keyframe primary, boolean unmergeable, boolean fromEditor)
     {
         Float tick = fromEditor ? this.getAutoKeyframeTick() : null;
-        Object before = factory.copy((tick == null ? primary : this.getEditTarget(primary)).getValue());
+        Keyframe editTarget = tick == null ? primary : (unmergeable
+            ? this.getEditTarget(primary) : this.getEditTarget(primary, false));
+        Object before = factory.copy(editTarget.getValue());
 
         for (UIKeyframeSheet sheet : this.getSheets())
         {
@@ -367,7 +376,8 @@ public interface IUIKeyframeGraph
                 }
                 else if (!sheet.selection.getSelected().isEmpty())
                 {
-                    Keyframe target = sheet.ensureKeyframe(tick);
+                    Keyframe target = unmergeable ? sheet.ensureKeyframe(tick)
+                        : UIReplaysEditorUtils.ensureKeyframe(sheet, tick, false);
 
                     if (target != null)
                     {

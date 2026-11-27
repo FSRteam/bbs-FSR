@@ -415,7 +415,8 @@ public class UIVector3KeyframeGraph extends UIKeyframeGraph
         }
 
         IKeyframeFactory factory = selected.getFactory();
-        Keyframe target = fromEditor && this.getAutoKeyframeTick() != null ? this.getEditTarget(selected) : selected;
+        Keyframe target = fromEditor && this.getAutoKeyframeTick() != null
+            ? (unmergeable ? this.getEditTarget(selected) : this.getEditTarget(selected, false)) : selected;
         Vector3f keyframe = (Vector3f) factory.copy(target.getValue());
         
         if (value instanceof Vector3f)

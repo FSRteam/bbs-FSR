@@ -294,6 +294,11 @@ public class UIReplaysEditorUtils
 
     public static <T> Keyframe<T> ensureKeyframe(UIKeyframeSheet sheet, float tick)
     {
+        return ensureKeyframe(sheet, tick, true);
+    }
+
+    public static <T> Keyframe<T> ensureKeyframe(UIKeyframeSheet sheet, float tick, boolean notify)
+    {
         if (sheet == null)
         {
             return null;
@@ -333,7 +338,15 @@ public class UIReplaysEditorUtils
         /* The lookup above guarantees no keyframe sits on the tick, so insertInheriting cannot
          * inherit from the keyframe it just wrote — only from the neighbour, as the hand-written
          * pair did (its `template != keyframe` guard could never fire here). */
-        Keyframe<T> inserted = (Keyframe<T>) sheet.channel.insertInheriting(tick, value);
+        Keyframe<T> inserted = (Keyframe<T>) (notify
+            ? sheet.channel.insertInheriting(tick, value)
+            : sheet.channel.get(sheet.channel.insert(tick, value, false)));
+
+        if (!notify && segment != null)
+        {
+            inserted.copyOverExtra(segment.a, false);
+        }
+
         sheet.selection.shiftAfterInsert(sheet.channel.indexOf(inserted));
 
         return inserted;
