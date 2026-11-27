@@ -153,9 +153,9 @@ public class ReplayBatchProcessor
 
         int count = selected.size();
 
-        for (VisibleReplay replay : selected)
+        for (int o = 0; o < count; o++)
         {
-            int o = replay.o;
+            VisibleReplay replay = selected.get(o);
             double a = 0;
             double b = 0;
 
@@ -269,9 +269,9 @@ public class ReplayBatchProcessor
             double half = (side - 1) / 2D;
             double step = side > 1 ? params.size / (side - 1) : 0D;
 
-            for (VisibleReplay replay : selected)
+            for (int o = 0; o < count; o++)
             {
-                int o = replay.o;
+                VisibleReplay replay = selected.get(o);
                 int gx;
                 int gy;
                 int gz;
@@ -304,9 +304,9 @@ public class ReplayBatchProcessor
             double radius = params.size / 2D;
             double goldenAngle = Math.PI * (3D - Math.sqrt(5D));
 
-            for (VisibleReplay replay : selected)
+            for (int o = 0; o < count; o++)
             {
-                int o = replay.o;
+                VisibleReplay replay = selected.get(o);
                 double t = (o + 0.5D) / count;
                 double theta = goldenAngle * (o + 0.5D);
                 double y = 1D - 2D * t;
