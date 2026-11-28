@@ -521,11 +521,23 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
     private List<TrackCategory> visibleCategories()
     {
         List<TrackCategory> present = new ArrayList<>();
-        for (TrackCategory category : TrackCategories.values())
+        List<TrackCategory> categories = TrackCategories.values();
+
+        /* Returning categories can be appended after the buttons already in the bar. */
+        for (UIIcon button : this.iconBar.getChildren(UIIcon.class))
         {
-            UIIcon button = this.tabButtons.get(category);
-            if (button != null && button.getParent() != null) present.add(category);
+            if (button.getParent() != this.iconBar) continue;
+
+            for (TrackCategory category : categories)
+            {
+                if (this.tabButtons.get(category) == button)
+                {
+                    present.add(category);
+                    break;
+                }
+            }
         }
+
         return present;
     }
 

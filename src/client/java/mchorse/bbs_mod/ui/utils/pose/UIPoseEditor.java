@@ -8,7 +8,6 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UICirculate;
-import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UIDeltaPropTransform;
@@ -135,6 +134,7 @@ public class UIPoseEditor extends UIElement
         });
         this.glow = new UISliderTrackpad((v) -> this.forEachSelectedPose((p) -> this.setGlow(p, v.floatValue())));
         this.glow.limit(0D, 1D).increment(0.1D);
+        this.glow.tooltip(UIKeys.FORMS_EDITORS_MATERIAL_GLOW_TOOLTIP);
         this.glow.context((menu) -> menu.action(Icons.DOWNLOAD, UIKeys.POSE_CONTEXT_APPLY,
             () -> this.applyChildren((p) -> this.setGlow(p, (float) this.glow.getValue()))));
         this.overlay = new UIColor((c) -> this.forEachSelectedPose((p) -> this.setOverlay(p, c))).withAlpha();
