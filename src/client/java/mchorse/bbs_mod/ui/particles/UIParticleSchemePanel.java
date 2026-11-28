@@ -263,6 +263,10 @@ public class UIParticleSchemePanel extends UIDataDashboardPanel<ParticleScheme>
         this.layoutPresetsButton.tooltip(UIKeys.PARTICLE_EDITOR_LAYOUT_PRESETS, Direction.LEFT);
         this.actions().action(this.layoutPresetsButton);
 
+        UIIcon resetLayout = new UIIcon(Icons.REFRESH, (b) -> this.dock.resetLayout());
+        resetLayout.tooltip(UIKeys.FILM_LAYOUT_RESET);
+        this.actions().action(resetLayout);
+
         /* Ctrl+Tab / Ctrl+Shift+Tab cycle the tabs of the dock stack under the cursor (like the film editor). */
         this.keys().register(Keys.FILM_CONTROLLER_NEXT_DOCK_TAB, () ->
         {
