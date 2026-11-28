@@ -97,6 +97,9 @@ public class UIDashboardPanels extends UIElement
         this.taskBar.add(new UIRenderable(this::renderBackground), this.pinned, this.panelButtons);
         this.taskBar.context(this::fillSideMenu);
         this.add(this.taskBar);
+
+        this.applySide(getSettingsSide());
+        this.positionTaskbar(0);
     }
 
     public static Direction getSettingsSide()
@@ -124,6 +127,15 @@ public class UIDashboardPanels extends UIElement
             return;
         }
 
+        this.applySide(side);
+        int slide = Math.max(0, this.lastDashboardSlide);
+
+        this.lastDashboardSlide = -1;
+        this.applyTaskbarSlide(slide);
+    }
+
+    private void applySide(Direction side)
+    {
         this.side = side;
         this.taskBar.resetFlex().relative(this);
         this.pinned.resetFlex().relative(this.taskBar);
@@ -156,10 +168,6 @@ public class UIDashboardPanels extends UIElement
         }
 
         this.panelButtons.scroll.setScroll(0);
-        int slide = Math.max(0, this.lastDashboardSlide);
-
-        this.lastDashboardSlide = -1;
-        this.applyTaskbarSlide(slide);
     }
 
     private void fillSideMenu(ContextMenuManager menu)
@@ -644,6 +652,19 @@ public class UIDashboardPanels extends UIElement
         }
 
         this.lastDashboardSlide = slide;
+        this.positionTaskbar(slide);
+
+        if (this.panel != null)
+        {
+            this.setPanelPlacement(this.panel, TASKBAR_HEIGHT - slide);
+            this.panel.setDashboardChromeHiddenAmount(slide / (float) TASKBAR_HEIGHT);
+        }
+
+        this.resize();
+    }
+
+    private void positionTaskbar(int slide)
+    {
         this.taskBar.resetFlex().relative(this);
 
         switch (this.side)
@@ -653,14 +674,6 @@ public class UIDashboardPanels extends UIElement
             case RIGHT -> this.taskBar.x(1F, -TASKBAR_HEIGHT + slide).w(TASKBAR_HEIGHT).h(1F);
             default -> this.taskBar.y(1F, -TASKBAR_HEIGHT + slide).w(1F).h(TASKBAR_HEIGHT);
         }
-
-        if (this.panel != null)
-        {
-            this.setPanelPlacement(this.panel, TASKBAR_HEIGHT - slide);
-            this.panel.setDashboardChromeHiddenAmount(slide / (float) TASKBAR_HEIGHT);
-        }
-
-        this.resize();
     }
 
     public static class PanelEvent extends UIEvent<UIDashboardPanels>
