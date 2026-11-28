@@ -20,6 +20,9 @@ import mchorse.bbs_mod.utils.resources.Pixels;
 import org.joml.Vector2i;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -333,23 +336,22 @@ public class UITextureEditor extends UIPixelsEditor
      * Write the {@code .mcmeta} beside the texture, or remove it when the user turned the
      * animation off. A texture that was never animated leaves whatever is on disk alone.
      */
-    private void writeAnimation(File file)
+    private boolean writeAnimation(Document document, File file)
     {
-        if (this.document.animation != null)
+        if (document.animation != null)
         {
-            this.document.animation.write(file, this.document.width, this.document.height);
+            return document.animation.write(file, document.width, document.height);
         }
-        else if (this.document.removeAnimationOnSave)
+
+        if (document.removeAnimationOnSave)
         {
             File mcmeta = TextureAnimation.file(file);
 
-            if (mcmeta.isFile())
-            {
-                mcmeta.delete();
-            }
+            return Files.notExists(mcmeta.toPath(), LinkOption.NOFOLLOW_LINKS)
+                || (mcmeta.isFile() && mcmeta.delete());
         }
 
-        this.document.removeAnimationOnSave = false;
+        return true;
     }
 
     /*
@@ -846,6 +848,7 @@ public class UITextureEditor extends UIPixelsEditor
             return null;
         }
 
+        Document document = this.document;
         File file = BBSMod.getAssetsPath(link.path);
 
         if (link.path.contains("/"))
@@ -866,8 +869,17 @@ public class UITextureEditor extends UIPixelsEditor
         {
             /* The animation goes first: the watchdog re-reads the texture per file, and by the time
              * it reads the PNG the .mcmeta has to be beside it already */
-            this.writeAnimation(file);
+            if (!this.writeAnimation(document, file))
+            {
+                throw new IOException("Could not write or remove texture animation metadata");
+            }
+
             PNGEncoder.writeToFile(pixels, file);
+
+            /* Persist the editable document (layers, opacity, etc.) next to the texture as
+             * NAME_INCLUDING_EXTENSION.dat so re-opening restores the full layer stack. */
+            document.writeChecked(Document.datFile(file));
+            document.removeAnimationOnSave = false;
 
             /* Refresh rendered textures and open browsers before the save callback selects the
              * file. The watchdog may be delayed while the game is paused in the editor. */
@@ -877,19 +889,15 @@ public class UITextureEditor extends UIPixelsEditor
 
             this.setDirty(false);
 
-            if (!link.equals(this.document.link))
+            if (!link.equals(document.link))
             {
-                this.document.link = link;
+                document.link = link;
 
                 if (this.renameCallback != null)
                 {
                     this.renameCallback.accept(link);
                 }
             }
-
-            /* Persist the editable document (layers, opacity, etc.) next to the texture as
-             * NAME_INCLUDING_EXTENSION.dat so re-opening restores the full layer stack. */
-            this.document.write(Document.datFile(file));
 
             if (this.saveCallback != null)
             {

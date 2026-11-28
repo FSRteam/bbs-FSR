@@ -14,6 +14,7 @@ import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.resources.Pixels;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -384,17 +385,23 @@ public class Document implements IMapSerializable
     {
         try
         {
-            if (file.getParentFile() != null)
-            {
-                file.getParentFile().mkdirs();
-            }
-
-            new DataGzipStorage(new DataFileStorage(file)).write(this.toData());
+            this.writeChecked(file);
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
+    }
+
+    /** Write project data while allowing a save owner to report an I/O failure. */
+    public void writeChecked(File file) throws IOException
+    {
+        if (file.getParentFile() != null)
+        {
+            file.getParentFile().mkdirs();
+        }
+
+        new DataGzipStorage(new DataFileStorage(file)).write(this.toData());
     }
 
     @Override
