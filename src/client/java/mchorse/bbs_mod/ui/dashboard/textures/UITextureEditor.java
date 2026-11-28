@@ -173,6 +173,18 @@ public class UITextureEditor extends UIPixelsEditor
     }
 
     @Override
+    protected boolean captureGestureDirtyState()
+    {
+        return this.isDirty();
+    }
+
+    @Override
+    protected void restoreGestureDirtyState(boolean dirty)
+    {
+        this.setDirty(dirty);
+    }
+
+    @Override
     protected void wasChanged()
     {
         super.wasChanged();
@@ -192,6 +204,11 @@ public class UITextureEditor extends UIPixelsEditor
 
     public void fillColor(Vector2i pixel, Color color, boolean colorReplace)
     {
+        if (!this.preparePixelMutation())
+        {
+            return;
+        }
+
         /* pixel is in document space; the active layer's buffer is shifted by its move-tool offset,
          * so subtract the offset to index the layer and add it back for document-space checks. */
         int ox = this.getActiveOffsetX();
@@ -824,6 +841,11 @@ public class UITextureEditor extends UIPixelsEditor
             return null;
         }
 
+        if (!this.preparePixelMutation())
+        {
+            return null;
+        }
+
         File file = BBSMod.getAssetsPath(link.path);
 
         if (link.path.contains("/"))
@@ -900,6 +922,11 @@ public class UITextureEditor extends UIPixelsEditor
     @Override
     public void setDocument(Document document)
     {
+        if (!this.preparePixelOwnerChange())
+        {
+            return;
+        }
+
         super.setDocument(document);
 
         this.setDirty(false);

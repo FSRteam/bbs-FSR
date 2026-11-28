@@ -13,6 +13,7 @@ import mchorse.bbs_mod.ui.dashboard.textures.data.TextureAnimation;
 import mchorse.bbs_mod.ui.dashboard.textures.undo.LayerStateUndo;
 import mchorse.bbs_mod.ui.dashboard.textures.undo.PixelsUndo;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.IUITreeEventListener;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.UICanvasEditor;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -44,7 +45,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class UIPixelsEditor extends UICanvasEditor
+public class UIPixelsEditor extends UICanvasEditor implements IUITreeEventListener
 {
     private static final double[] BRUSH_SAMPLE_OFFSETS = {0.25D, 0.75D};
 
@@ -140,6 +141,30 @@ public class UIPixelsEditor extends UICanvasEditor
     private int moveStartOffsetX;
     private int moveStartOffsetY;
 
+    /** Physical ownership is separate from the logical brush/pan button. */
+    private int pixelGestureButton = -1;
+    private long pixelGestureSequence;
+    private long activePixelGesture;
+    private PixelGestureSnapshot pixelGestureSnapshot;
+    private boolean pixelPressInProgress;
+    private boolean pixelDragStarting;
+
+    private record PixelGestureSnapshot(
+        long sequence,
+        Document document,
+        TextureLayer layer,
+        Pixels pixels,
+        int layerIndex,
+        boolean dirty,
+        List<SelectionRect> selections,
+        boolean hasSelection,
+        int offsetX,
+        int offsetY,
+        int frameX,
+        int frameY
+    )
+    {}
+
     public UIPixelsEditor()
     {
         super();
@@ -167,6 +192,52 @@ public class UIPixelsEditor extends UICanvasEditor
         this.setEditing(false);
     }
 
+    @Override
+    protected void onRemove(UIElement parent)
+    {
+        Throwable failure = null;
+
+        try
+        {
+            this.cancelPixelGesture();
+        }
+        catch (RuntimeException | Error exception)
+        {
+            failure = exception;
+
+            throw exception;
+        }
+        finally
+        {
+            try
+            {
+                super.onRemove(parent);
+            }
+            catch (RuntimeException | Error exception)
+            {
+                if (failure == null)
+                {
+                    throw exception;
+                }
+
+                if (failure != exception)
+                {
+                    failure.addSuppressed(exception);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onAddedToTree(UIElement element)
+    {}
+
+    @Override
+    public void onRemovedFromTree(UIElement element)
+    {
+        this.cancelPixelGesture();
+    }
+
     /* Macros */
 
     /** A macro over the selection's part of the frame on show, or the whole frame without one. */
@@ -181,6 +252,11 @@ public class UIPixelsEditor extends UICanvasEditor
      */
     public void applyMacro(PixelMacro macro, List<int[]> rects, boolean withinSelection)
     {
+        if (!this.preparePixelMutation())
+        {
+            return;
+        }
+
         TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
 
         if (!this.editing || this.undoManager == null || layer == null || layer.pixels == null || rects.isEmpty())
@@ -323,6 +399,11 @@ public class UIPixelsEditor extends UICanvasEditor
 
     public void clearSelection()
     {
+        if (!this.preparePixelMutation())
+        {
+            return;
+        }
+
         if (this.hasSelection)
         {
             this.hasSelection = false;
@@ -437,6 +518,11 @@ public class UIPixelsEditor extends UICanvasEditor
 
     public void selectLayerBounds()
     {
+        if (!this.preparePixelMutation())
+        {
+            return;
+        }
+
         if (this.pixels == null)
         {
             return;
@@ -510,9 +596,18 @@ public class UIPixelsEditor extends UICanvasEditor
     {
         if (this.document != null && index >= 0 && index < this.document.layers.size())
         {
+            Document document = this.document;
+            TextureLayer layer = document.layers.get(index);
+
+            if ((document.getActiveLayer() != layer || this.pixels != layer.pixels)
+                && !this.preparePixelOwnerChange())
+            {
+                return;
+            }
+
             this.document.activeLayerIndex = index;
-            this.pixels = this.document.layers.get(index).pixels;
-            this.temporary = this.document.layers.get(index).texture;
+            this.pixels = layer.pixels;
+            this.temporary = layer.texture;
         }
     }
 
@@ -1404,6 +1499,264 @@ public class UIPixelsEditor extends UICanvasEditor
     }
 
     /** Something in the document changed; an override has to call this too. */
+    /** The base viewer has no dirty UI; editable documents override these hooks. */
+    protected boolean captureGestureDirtyState()
+    {
+        return false;
+    }
+
+    protected void restoreGestureDirtyState(boolean dirty)
+    {}
+
+    /** Pixel edits leave a navigation-only drag and immediate Fill/Pipette intact. */
+    protected final boolean preparePixelMutation()
+    {
+        return this.preparePixelMutation(true);
+    }
+
+    /** Replacing an owner also retires navigation and immediate-operation input. */
+    protected final boolean preparePixelOwnerChange()
+    {
+        return this.preparePixelMutation(false);
+    }
+
+    private boolean preparePixelMutation(boolean pendingOnly)
+    {
+        Document document = this.document;
+        TextureLayer layer = document == null ? null : document.getActiveLayer();
+        Pixels pixels = layer == null ? null : layer.pixels;
+        Pixels cached = this.pixels;
+        long sequence = this.pixelGestureSequence;
+
+        if (!pendingOnly || this.pixelGestureSnapshot != null)
+        {
+            this.cancelPixelGesture();
+        }
+
+        return this.document == document
+            && this.pixelGestureSequence == sequence
+            && (document == null ? null : document.getActiveLayer()) == layer
+            && (layer == null || layer.pixels == pixels)
+            && this.pixels == cached;
+    }
+
+    private PixelGestureSnapshot capturePixelGestureSnapshot(long sequence)
+    {
+        Document document = this.document;
+        TextureLayer layer = document == null ? null : document.getActiveLayer();
+
+        if (layer == null || layer.pixels == null || this.pixels != layer.pixels)
+        {
+            return null;
+        }
+
+        List<SelectionRect> selections = new ArrayList<>();
+
+        for (SelectionRect rect : this.selections)
+        {
+            selections.add(new SelectionRect(rect.x1, rect.y1, rect.x2, rect.y2));
+        }
+
+        return new PixelGestureSnapshot(sequence, document, layer, layer.pixels,
+            document.activeLayerIndex, this.captureGestureDirtyState(),
+            List.copyOf(selections), this.hasSelection, layer.offsetX, layer.offsetY,
+            this.frameX, this.frameY);
+    }
+
+    private boolean isPixelGestureSnapshotCurrent(PixelGestureSnapshot snapshot)
+    {
+        if (snapshot == null || this.pixelGestureSequence != snapshot.sequence()
+            || this.document != snapshot.document())
+        {
+            return false;
+        }
+
+        Document document = snapshot.document();
+        int index = snapshot.layerIndex();
+
+        return index >= 0 && index < document.layers.size()
+            && document.layers.get(index) == snapshot.layer()
+            && document.getActiveLayer() == snapshot.layer()
+            && snapshot.layer().pixels == snapshot.pixels()
+            && this.pixels == snapshot.pixels();
+    }
+
+    private void clearPixelGesture(long sequence)
+    {
+        if (this.activePixelGesture != sequence)
+        {
+            return;
+        }
+
+        boolean selecting = this.currentSelection != null;
+
+        this.activePixelGesture = 0L;
+        this.pixelGestureButton = -1;
+        this.pixelGestureSnapshot = null;
+        this.pixelsUndo = null;
+        this.moveUndoBefore = null;
+        this.strokeStrengths.clear();
+        this.currentSelection = null;
+        this.currentSelectionSubtract = false;
+        this.drawColor = null;
+        this.blendStroke = false;
+        this.moveStartOffsetX = 0;
+        this.moveStartOffsetY = 0;
+
+        if (selecting)
+        {
+            this.invalidateSelectionMask();
+        }
+    }
+
+    private void restorePixelSelection(PixelGestureSnapshot snapshot)
+    {
+        int dx = this.frameX - snapshot.frameX();
+        int dy = this.frameY - snapshot.frameY();
+        List<SelectionRect> selections = new ArrayList<>();
+
+        for (SelectionRect rect : snapshot.selections())
+        {
+            selections.add(new SelectionRect(rect.x1 + dx, rect.y1 + dy, rect.x2 + dx, rect.y2 + dy));
+        }
+
+        this.selections = selections;
+        this.hasSelection = snapshot.hasSelection();
+        this.invalidateSelectionMask();
+    }
+
+    private void cancelPixelGesture()
+    {
+        this.cancelPixelGesture(this.pixelGestureButton, this.activePixelGesture);
+    }
+
+    private void cancelPixelGesture(int physicalButton, long sequence)
+    {
+        if (sequence == 0L || this.activePixelGesture != sequence
+            || this.pixelGestureButton != physicalButton)
+        {
+            return;
+        }
+
+        /* A normal finalizer may already have retired this exact input. Its
+         * private pending state still needs cleanup before an owner change. */
+        if (!this.retireOwnedDrag(physicalButton) && this.dragging)
+        {
+            return;
+        }
+
+        PixelGestureSnapshot snapshot = this.pixelGestureSnapshot;
+        PixelsUndo pixelsUndo = this.pixelsUndo;
+        boolean moved = this.moveUndoBefore != null;
+        Throwable failure = null;
+
+        try
+        {
+            failure = runPixelGestureCleanup(failure, () -> this.clearPixelGesture(sequence));
+
+            /* The old pending state is gone before any rollback or external callback.
+             * Each step repeats the fence so a replacement cannot receive the old write. */
+            if (this.isPixelGestureSnapshotCurrent(snapshot))
+            {
+                failure = runPixelGestureCleanup(failure, () ->
+                {
+                    if (this.isPixelGestureSnapshotCurrent(snapshot) && pixelsUndo != null
+                        && pixelsUndo.layerIndex == snapshot.layerIndex())
+                    {
+                        pixelsUndo.undo(snapshot.document());
+                    }
+                });
+                failure = runPixelGestureCleanup(failure, () ->
+                {
+                    if (this.isPixelGestureSnapshotCurrent(snapshot) && moved)
+                    {
+                        snapshot.layer().offsetX = snapshot.offsetX();
+                        snapshot.layer().offsetY = snapshot.offsetY();
+                    }
+                });
+                failure = runPixelGestureCleanup(failure, () ->
+                {
+                    if (this.isPixelGestureSnapshotCurrent(snapshot))
+                    {
+                        this.restorePixelSelection(snapshot);
+                    }
+                });
+                failure = runPixelGestureCleanup(failure, () ->
+                {
+                    if (this.isPixelGestureSnapshotCurrent(snapshot))
+                    {
+                        this.wasChanged();
+                    }
+                });
+                failure = runPixelGestureCleanup(failure, () ->
+                {
+                    if (this.isPixelGestureSnapshotCurrent(snapshot))
+                    {
+                        this.restoreGestureDirtyState(snapshot.dirty());
+                    }
+                });
+            }
+        }
+        catch (RuntimeException | Error exception)
+        {
+            if (failure == null)
+            {
+                failure = exception;
+            }
+            else if (failure != exception)
+            {
+                failure.addSuppressed(exception);
+            }
+        }
+        finally
+        {
+            failure = runPixelGestureCleanup(failure, () ->
+            {
+                if (this.pixelGestureSequence == sequence)
+                {
+                    this.restoreSecondaryEraser();
+                }
+            });
+        }
+
+        throwPixelGestureFailure(failure);
+    }
+
+    private static Throwable runPixelGestureCleanup(Throwable failure, Runnable step)
+    {
+        try
+        {
+            step.run();
+        }
+        catch (RuntimeException | Error exception)
+        {
+            if (failure == null)
+            {
+                return exception;
+            }
+
+            if (failure != exception)
+            {
+                failure.addSuppressed(exception);
+            }
+        }
+
+        return failure;
+    }
+
+    private static void throwPixelGestureFailure(Throwable failure)
+    {
+        if (failure instanceof RuntimeException exception)
+        {
+            throw exception;
+        }
+
+        if (failure instanceof Error error)
+        {
+            throw error;
+        }
+    }
+
     protected void wasChanged()
     {
         if (this.document != null)
@@ -1424,14 +1777,52 @@ public class UIPixelsEditor extends UICanvasEditor
 
     public void setEditing(boolean editing)
     {
+        if (!this.preparePixelOwnerChange())
+        {
+            return;
+        }
+
         this.editing = editing;
 
         this.toolbar.setVisible(editing);
 
         if (editing)
         {
-            this.undoManager = new UndoManager<>();
-            this.undoManager.setCallback(this::handleUndo);
+            Document document = this.document;
+
+            this.undoManager = new UndoManager<>()
+            {
+                @Override
+                public boolean undo(Document context)
+                {
+                    if (context != document || (UIPixelsEditor.this.document == document
+                        && !UIPixelsEditor.this.preparePixelOwnerChange()))
+                    {
+                        return false;
+                    }
+
+                    return super.undo(context);
+                }
+
+                @Override
+                public boolean redo(Document context)
+                {
+                    if (context != document || (UIPixelsEditor.this.document == document
+                        && !UIPixelsEditor.this.preparePixelOwnerChange()))
+                    {
+                        return false;
+                    }
+
+                    return super.redo(context);
+                }
+            };
+            this.undoManager.setCallback((undo, redo) ->
+            {
+                if (this.document == document)
+                {
+                    this.handleUndo(undo, redo);
+                }
+            });
         }
         else
         {
@@ -1485,18 +1876,31 @@ public class UIPixelsEditor extends UICanvasEditor
      */
     public void recordLayerChange(String mergeTag, Runnable mutation)
     {
-        if (this.undoManager == null || this.document == null)
+        if (!this.preparePixelOwnerChange())
+        {
+            return;
+        }
+
+        Document document = this.document;
+        UndoManager<Document> undoManager = this.undoManager;
+        long sequence = this.pixelGestureSequence;
+
+        if (undoManager == null || document == null)
         {
             mutation.run();
 
             return;
         }
 
-        MapType before = this.document.snapshot();
+        MapType before = document.snapshot();
 
         mutation.run();
 
-        this.undoManager.pushUndo(new LayerStateUndo(before, this.document.snapshot(), mergeTag));
+        if (this.document == document && this.undoManager == undoManager
+            && this.pixelGestureSequence == sequence)
+        {
+            undoManager.pushUndo(new LayerStateUndo(before, document.snapshot(), mergeTag));
+        }
     }
 
     /**
@@ -1555,6 +1959,11 @@ public class UIPixelsEditor extends UICanvasEditor
      */
     public void cut()
     {
+        if (!this.preparePixelMutation())
+        {
+            return;
+        }
+
         TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
 
         if (layer == null || layer.pixels == null || !this.copyImage())
@@ -1698,6 +2107,11 @@ public class UIPixelsEditor extends UICanvasEditor
      */
     public void pasteImage()
     {
+        if (!this.preparePixelMutation())
+        {
+            return;
+        }
+
         if (this.document == null)
         {
             return;
@@ -1784,6 +2198,11 @@ public class UIPixelsEditor extends UICanvasEditor
 
     public void deleteTexture()
     {
+        if (!this.preparePixelOwnerChange())
+        {
+            return;
+        }
+
         if (this.document != null)
         {
             this.document.delete();
@@ -1820,6 +2239,11 @@ public class UIPixelsEditor extends UICanvasEditor
      */
     public void setDocument(Document document)
     {
+        if (!this.preparePixelOwnerChange())
+        {
+            return;
+        }
+
         this.lastPixel = null;
 
         if (this.document != document)
@@ -1848,6 +2272,11 @@ public class UIPixelsEditor extends UICanvasEditor
     @Override
     public void setSize(int w, int h)
     {
+        if (!this.preparePixelOwnerChange())
+        {
+            return;
+        }
+
         if (this.document == null)
         {
             super.setSize(w, h);
@@ -1871,50 +2300,64 @@ public class UIPixelsEditor extends UICanvasEditor
     @Override
     public boolean subMouseClicked(UIContext context)
     {
-        if (this.editing && context.mouseButton == 1 && this.area.isInside(context)
-            && this.getActivePaintTool() == TexturePaintTool.BRUSH && !this.dragging)
+        if (this.pixelPressInProgress || this.pixelDragStarting)
         {
-            /* While the brush is selected, the right mouse button temporarily acts as the
-             * eraser: engage the secondary eraser (which switches the active tool) and run
-             * the stroke as a regular left-button drag, reverting on release. */
-            this.secondaryEraser = true;
-            boolean started = false;
+            return false;
+        }
 
-            try
+        this.pixelPressInProgress = true;
+
+        try
+        {
+            if (this.editing && context.mouseButton == 1 && this.area.isInside(context)
+                && this.getActivePaintTool() == TexturePaintTool.BRUSH && !this.dragging)
             {
-                this.secondaryEraserToggle.accept(true);
-                started = this.beginOwnedDrag(context, 0);
+                /* While the brush is selected, the right mouse button temporarily acts as the
+                 * eraser: engage the secondary eraser (which switches the active tool) and run
+                 * the stroke as a regular left-button drag, reverting on release. */
+                this.secondaryEraser = true;
+                boolean started = false;
 
-                if (started)
+                try
+                {
+                    this.secondaryEraserToggle.accept(true);
+                    started = this.beginOwnedDrag(context, 0);
+
+                    if (started)
+                    {
+                        return true;
+                    }
+                }
+                finally
+                {
+                    if (!started)
+                    {
+                        this.restoreSecondaryEraser();
+                    }
+                }
+            }
+
+            if (this.area.isInside(context) && this.isMouseButtonAllowed(context.mouseButton))
+            {
+                int dragButton = context.mouseButton;
+
+                if (dragButton == 0 && Window.isCtrlPressed() && this.getActivePaintTool() != TexturePaintTool.SELECTION)
+                {
+                    dragButton = 2;
+                }
+
+                if (this.beginOwnedDrag(context, dragButton))
                 {
                     return true;
                 }
             }
-            finally
-            {
-                if (!started)
-                {
-                    this.restoreSecondaryEraser();
-                }
-            }
-        }
 
-        if (this.area.isInside(context) && this.isMouseButtonAllowed(context.mouseButton))
+            return super.subMouseClicked(context);
+        }
+        finally
         {
-            int dragButton = context.mouseButton;
-
-            if (dragButton == 0 && Window.isCtrlPressed() && this.getActivePaintTool() != TexturePaintTool.SELECTION)
-            {
-                dragButton = 2;
-            }
-
-            if (this.beginOwnedDrag(context, dragButton))
-            {
-                return true;
-            }
+            this.pixelPressInProgress = false;
         }
-
-        return super.subMouseClicked(context);
     }
 
     @Override
@@ -1924,91 +2367,182 @@ public class UIPixelsEditor extends UICanvasEditor
     }
 
     @Override
+    protected boolean beginOwnedDrag(UIContext context, int dragButton)
+    {
+        if (this.dragging || this.pixelDragStarting)
+        {
+            return false;
+        }
+
+        this.pixelDragStarting = true;
+
+        try
+        {
+            return super.beginOwnedDrag(context, dragButton);
+        }
+        finally
+        {
+            this.pixelDragStarting = false;
+        }
+    }
+
+    @Override
     protected void startDragging(UIContext context)
     {
-        super.startDragging(context);
+        long sequence = ++this.pixelGestureSequence;
 
-        if (!this.editing || this.mouse != 0 || this.pixelsUndo != null)
+        if (sequence == 0L)
         {
-            return;
+            sequence = ++this.pixelGestureSequence;
         }
 
-        TexturePaintTool tool = this.getActivePaintTool();
+        this.activePixelGesture = sequence;
+        this.pixelGestureButton = context.mouseButton;
+        long capturedSequence = sequence;
 
-        if (tool == TexturePaintTool.SELECTION)
+        try
         {
-            Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
-            boolean subtract = Window.isCtrlPressed();
+            super.startDragging(context);
 
-            if (!Window.isShiftPressed() && !subtract)
+            if (!this.editing || this.mouse != 0 || this.pixelsUndo != null)
             {
-                this.selections.clear();
+                return;
             }
 
-            this.hasSelection = !this.selections.isEmpty() || !subtract;
-            this.currentSelection = new SelectionRect(pixel.x, pixel.y, pixel.x, pixel.y);
-            this.currentSelectionSubtract = subtract;
+            TexturePaintTool tool = this.getActivePaintTool();
 
-            return;
-        }
-
-        if (tool == TexturePaintTool.FILL)
-        {
-            Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
-
-            this.onFillAt(pixel);
-
-            return;
-        }
-
-        if (tool == TexturePaintTool.PIPETTE)
-        {
-            Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
-            /* Pick the merged colour across all layers (the colour the user sees),
-             * not just the active layer. */
-            Color color = this.getMergedColor(pixel.x, pixel.y);
-
-            if (color != null)
+            if (this.activePixelGesture != sequence || !this.isDragOwnedBy(context.mouseButton))
             {
-                this.pickColorConsumer.accept(color);
+                return;
             }
 
-            return;
-        }
-
-        if (tool == TexturePaintTool.MOVE)
-        {
-            TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
-
-            if (layer != null)
+            if (tool == TexturePaintTool.SELECTION || tool == TexturePaintTool.MOVE
+                || tool == TexturePaintTool.BRUSH || tool == TexturePaintTool.ERASER)
             {
-                /* Anchor the drag to the layer's current offset and the press position; the offset
-                 * is recomputed as startOffset + (currentPixel - startPixel) each frame so slow
-                 * sub-pixel drags accumulate correctly without drift. */
-                this.moveStartOffsetX = layer.offsetX;
-                this.moveStartOffsetY = layer.offsetY;
+                PixelGestureSnapshot snapshot = this.capturePixelGestureSnapshot(sequence);
 
-                /* Snapshot the document so the whole move gesture becomes one undo entry on release. */
-                this.moveUndoBefore = this.document.snapshot();
+                if (this.activePixelGesture != sequence || !this.isDragOwnedBy(context.mouseButton))
+                {
+                    return;
+                }
+
+                this.pixelGestureSnapshot = snapshot;
+
+                if (!this.isPixelGestureSnapshotCurrent(snapshot))
+                {
+                    this.cancelPixelGesture(context.mouseButton, sequence);
+
+                    return;
+                }
             }
 
-            return;
+            if (tool == TexturePaintTool.SELECTION)
+            {
+                Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
+                boolean subtract = Window.isCtrlPressed();
+
+                if (!Window.isShiftPressed() && !subtract)
+                {
+                    this.selections.clear();
+                }
+
+                this.hasSelection = !this.selections.isEmpty() || !subtract;
+                this.currentSelection = new SelectionRect(pixel.x, pixel.y, pixel.x, pixel.y);
+                this.currentSelectionSubtract = subtract;
+
+                return;
+            }
+
+            if (tool == TexturePaintTool.FILL)
+            {
+                Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
+
+                this.onFillAt(pixel);
+
+                return;
+            }
+
+            if (tool == TexturePaintTool.PIPETTE)
+            {
+                Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
+                /* Pick the merged colour across all layers (the colour the user sees),
+                 * not just the active layer. */
+                Color color = this.getMergedColor(pixel.x, pixel.y);
+
+                if (color != null)
+                {
+                    this.pickColorConsumer.accept(color);
+                }
+
+                return;
+            }
+
+            if (tool == TexturePaintTool.MOVE)
+            {
+                TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
+
+                if (layer != null)
+                {
+                    /* Anchor the drag to the layer's current offset and the press position; the offset
+                     * is recomputed as startOffset + (currentPixel - startPixel) each frame so slow
+                     * sub-pixel drags accumulate correctly without drift. */
+                    this.moveStartOffsetX = layer.offsetX;
+                    this.moveStartOffsetY = layer.offsetY;
+
+                    /* Snapshot the document so the whole move gesture becomes one undo entry on release. */
+                    MapType moveUndoBefore = this.document.snapshot();
+
+                    if (this.activePixelGesture == sequence
+                        && this.isPixelGestureSnapshotCurrent(this.pixelGestureSnapshot))
+                    {
+                        this.moveUndoBefore = moveUndoBefore;
+                    }
+                }
+
+                return;
+            }
+
+            if (tool == TexturePaintTool.BRUSH || tool == TexturePaintTool.ERASER)
+            {
+                this.pixelsUndo = new PixelsUndo();
+                this.pixelsUndo.layerIndex = this.document == null ? -1 : this.document.activeLayerIndex;
+                this.strokeStrengths.clear();
+                this.blendStroke = tool == TexturePaintTool.BRUSH;
+                Color drawColor = tool == TexturePaintTool.ERASER ? new Color(0, 0, 0, 0) : this.colorSupplier.get();
+
+                if (this.activePixelGesture != sequence
+                    || !this.isPixelGestureSnapshotCurrent(this.pixelGestureSnapshot))
+                {
+                    return;
+                }
+
+                this.drawColor = drawColor;
+
+                if (!this.isPixelGestureSnapshotCurrent(this.pixelGestureSnapshot))
+                {
+                    this.cancelPixelGesture(context.mouseButton, sequence);
+
+                    return;
+                }
+
+                Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
+
+                this.paint(pixel.x, pixel.y);
+                this.updateTexture();
+
+                if (this.activePixelGesture == sequence
+                    && this.isPixelGestureSnapshotCurrent(this.pixelGestureSnapshot))
+                {
+                    this.wasChanged();
+                }
+            }
         }
-
-        if (this.isStrokePaintTool())
+        catch (RuntimeException | Error exception)
         {
-            this.pixelsUndo = new PixelsUndo();
-            this.pixelsUndo.layerIndex = this.document == null ? -1 : this.document.activeLayerIndex;
-            this.strokeStrengths.clear();
-            this.blendStroke = tool == TexturePaintTool.BRUSH;
-            this.drawColor = tool == TexturePaintTool.ERASER ? new Color(0, 0, 0, 0) : this.colorSupplier.get();
+            Throwable failure = runPixelGestureCleanup(exception,
+                () -> this.cancelPixelGesture(context.mouseButton, capturedSequence));
 
-            Vector2i pixel = this.getHoverPixel(context.mouseX, context.mouseY);
-
-            this.paint(pixel.x, pixel.y);
-            this.updateTexture();
-
-            this.wasChanged();
+            throwPixelGestureFailure(failure);
         }
     }
 
@@ -2020,14 +2554,51 @@ public class UIPixelsEditor extends UICanvasEditor
             return super.subMouseReleased(context);
         }
 
+        long sequence = this.activePixelGesture;
+        PixelGestureSnapshot snapshot = this.pixelGestureSnapshot;
+
+        try
+        {
+            if (snapshot != null && !this.isPixelGestureSnapshotCurrent(snapshot))
+            {
+                this.cancelPixelGesture(context.mouseButton, sequence);
+
+                return true;
+            }
+        }
+        catch (RuntimeException | Error exception)
+        {
+            Throwable cleanup = runPixelGestureCleanup(exception,
+                () -> this.cancelPixelGesture(context.mouseButton, sequence));
+
+            throwPixelGestureFailure(cleanup);
+
+            return false;
+        }
+
         if (!this.retireOwnedDrag(context.mouseButton))
         {
             return false;
         }
 
+        Document document = this.document;
+        UndoManager<Document> undoManager = this.undoManager;
+        PixelsUndo pixelsUndo = this.pixelsUndo;
+        MapType moveUndoBefore = this.moveUndoBefore;
+        int moveStartOffsetX = this.moveStartOffsetX;
+        int moveStartOffsetY = this.moveStartOffsetY;
+        Throwable failure = null;
+
         try
         {
-            if (this.getActivePaintTool() == TexturePaintTool.SELECTION && this.currentSelection != null)
+            TexturePaintTool tool = this.getActivePaintTool();
+
+            if (this.activePixelGesture != sequence || this.document != document)
+            {
+                return true;
+            }
+
+            if (tool == TexturePaintTool.SELECTION && this.currentSelection != null)
             {
                 Vector2i hoverPixel = this.getHoverPixel(context.mouseX, context.mouseY);
 
@@ -2036,7 +2607,9 @@ public class UIPixelsEditor extends UICanvasEditor
                 this.applyCurrentSelection();
             }
 
-            if (this.pixelsUndo != null)
+            Vector2i lastPixel = null;
+
+            if (pixelsUndo != null)
             {
                 Vector2i hoverPixel = this.getHoverPixel(context.mouseX, context.mouseY);
 
@@ -2057,36 +2630,95 @@ public class UIPixelsEditor extends UICanvasEditor
                     }
 
                     this.updateTexture();
+
+                    if (this.activePixelGesture != sequence || this.pixelGestureSequence != sequence || this.document != document)
+                    {
+                        return true;
+                    }
+
                     this.wasChanged();
                 }
 
-                this.undoManager.pushUndo(this.pixelsUndo);
-
-                this.pixelsUndo = null;
-                this.strokeStrengths.clear();
-                this.lastPixel = hoverPixel;
+                lastPixel = hoverPixel;
             }
 
-            /* Commit the move gesture as a single undo entry if the layer offset actually changed. */
-            if (this.moveUndoBefore != null)
+            if (this.activePixelGesture != sequence || this.pixelGestureSequence != sequence || this.document != document)
             {
-                TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
-                boolean moved = layer != null && (layer.offsetX != this.moveStartOffsetX || layer.offsetY != this.moveStartOffsetY);
+                return true;
+            }
 
-                if (moved && this.undoManager != null)
+            LayerStateUndo moveUndo = null;
+
+            /* Commit only an actually started move, using its captured owner/history. */
+            if (moveUndoBefore != null)
+            {
+                TextureLayer layer = document == null ? null : document.getActiveLayer();
+                boolean moved = layer != null && (layer.offsetX != moveStartOffsetX || layer.offsetY != moveStartOffsetY);
+
+                if (moved && undoManager != null)
                 {
-                    this.undoManager.pushUndo(new LayerStateUndo(this.moveUndoBefore, this.document.snapshot()));
+                    moveUndo = new LayerStateUndo(moveUndoBefore, document.snapshot());
                 }
+            }
 
-                this.moveUndoBefore = null;
+            this.clearPixelGesture(sequence);
+
+            if (pixelsUndo != null && undoManager != null)
+            {
+                undoManager.pushUndo(pixelsUndo);
+            }
+
+            if (moveUndo != null)
+            {
+                undoManager.pushUndo(moveUndo);
+            }
+
+            if (lastPixel != null && this.pixelGestureSequence == sequence && this.document == document)
+            {
+                this.lastPixel = lastPixel;
             }
 
             return true;
         }
+        catch (RuntimeException | Error exception)
+        {
+            failure = exception;
+
+            throw exception;
+        }
         finally
         {
-            /* Restore the brush even if stroke finalization or undo creation fails. */
-            this.restoreSecondaryEraser();
+            Throwable cleanup = runPixelGestureCleanup(failure, () -> this.clearPixelGesture(sequence));
+            cleanup = runPixelGestureCleanup(cleanup, () ->
+            {
+                if (this.pixelGestureSequence == sequence)
+                {
+                    this.restoreSecondaryEraser();
+                }
+            });
+
+            if (failure == null)
+            {
+                throwPixelGestureFailure(cleanup);
+            }
+        }
+    }
+
+    @Override
+    protected void subMouseCanceled(UIContext context)
+    {
+        long sequence = this.activePixelGesture;
+
+        try
+        {
+            this.cancelPixelGesture(context.mouseButton, sequence);
+        }
+        finally
+        {
+            if (this.pixelGestureSequence == sequence)
+            {
+                super.subMouseCanceled(context);
+            }
         }
     }
 
@@ -2106,6 +2738,13 @@ public class UIPixelsEditor extends UICanvasEditor
     @Override
     protected void renderCanvasFrame(UIContext context)
     {
+        PixelGestureSnapshot snapshot = this.pixelGestureSnapshot;
+
+        if (snapshot != null && !this.isPixelGestureSnapshotCurrent(snapshot))
+        {
+            this.cancelPixelGesture(this.pixelGestureButton, snapshot.sequence());
+        }
+
         int x = -this.w / 2;
         int y = -this.h / 2;
         Area area = this.calculate(x, y, x + this.w, y + this.h);
@@ -2155,7 +2794,7 @@ public class UIPixelsEditor extends UICanvasEditor
                 this.lastX = context.mouseX;
                 this.lastY = context.mouseY;
             }
-            else if (this.getActivePaintTool() == TexturePaintTool.MOVE)
+            else if (this.getActivePaintTool() == TexturePaintTool.MOVE && this.moveUndoBefore != null)
             {
                 TextureLayer layer = this.document == null ? null : this.document.getActiveLayer();
 
