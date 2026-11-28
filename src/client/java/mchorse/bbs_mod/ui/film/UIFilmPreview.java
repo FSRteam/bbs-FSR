@@ -365,6 +365,12 @@ public class UIFilmPreview extends UIElement
         }
     }
 
+    /** Register an addon layer in the shared preview factory registry. */
+    public static void registerOverlay(Function<UIFilmPreview, UIElement> factory)
+    {
+        new RegisterPreviewOverlaysEvent().register(factory);
+    }
+
     private void setupViewTools()
     {
         UIIcon binding = new UIIcon(Icons.FRUSTUM, button -> this.getContext().replaceContextMenu(menu -> FilmViewMenus.cameras(this.panel, this, menu)));
