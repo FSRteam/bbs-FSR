@@ -30,9 +30,9 @@ import mchorse.bbs_mod.film.markers.FilmMarker;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.camera.CameraTrack;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.film.replays.tracks.TrackId;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
-import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.L10n;
@@ -48,11 +48,9 @@ import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.IFlightSupported;
-import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDataDashboardPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.overlay.UICRUDOverlayPanel;
 import mchorse.bbs_mod.ui.dashboard.panels.tabs.DataTab;
-import mchorse.bbs_mod.ui.dashboard.panels.tabs.UIDataTabs;
 import mchorse.bbs_mod.ui.dashboard.utils.IUIOrbitKeysHandler;
 import mchorse.bbs_mod.ui.film.audio.UIAudioRecorder;
 import mchorse.bbs_mod.ui.film.controller.UIFilmController;
@@ -74,7 +72,6 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UINumberOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIPromptOverlayPanel;
-import mchorse.bbs_mod.ui.framework.elements.utils.UIRenderable;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.context.ContextMenuManager;
@@ -82,7 +79,6 @@ import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.ui.utils.presets.UICopyPasteController;
 import mchorse.bbs_mod.utils.CollectionUtils;
-import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.PlayerUtils;
 import mchorse.bbs_mod.utils.clips.Clip;
@@ -1152,7 +1148,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                         channel.insertSpace(this.getCursor(), d.intValue());
                     }
 
-                    for (KeyframeChannel channel : replay.properties.properties.values())
+                    for (KeyframeChannel channel : replay.properties.tracks.values())
                     {
                         channel.insertSpace(this.getCursor(), d.intValue());
                     }
@@ -2049,7 +2045,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
                 }
             }
 
-            for (Map.Entry<String, KeyframeChannel> entry : replay.properties.properties.entrySet())
+            for (Map.Entry<TrackId, KeyframeChannel> entry : replay.properties.tracks.entrySet())
             {
                 KeyframeChannel channel = entry.getValue();
 
@@ -2068,8 +2064,7 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
 
                 if (!newChannel.isEmpty())
                 {
-                    copy.properties.properties.put(newChannel.getId(), newChannel);
-                    copy.properties.add(newChannel);
+                    copy.properties.put(entry.getKey(), newChannel);
                 }
             }
 
@@ -2947,11 +2942,6 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (this.editor.isVisible())
         {
             this.preview.area.render(context.batcher, Colors.A75);
-        }
-
-        if (this.getData() == null)
-        {
-            this.openOverlay.area.copy(this.openFilmMenu.area);
         }
 
         BBSSettings.lightInputs = true;
