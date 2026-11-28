@@ -119,7 +119,7 @@ public class UIDashboardPanels extends UIElement
 
     public void setSide(Direction side)
     {
-        if (this.side == side)
+        if (side == null || this.side == side)
         {
             return;
         }
