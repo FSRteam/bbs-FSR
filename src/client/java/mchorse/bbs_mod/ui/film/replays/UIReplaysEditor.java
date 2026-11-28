@@ -50,7 +50,6 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import mchorse.bbs_mod.forms.forms.IPosedForm;
 import mchorse.bbs_mod.forms.forms.sound.AbstractSoundForm;
-import mchorse.bbs_mod.forms.forms.PoseForm;
 import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.L10n;
@@ -585,6 +584,10 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
 
             this.replaysList.replays.refreshReplayList();
             this.setReplay(replays.isEmpty() ? null : replays.get(index), true, OrbitReaction.SWITCH);
+        }
+        else
+        {
+            this.setReplay(null, false, OrbitReaction.KEEP);
         }
     }
 
@@ -1160,7 +1163,7 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
     private void pickFormBone(Form form, String bone, boolean insert) {
         this.setActionsMode(false);
         if (form != null) this.selectBodyPart(FormUtils.getPath(form));
-        if (form instanceof PoseForm && bone != null && !bone.isEmpty() && !this.showAllTracks() && this.category != TrackCategories.POSE) {
+        if (form instanceof IPosedForm && bone != null && !bone.isEmpty() && !this.showAllTracks() && this.category != TrackCategories.POSE) {
             this.setCategory(TrackCategories.POSE);
         }
 
