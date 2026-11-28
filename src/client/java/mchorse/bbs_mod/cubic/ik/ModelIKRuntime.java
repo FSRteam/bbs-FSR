@@ -285,10 +285,22 @@ public final class ModelIKRuntime
         return targetsOf(instance, false);
     }
 
+    /** Discover targets for the requested form without borrowing a shared instance's last render owner. */
+    public static List<String> getControllers(IModel model, ModelForm form)
+    {
+        return targetsOf(model, form, false);
+    }
+
     /** Configured pole targets remain discoverable while a scalar track switches the pole off. */
     public static List<String> getPoleControllers(ModelInstance instance)
     {
         return targetsOf(instance, true);
+    }
+
+    /** Explicit form owner for configured poles, preserving the existing scalar-track policy. */
+    public static List<String> getPoleControllers(IModel model, ModelForm form)
+    {
+        return targetsOf(model, form, true);
     }
 
     private static List<String> targetsOf(ModelInstance instance, boolean pole)
@@ -298,7 +310,17 @@ public final class ModelIKRuntime
             return Collections.emptyList();
         }
 
-        ModelIKCache.Compiled compiled = ModelIKCache.compile(instance.model, form);
+        return targetsOf(instance.model, form, pole);
+    }
+
+    private static List<String> targetsOf(IModel model, ModelForm form, boolean pole)
+    {
+        if (model == null || form == null)
+        {
+            return Collections.emptyList();
+        }
+
+        ModelIKCache.Compiled compiled = ModelIKCache.compile(model, form);
 
         if (compiled == null || compiled.chains() == null || compiled.chains().isEmpty())
         {

@@ -571,8 +571,8 @@ public class UIReplaysEditorUtils
             return;
         }
 
-        List<String> controllers = ModelIKRuntime.getControllers(model);
-        List<String> poleControllers = ModelIKRuntime.getPoleControllers(model);
+        List<String> controllers = ModelIKRuntime.getControllers(model.model, modelForm);
+        List<String> poleControllers = ModelIKRuntime.getPoleControllers(model.model, modelForm);
         String path = FormUtils.getPath(modelForm);
 
         BaseValue.edit(replay.properties, (props) ->

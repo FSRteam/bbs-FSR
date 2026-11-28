@@ -795,7 +795,10 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
                 }
 
                 if (replayForEditor.form.get() instanceof ModelForm modelForm) {
-                    List<String> controllers = ModelIKRuntime.getControllers(ModelFormRenderer.getModel(modelForm));
+                    ModelInstance ikInstance = ModelFormRenderer.getModel(modelForm);
+                    List<String> controllers = ikInstance == null
+                            ? Collections.emptyList()
+                            : ModelIKRuntime.getControllers(ikInstance.model, modelForm);
 
                     if (!controllers.isEmpty()) {
                         menu.action(Icons.CLOSE, UIKeys.FILM_REPLAY_CONTEXT_CLEAR_IK, () -> {
@@ -808,7 +811,6 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
                         });
                     }
 
-                    ModelInstance ikInstance = ModelFormRenderer.getModel(modelForm);
                     /* Keyed by each chain's tip bone, in the order getChains returns: chain root
                      * depth ascending, and config order within one depth (ModelIKCache.compile).
                      * The panel sorts its own list, so nothing here depends on that order. */
