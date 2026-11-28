@@ -88,6 +88,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -98,6 +99,12 @@ public class UIReplaysEditorUtils
 
     /** The overlay creation action is shared by Film and animation-state timelines. */
     public static void addOverlayTrackAction(ContextMenuManager menu, UIKeyframeSheet sheet, Consumer<TrackId> refresh)
+    {
+        addOverlayTrackAction(menu, sheet, () -> true, refresh);
+    }
+
+    /** Add an overlay only while the captured timeline owner remains current. */
+    public static void addOverlayTrackAction(ContextMenuManager menu, UIKeyframeSheet sheet, BooleanSupplier ownerValid, Consumer<TrackId> refresh)
     {
         if (sheet == null) return;
         TrackId track = TrackId.parse(sheet.id);
@@ -110,7 +117,7 @@ public class UIReplaysEditorUtils
         if (count == null || count.get() >= count.getMax()) return;
         menu.action(Icons.ADD, L10n.lang(pose ? "bbs.ui.keyframes.context.add_pose_track" : "bbs.ui.keyframes.context.add_transform_track"), () ->
         {
-            if (count.get() >= count.getMax()) return;
+            if (!ownerValid.getAsBoolean() || count.get() >= count.getMax()) return;
             count.set(count.get() + 1);
             owner.syncOverlayTracks();
             refresh.accept(TrackId.property(track.formPath(), pose ? "pose" : "transform"));

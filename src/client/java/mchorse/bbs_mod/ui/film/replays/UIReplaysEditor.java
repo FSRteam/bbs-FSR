@@ -760,7 +760,9 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost {
 
                 int mouseY = this.getContext().mouseY;
                 UIKeyframeSheet sheet = view.getGraph().getSheet(mouseY);
-                UIReplaysEditorUtils.addOverlayTrackAction(menu, sheet, parent ->
+                UIReplaysEditorUtils.addOverlayTrackAction(menu, sheet,
+                    () -> this.keyframeEditor == editor && this.replay == replayForEditor,
+                    parent ->
                 {
                     if (this.keyframeEditor != editor || this.replay != replayForEditor) return;
                     this.getExpandedTracks().set(parent.toKey(), true);

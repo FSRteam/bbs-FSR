@@ -341,6 +341,8 @@ public class UIAnimationStateEditor extends UIElement
         if (!sheets.isEmpty() || hadTracks || !this.allMode)
         {
             this.keyframeEditor = new UIKeyframeEditor((consumer) -> new UIAnimationStateKeyframes(this.editor, consumer)).target(this.editArea);
+            UIKeyframeEditor editorForState = this.keyframeEditor;
+            AnimationState stateForEditor = state;
             this.keyframeEditor.relative(this.timelineArea).x(CATEGORY_BAR_WIDTH).w(1F, -CATEGORY_BAR_WIDTH).h(1F);
             this.keyframeEditor.setUndoId("form_animation_state_keyframe_editor");
             this.keyframeEditor.view.getDopeSheet().setEmptyState(UIKeys.KEYFRAMES_EMPTY_FILTERED, UIKeys.KEYFRAMES_EMPTY_FILTERED_HINT);
@@ -351,14 +353,19 @@ public class UIAnimationStateEditor extends UIElement
                 this.keyframeEditor.view.copyViewport(lastEditor);
             }
 
-            this.keyframeEditor.view.duration(() -> this.state.duration.get());
-            this.keyframeEditor.view.context((menu) ->
+            editorForState.view.duration(() -> stateForEditor.duration.get());
+            editorForState.view.context((menu) ->
             {
-                UIKeyframeSheet sheet = this.keyframeEditor.view.getGraph().getSheet(this.getContext().mouseY);
-                UIReplaysEditorUtils.addOverlayTrackAction(menu, sheet, parent ->
+                if (this.keyframeEditor != editorForState || this.state != stateForEditor) return;
+
+                UIKeyframeSheet sheet = editorForState.view.getGraph().getSheet(this.getContext().mouseY);
+                UIReplaysEditorUtils.addOverlayTrackAction(menu, sheet,
+                    () -> this.keyframeEditor == editorForState && this.state == stateForEditor,
+                    parent ->
                 {
+                    if (this.keyframeEditor != editorForState || this.state != stateForEditor) return;
                     this.expandedTabs.set(parent.toKey(), true);
-                    this.setState(this.state);
+                    this.setState(stateForEditor);
                 });
                 menu.action(Icons.KEY, UIKeys.FILM_AUTO_KEYFRAME, BBSSettings.autoKeyframe.get(),
                     () -> BBSSettings.autoKeyframe.set(!BBSSettings.autoKeyframe.get()));
@@ -369,10 +376,13 @@ public class UIAnimationStateEditor extends UIElement
                 {
                     menu.action(Icons.LIMB, UIKeys.FILM_REPLAY_CONTEXT_POSES_TO_LIMBS, () ->
                     {
-                        if (UIReplaysEditorUtils.posesToLimbTracks(this.state.properties, sheet))
+                        if (this.keyframeEditor != editorForState || this.state != stateForEditor) return;
+
+                        if (UIReplaysEditorUtils.posesToLimbTracks(stateForEditor.properties, sheet))
                         {
+                            if (this.keyframeEditor != editorForState || this.state != stateForEditor) return;
                             this.expandedTabs.set(sheet.id, true);
-                            this.setState(this.state);
+                            this.setState(stateForEditor);
                         }
                     });
                 }
@@ -383,26 +393,32 @@ public class UIAnimationStateEditor extends UIElement
                 {
                     menu.action(Icons.POSE, UIKeys.FILM_REPLAY_CONTEXT_ANIMATION_TO_KEYFRAMES, () ->
                     {
+                        if (this.keyframeEditor != editorForState || this.state != stateForEditor) return;
+
                         ModelInstance model = ModelFormRenderer.getModel(poseModelForm);
 
                         if (model != null)
                         {
                             UIOverlay.addOverlay(this.getContext(), new UIAnimationToPoseOverlayPanel((animationKey, onlyKeyframes, length, step) ->
                             {
+                                if (this.keyframeEditor != editorForState || this.state != stateForEditor) return;
+
                                 UIContext context = this.getContext();
                                 float current = this.editor.getKeyframeCursor(context == null ? 0F : context.getTransition());
                                 IEntity entity = this.editor.renderer.getTargetEntity();
 
-                                UIReplaysEditorUtils.animationToPoseKeyframes(this.keyframeEditor, sheet, poseModelForm, entity, current, animationKey, onlyKeyframes, length, step);
+                                UIReplaysEditorUtils.animationToPoseKeyframes(editorForState, sheet, poseModelForm, entity, current, animationKey, onlyKeyframes, length, step);
                             }, poseModelForm, sheet), 200, 197);
                         }
                     });
                 }
 
-                if (this.keyframeEditor.view.getGraph() instanceof UIKeyframeDopeSheet)
+                if (editorForState.view.getGraph() instanceof UIKeyframeDopeSheet)
                 {
                     menu.action(Icons.FILTER, UIKeys.FILM_REPLAY_FILTER_SHEETS, () ->
                     {
+                        if (this.keyframeEditor != editorForState || this.state != stateForEditor) return;
+
                         UIKeyframeSheetFilterOverlayPanel panel = new UIKeyframeSheetFilterOverlayPanel(
                             BBSSettings.disabledSheets.get(),
                             this.keys,
@@ -414,7 +430,8 @@ public class UIAnimationStateEditor extends UIElement
 
                         panel.onClose((e) ->
                         {
-                            this.setState(this.state);
+                            if (this.keyframeEditor != editorForState || this.state != stateForEditor) return;
+                            this.setState(stateForEditor);
                             BBSSettings.disabledSheets.set(BBSSettings.disabledSheets.get());
                         });
                     });

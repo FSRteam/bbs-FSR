@@ -42,7 +42,6 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.HashMap;
