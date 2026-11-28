@@ -67,6 +67,12 @@ public class TransformGesture implements DragContext
         /** The frame chosen in the editor's space dropdown. */
         TransformSpace pickedSpace();
 
+        /** Allow a host to share its exposed target frame with the actual gesture. */
+        default TransformSpace resolveGestureSpace(TransformSpace candidate)
+        {
+            return candidate;
+        }
+
         /** Whether the edited transform belongs to a model bone (flips the local translate frame). */
         boolean isModel();
 
@@ -516,6 +522,8 @@ public class TransformGesture implements DragContext
 
         if (op == TransformOp.SCALE)
         {
+            if (!this.host.getHandleMask().allows(Gizmo.Op.SCALE_ALL)) return false;
+
             this.enableUniformScale(this.drag, this.hotkeyMode);
 
             return true;
@@ -528,10 +536,14 @@ public class TransformGesture implements DragContext
 
         if (op == TransformOp.TRANSLATE)
         {
+            if (!this.host.getHandleMask().allows(Gizmo.Op.SCREEN)) return false;
+
             this.enableScreenTranslate(this.drag, this.hotkeyMode);
         }
         else
         {
+            if (!this.host.getHandleMask().allows(Gizmo.Op.VIEW)) return false;
+
             this.enableViewRotate(this.drag, this.hotkeyMode);
         }
 
@@ -1080,7 +1092,7 @@ public class TransformGesture implements DragContext
     @Override
     public TransformSpace space()
     {
-        return this.editing && this.editSpace != null ? this.editSpace : this.host.pickedSpace();
+        return this.host.resolveGestureSpace(this.editing && this.editSpace != null ? this.editSpace : this.host.pickedSpace());
     }
 
     @Override

@@ -78,6 +78,13 @@ public class UIReplayPropTransform extends UIPropTransform
         return TransformSpace.WORLD;
     }
 
+    /** The hidden picker and axis walk must keep the replay target's exposed frame. */
+    @Override
+    public TransformSpace resolveGestureSpace(TransformSpace candidate)
+    {
+        return this.getSpace();
+    }
+
     @Override
     public boolean isLocal()
     {
