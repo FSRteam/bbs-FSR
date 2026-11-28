@@ -107,7 +107,7 @@ public class Icons
 
     public static final Icon YOUTUBE = register(new Icon(ATLAS, "youtube", 0, 80));
     public static final Icon TWITTER = register(new Icon(ATLAS, "twitter", 16, 80));
-    public static final Icon DISCORD = register(new Icon(ATLAS, "discord", 48, 176));
+    public static final Icon DISCORD = register(new Icon(EDITOR_ATLAS, "discord", 48, 176));
     public static final Icon CHICKEN = register(new Icon(ATLAS, "chicken", 32, 80));
     public static final Icon SPRAY = register(new Icon(ATLAS, "spray", 48, 80));
     public static final Icon BUCKET = register(new Icon(ATLAS, "bucket", 64, 80));
