@@ -375,7 +375,7 @@ public class UIDashboard extends UIBaseMenu
         this.buildStep("morphing", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.MORPHING, new UIMorphingPanel(this), UIKeys.MORPHING_TITLE, Icons.MORPH));
         this.buildStep("film", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.FILM, new UIFilmPanel(this), UIKeys.FILM_TITLE, Icons.FILM));
         this.buildStep("model_blocks", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.MODEL_BLOCKS, new UIModelBlockPanel(this), UIKeys.MODEL_BLOCKS_TITLE, Icons.BLOCK));
-        this.buildStep("particles", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.PARTICLES, new UIParticleSchemePanel(this), UIKeys.PANELS_PARTICLES, Icons.PARTICLE).marginLeft(10));
+        this.buildStep("particles", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.PARTICLES, new UIParticleSchemePanel(this), UIKeys.PANELS_PARTICLES, Icons.PARTICLE));
         this.buildStep("model_editor", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.MODEL_EDITOR, new UIModelEditorPanel(this), UIKeys.MODEL_EDITOR_TITLE, Icons.POSE));
         this.buildStep("textures", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.TEXTURES, new UITextureManagerPanel(this), UIKeys.TEXTURES_TOOLTIP, Icons.MATERIAL));
         this.buildStep("audio", () -> this.registerBuiltInPanel(BBSDashboardPanelIds.AUDIO, new UIAudioEditorPanel(this), UIKeys.AUDIO_TITLE, Icons.SOUND));
